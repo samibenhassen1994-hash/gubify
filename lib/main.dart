@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'screens/welcome_screen.dart';
+import 'theme/app_theme.dart';
 
 void main() {
   runApp(const HomyouApp());
@@ -10,10 +11,11 @@ class HomyouApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      title: 'Homyou',
-      home: const WelcomeScreen(),
-    );
+   return MaterialApp(
+  debugShowCheckedModeBanner: false,
+  title: 'Homyou',
+  theme: AppTheme.lightTheme,
+  home: const WelcomeScreen(),
+);
   }
 }
