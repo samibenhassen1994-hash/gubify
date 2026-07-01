@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../widgets/primary_button.dart';
+import 'create_home_screen.dart';
+import 'join_home_screen.dart';
+
 class WelcomeScreen extends StatelessWidget {
   const WelcomeScreen({super.key});
 
@@ -11,15 +15,15 @@ class WelcomeScreen extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
+            const Icon(
               Icons.home_rounded,
               size: 80,
               color: Color(0xFF2563EB),
             ),
 
-            SizedBox(height: 20),
+            const SizedBox(height: 20),
 
-            Text(
+            const Text(
               "Homyou",
               style: TextStyle(
                 fontSize: 36,
@@ -28,14 +32,47 @@ class WelcomeScreen extends StatelessWidget {
               ),
             ),
 
-            SizedBox(height: 10),
+            const SizedBox(height: 10),
 
-            Text(
+            const Text(
               "Organizza la tua casa.\nInsieme.",
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 18,
                 color: Color(0xFF6B7280),
+              ),
+            ),
+
+            const SizedBox(height: 50),
+
+            PrimaryButton(
+              text: "Crea una casa",
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const CreateHomeScreen(),
+                  ),
+                );
+              },
+            ),
+
+            const SizedBox(height: 20),
+
+            TextButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const JoinHomeScreen(),
+                  ),
+                );
+              },
+              child: const Text(
+                "Ho un invito",
+                style: TextStyle(
+                  fontSize: 18,
+                ),
               ),
             ),
           ],
