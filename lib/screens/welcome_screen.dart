@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../widgets/homyou_logo.dart';
+import '../widgets/Hubfy_logo.dart';
 import '../widgets/primary_button.dart';
 import 'create_home_screen.dart';
 import 'join_home_screen.dart';
@@ -78,12 +78,12 @@ class WelcomeScreen extends StatelessWidget {
                         offset: const Offset(0, -145),
                         child: Column(
                           children: [
-                            const HomyouLogo(width: 400),
+                            const HubfyLogo(width: 400),
 
                             const SizedBox(height: 20),
 
                             const Text(
-                              "Homyou",
+                              "Hubfy",
                               style: TextStyle(
                                 fontSize: 42,
                                 fontWeight: FontWeight.bold,

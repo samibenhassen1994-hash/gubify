@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
-class HomyouLogo extends StatelessWidget {
+class HubfyLogo extends StatelessWidget {
   final double width;
 
-  const HomyouLogo({
+  const HubfyLogo({
     super.key,
     this.width = 220,
   });
