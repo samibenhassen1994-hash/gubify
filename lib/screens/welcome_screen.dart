@@ -27,7 +27,7 @@ class WelcomeScreen extends StatelessWidget {
 
                     Container(
                       width: 180,
-                      height: 1,
+                      height: 180,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         boxShadow: [
