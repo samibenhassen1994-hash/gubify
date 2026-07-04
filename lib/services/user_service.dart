@@ -14,4 +14,10 @@ class UserService {
       'avatar': null,
     });
   }
+
+  Future<bool> userExists(String userId) async {
+    final doc = await _firestore.collection('users').doc(userId).get();
+
+    return doc.exists;
+  }
 }

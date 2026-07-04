@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../widgets/hubfy_background.dart';
+import '../services/auth_service.dart';
+import '../screens/welcome_screen.dart';
 
 class NameScreen extends StatefulWidget {
   const NameScreen({super.key});
@@ -11,7 +13,7 @@ class NameScreen extends StatefulWidget {
 
 class _NameScreenState extends State<NameScreen> {
   final TextEditingController _controller = TextEditingController();
-
+ bool _isLoading = false;
   @override
   void dispose() {
     _controller.dispose();
@@ -80,16 +82,68 @@ class _NameScreenState extends State<NameScreen> {
                   width: double.infinity,
                   height: 55,
                   child: ElevatedButton(
-                    onPressed: () {
-                      // Lo collegheremo a Firebase nel prossimo blocco
-                    },
-                    child: const Text(
-                      "Continue",
-                      style: TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
+                    onPressed: _isLoading
+    ? null
+    : () async {
+        final name = _controller.text.trim();
+
+        if (name.isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text("Please enter your name"),
+            ),
+          );
+          return;
+        }
+
+        setState(() {
+          _isLoading = true;
+        });
+
+        try {
+          print("PROFILE UID: ${AuthService().currentUser?.uid}");
+          await AuthService().createProfile(name);
+
+          if (!context.mounted) return;
+
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (_) => const WelcomeScreen(),
+            ),
+          );
+        } catch (e) {
+          if (!context.mounted) return;
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text("Error: $e"),
+            ),
+          );
+        }
+
+        if (context.mounted) {
+          setState(() {
+            _isLoading = false;
+          });
+        }
+      },
+                  child: _isLoading
+    ? const SizedBox(
+        width: 24,
+        height: 24,
+        child: CircularProgressIndicator(
+          strokeWidth: 2.5,
+          color: Colors.white,
+        ),
+      )
+    : const Text(
+        "Continue",
+        style: TextStyle(
+          fontSize: 17,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
                   ),
                 ),
               ],
