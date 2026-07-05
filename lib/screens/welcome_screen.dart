@@ -4,8 +4,8 @@ import '../widgets/hubfy_background.dart';
 import '../widgets/hubfy_logo.dart';
 import '../widgets/primary_button.dart';
 
-import 'create_home_screen.dart';
-import 'join_home_screen.dart';
+import 'hub/create_hub_screen.dart';
+import 'hub/join_hub_screen.dart';
 
 class WelcomeScreen extends StatelessWidget {
   const WelcomeScreen({super.key});
@@ -19,12 +19,10 @@ class WelcomeScreen extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 30),
             child: Column(
               children: [
-
                 // Glow dietro al logo
                 Stack(
                   alignment: Alignment.center,
                   children: [
-
                     Container(
                       width: 180,
                       height: 180,
@@ -40,7 +38,6 @@ class WelcomeScreen extends StatelessWidget {
                         ],
                       ),
                     ),
-
                     const HubfyLogo(width: 500),
                   ],
                 ),
@@ -52,7 +49,7 @@ class WelcomeScreen extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 42,
                     fontWeight: FontWeight.bold,
-                    color: Color.fromARGB(255, 255, 255, 255),
+                    color: Colors.white,
                   ),
                 ),
 
@@ -88,7 +85,7 @@ class WelcomeScreen extends StatelessWidget {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => const CreateHomeScreen(),
+                        builder: (_) => const CreateHubScreen(),
                       ),
                     );
                   },
@@ -104,7 +101,7 @@ class WelcomeScreen extends StatelessWidget {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (_) => const JoinHomeScreen(),
+                          builder: (_) => const JoinHubScreen(),
                         ),
                       );
                     },
@@ -117,17 +114,13 @@ class WelcomeScreen extends StatelessWidget {
                       ),
                     ),
                     child: const Row(
-                      mainAxisAlignment:
-                          MainAxisAlignment.center,
+                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-
                         Icon(
                           Icons.group_outlined,
                           color: Colors.white,
                         ),
-
                         SizedBox(width: 12),
-
                         Text(
                           "Unisciti ad un Hub",
                           style: TextStyle(
