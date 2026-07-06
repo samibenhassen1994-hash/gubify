@@ -3,9 +3,11 @@ import 'package:flutter/material.dart';
 import '../widgets/hubfy_background.dart';
 import '../widgets/hubfy_logo.dart';
 import '../widgets/primary_button.dart';
+import '../widgets/user_header.dart';
 
 import 'hub/create_hub_screen.dart';
 import 'hub/join_hub_screen.dart';
+import 'hub/my_hubs_screen.dart';
 
 class WelcomeScreen extends StatelessWidget {
   const WelcomeScreen({super.key});
@@ -19,6 +21,12 @@ class WelcomeScreen extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 30),
             child: Column(
               children: [
+                const UserHeader(
+  darkMode: true,
+),
+
+                const SizedBox(height: 10),
+
                 // Glow dietro al logo
                 Stack(
                   alignment: Alignment.center,
@@ -91,7 +99,50 @@ class WelcomeScreen extends StatelessWidget {
                   },
                 ),
 
-                const SizedBox(height: 24),
+                const SizedBox(height: 20),
+
+                SizedBox(
+                  width: double.infinity,
+                  height: 60,
+                  child: OutlinedButton(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const MyHubsScreen(),
+                        ),
+                      );
+                    },
+                    style: OutlinedButton.styleFrom(
+                      side: BorderSide(
+                        color: Colors.white.withValues(alpha: .18),
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(18),
+                      ),
+                    ),
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.home_work_outlined,
+                          color: Colors.white,
+                        ),
+                        SizedBox(width: 12),
+                        Text(
+                          "My Hubs",
+                          style: TextStyle(
+                            fontSize: 18,
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 20),
 
                 SizedBox(
                   width: double.infinity,

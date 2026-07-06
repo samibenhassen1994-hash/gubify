@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../widgets/user_header.dart';
 import 'module_selection_screen.dart';
 
 class CreateHubScreen extends StatefulWidget {
@@ -48,7 +49,9 @@ class _CreateHubScreenState extends State<CreateHubScreen> {
         padding: const EdgeInsets.all(24),
         child: Column(
           children: [
-            const SizedBox(height: 40),
+            const UserHeader(),
+
+            const SizedBox(height: 20),
 
             const Icon(
               Icons.groups,

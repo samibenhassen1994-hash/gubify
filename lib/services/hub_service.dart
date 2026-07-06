@@ -46,6 +46,17 @@ class HubService {
       'joinedAt': FieldValue.serverTimestamp(),
     });
 
+    // Salva riferimento all'Hub dell'utente
+    await _firestore
+        .collection("users")
+        .doc(user.uid)
+        .collection("hubs")
+        .doc(hubRef.id)
+        .set({
+      "hubId": hubRef.id,
+      "joinedAt": FieldValue.serverTimestamp(),
+    });
+
     return hubRef.id;
   }
 
@@ -60,7 +71,10 @@ class HubService {
 
     final query = await _firestore
         .collection("hubs")
-        .where("inviteCode", isEqualTo: inviteCode.trim().toUpperCase())
+        .where(
+          "inviteCode",
+          isEqualTo: inviteCode.trim().toUpperCase(),
+        )
         .limit(1)
         .get();
 
@@ -90,6 +104,17 @@ class HubService {
 
       await _firestore.collection("hubs").doc(hubId).update({
         "memberCount": FieldValue.increment(1),
+      });
+
+      // Salva riferimento all'Hub dell'utente
+      await _firestore
+          .collection("users")
+          .doc(user.uid)
+          .collection("hubs")
+          .doc(hubId)
+          .set({
+        "hubId": hubId,
+        "joinedAt": FieldValue.serverTimestamp(),
       });
     }
 

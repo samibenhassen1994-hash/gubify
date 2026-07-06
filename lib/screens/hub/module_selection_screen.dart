@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../services/hub_service.dart';
+import '../../widgets/user_header.dart';
 import 'hub_screen.dart';
 
 class ModuleSelectionScreen extends StatefulWidget {
@@ -98,6 +99,8 @@ class _ModuleSelectionScreenState extends State<ModuleSelectionScreen> {
         padding: const EdgeInsets.all(20),
         child: Column(
           children: [
+            const UserHeader(),
+
             Text(
               widget.hubName,
               style: const TextStyle(

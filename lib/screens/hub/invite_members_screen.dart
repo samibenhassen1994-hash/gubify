@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../../widgets/user_header.dart';
+
 class InviteMembersScreen extends StatelessWidget {
   final String hubId;
 
@@ -46,6 +48,7 @@ class InviteMembersScreen extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                const UserHeader(),
 
                 Text(
                   hubName,
@@ -76,7 +79,6 @@ class InviteMembersScreen extends StatelessWidget {
                   ),
                   child: Column(
                     children: [
-
                       const Text(
                         "Codice Hub",
                         style: TextStyle(
@@ -162,7 +164,6 @@ class InviteMembersScreen extends StatelessWidget {
                         .collection("members")
                         .snapshots(),
                     builder: (context, snapshot) {
-
                       if (snapshot.connectionState ==
                           ConnectionState.waiting) {
                         return const Center(
@@ -182,7 +183,6 @@ class InviteMembersScreen extends StatelessWidget {
                       return ListView.builder(
                         itemCount: members.length,
                         itemBuilder: (context, index) {
-
                           final member =
                               members[index].data() as Map<String, dynamic>;
 
@@ -190,8 +190,7 @@ class InviteMembersScreen extends StatelessWidget {
                             margin: const EdgeInsets.only(bottom: 10),
                             child: ListTile(
                               leading: CircleAvatar(
-                                backgroundColor:
-                                    Colors.blue.shade100,
+                                backgroundColor: Colors.blue.shade100,
                                 child: const Icon(Icons.person),
                               ),
                               title: Text(

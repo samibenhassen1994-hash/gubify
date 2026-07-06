@@ -1,7 +1,10 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
+import '../../widgets/user_header.dart';
+import '../welcome_screen.dart';
 import 'invite_members_screen.dart';
+import 'board_screen.dart';
 
 class HubScreen extends StatelessWidget {
   final String hubId;
@@ -15,6 +18,17 @@ class HubScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                builder: (_) => const WelcomeScreen(),
+              ),
+            );
+          },
+        ),
         title: const Text("Hubfy"),
       ),
       body: StreamBuilder<DocumentSnapshot>(
@@ -54,6 +68,8 @@ class HubScreen extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                const UserHeader(),
+
                 Text(
                   hubName,
                   style: const TextStyle(
@@ -74,16 +90,26 @@ class HubScreen extends StatelessWidget {
 
                 const SizedBox(height: 30),
 
-                Card(
-                  child: ListTile(
-                    leading: const Icon(Icons.campaign),
-                    title: const Text("Bacheca"),
-                    subtitle: const Text(
-                      "Qui compariranno tutte le attività del gruppo.",
-                    ),
-                  ),
-                ),
-
+               Card(
+  child: ListTile(
+    leading: const Icon(Icons.campaign),
+    title: const Text("Bacheca"),
+    subtitle: const Text(
+      "Qui compariranno tutte le attività del gruppo.",
+    ),
+    trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+    onTap: () {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => BoardScreen(
+            hubId: hubId,
+          ),
+        ),
+      );
+    },
+  ),
+),
                 const SizedBox(height: 12),
 
                 Card(

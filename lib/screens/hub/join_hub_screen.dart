@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../services/hub_service.dart';
+import '../../widgets/user_header.dart';
 import 'hub_screen.dart';
 
 class JoinHubScreen extends StatefulWidget {
@@ -16,57 +17,57 @@ class _JoinHubScreenState extends State<JoinHubScreen> {
   bool _loading = false;
 
   Future<void> _joinHub() async {
-  print(">>> PULSANTE PREMUTO <<<");
+    print(">>> PULSANTE PREMUTO <<<");
 
-  if (_controller.text.trim().isEmpty) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text("Inserisci un codice."),
-      ),
-    );
-    return;
-  }
-
-  print("Codice digitato: ${_controller.text}");
-
-  setState(() => _loading = true);
-
-  try {
-    print("Chiamo HubService...");
-
-    final hubId = await HubService().joinHub(
-      inviteCode: _controller.text,
-    );
-
-    print("Hub trovato: $hubId");
-
-    if (!mounted) return;
-
-    Navigator.pushAndRemoveUntil(
-      context,
-      MaterialPageRoute(
-        builder: (_) => HubScreen(
-          hubId: hubId,
+    if (_controller.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Inserisci un codice."),
         ),
-      ),
-      (_) => false,
-    );
-  } catch (e) {
-    print("ERRORE: $e");
+      );
+      return;
+    }
 
-    if (!mounted) return;
+    print("Codice digitato: ${_controller.text}");
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(e.toString()),
-      ),
-    );
+    setState(() => _loading = true);
+
+    try {
+      print("Chiamo HubService...");
+
+      final hubId = await HubService().joinHub(
+        inviteCode: _controller.text,
+      );
+
+      print("Hub trovato: $hubId");
+
+      if (!mounted) return;
+
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(
+          builder: (_) => HubScreen(
+            hubId: hubId,
+          ),
+        ),
+        (_) => false,
+      );
+    } catch (e) {
+      print("ERRORE: $e");
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString()),
+        ),
+      );
+    }
+
+    if (mounted) {
+      setState(() => _loading = false);
+    }
   }
-
-  if (mounted) {
-    setState(() => _loading = false);
-  }
-}
 
   @override
   void dispose() {
@@ -84,7 +85,9 @@ class _JoinHubScreenState extends State<JoinHubScreen> {
         padding: const EdgeInsets.all(24),
         child: Column(
           children: [
-            const SizedBox(height: 30),
+            const UserHeader(),
+
+            const SizedBox(height: 20),
 
             const Icon(
               Icons.group_add,
