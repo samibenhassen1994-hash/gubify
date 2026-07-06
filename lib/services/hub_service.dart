@@ -14,10 +14,10 @@ class HubService {
     final user = _auth.currentUser;
 
     if (user == null) {
-      throw Exception("Utente non autenticato.");
+      throw Exception("User not authenticated.");
     }
 
-    final hubRef = _firestore.collection('hubs').doc();
+    final hubRef = _firestore.collection("hubs").doc();
 
     final random = Random();
 
@@ -28,34 +28,47 @@ class HubService {
 
     final inviteCode = "$prefix-${1000 + random.nextInt(9000)}";
 
-    await hubRef.set({
-      'hubId': hubRef.id,
-      'name': name.trim(),
-      'ownerId': user.uid,
-      'inviteCode': inviteCode,
-      'memberCount': 1,
-      'modules': modules,
-      'createdAt': FieldValue.serverTimestamp(),
-    });
+    final batch = _firestore.batch();
 
-    await hubRef.collection('members').doc(user.uid).set({
-      'uid': user.uid,
-      'displayName': user.displayName ?? "Utente",
-      'photoUrl': user.photoURL,
-      'role': 'owner',
-      'joinedAt': FieldValue.serverTimestamp(),
-    });
-
-    // Salva riferimento all'Hub dell'utente
-    await _firestore
-        .collection("users")
-        .doc(user.uid)
-        .collection("hubs")
-        .doc(hubRef.id)
-        .set({
+    batch.set(hubRef, {
       "hubId": hubRef.id,
-      "joinedAt": FieldValue.serverTimestamp(),
+      "name": name.trim(),
+      "ownerId": user.uid,
+      "inviteCode": inviteCode,
+      "memberCount": 1,
+      "modules": modules,
+      "createdAt": FieldValue.serverTimestamp(),
     });
+
+    batch.set(
+      hubRef.collection("members").doc(user.uid),
+      {
+        "uid": user.uid,
+        "displayName": user.displayName ?? "User",
+        "photoUrl": user.photoURL,
+        "role": "owner",
+        "joinedAt": FieldValue.serverTimestamp(),
+      },
+    );
+
+    batch.set(
+      _firestore
+          .collection("users")
+          .doc(user.uid)
+          .collection("hubs")
+          .doc(hubRef.id),
+      {
+        "hubId": hubRef.id,
+        "name": name.trim(),
+        "inviteCode": inviteCode,
+        "memberCount": 1,
+        "ownerId": user.uid,
+        "modules": modules,
+        "joinedAt": FieldValue.serverTimestamp(),
+      },
+    );
+
+    await batch.commit();
 
     return hubRef.id;
   }
@@ -66,7 +79,7 @@ class HubService {
     final user = _auth.currentUser;
 
     if (user == null) {
-      throw Exception("Utente non autenticato");
+      throw Exception("User not authenticated.");
     }
 
     final query = await _firestore
@@ -79,7 +92,7 @@ class HubService {
         .get();
 
     if (query.docs.isEmpty) {
-      throw Exception("Codice Hub non valido.");
+      throw Exception("Invalid Hub code.");
     }
 
     final hubDoc = query.docs.first;
@@ -91,32 +104,48 @@ class HubService {
         .collection("members")
         .doc(user.uid);
 
-    final alreadyMember = await memberRef.get();
+    if ((await memberRef.get()).exists) {
+      return hubId;
+    }
 
-    if (!alreadyMember.exists) {
-      await memberRef.set({
+    final batch = _firestore.batch();
+
+    batch.set(
+      memberRef,
+      {
         "uid": user.uid,
-        "displayName": user.displayName ?? "Utente",
+        "displayName": user.displayName ?? "User",
         "photoUrl": user.photoURL,
         "role": "member",
         "joinedAt": FieldValue.serverTimestamp(),
-      });
+      },
+    );
 
-      await _firestore.collection("hubs").doc(hubId).update({
+    batch.update(
+      _firestore.collection("hubs").doc(hubId),
+      {
         "memberCount": FieldValue.increment(1),
-      });
+      },
+    );
 
-      // Salva riferimento all'Hub dell'utente
-      await _firestore
+    batch.set(
+      _firestore
           .collection("users")
           .doc(user.uid)
           .collection("hubs")
-          .doc(hubId)
-          .set({
+          .doc(hubId),
+      {
         "hubId": hubId,
+        "name": hubDoc["name"],
+        "inviteCode": hubDoc["inviteCode"],
+        "memberCount": (hubDoc["memberCount"] ?? 1) + 1,
+        "ownerId": hubDoc["ownerId"],
+        "modules": hubDoc["modules"],
         "joinedAt": FieldValue.serverTimestamp(),
-      });
-    }
+      },
+    );
+
+    await batch.commit();
 
     return hubId;
   }
