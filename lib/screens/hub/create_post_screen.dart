@@ -2,6 +2,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import '../../repositories/user_repository.dart';
+
 class CreatePostScreen extends StatefulWidget {
   final String hubId;
 
@@ -26,10 +28,12 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   }
 
   Future<void> _publish() async {
-    if (_controller.text.trim().isEmpty) {
+    final message = _controller.text.trim();
+
+    if (message.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text("Scrivi qualcosa."),
+          content: Text("Write something."),
         ),
       );
       return;
@@ -40,13 +44,11 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     try {
       final user = FirebaseAuth.instance.currentUser!;
 
-      final userDoc = await FirebaseFirestore.instance
-          .collection("users")
-          .doc(user.uid)
-          .get();
+      final userData =
+          await UserRepository.instance.getUser(user.uid);
 
       final displayName =
-          userDoc.data()?["displayName"] ?? "Utente";
+          userData?["displayName"] ?? "User";
 
       await FirebaseFirestore.instance
           .collection("hubs")
@@ -55,8 +57,10 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
           .add({
         "authorId": user.uid,
         "authorName": displayName,
-        "message": _controller.text.trim(),
+        "authorPhoto": user.photoURL,
+        "message": message,
         "createdAt": FieldValue.serverTimestamp(),
+        "updatedAt": FieldValue.serverTimestamp(),
         "likes": 0,
         "comments": 0,
       });
@@ -65,15 +69,17 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         Navigator.pop(context);
       }
     } catch (e) {
+      if (!mounted) return;
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(e.toString()),
         ),
       );
-    }
-
-    if (mounted) {
-      setState(() => _loading = false);
+    } finally {
+      if (mounted) {
+        setState(() => _loading = false);
+      }
     }
   }
 
@@ -81,7 +87,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Nuovo post"),
+        title: const Text("New Post"),
       ),
       body: Padding(
         padding: const EdgeInsets.all(20),
@@ -90,8 +96,9 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
             TextField(
               controller: _controller,
               maxLines: 8,
+              textInputAction: TextInputAction.newline,
               decoration: const InputDecoration(
-                hintText: "Cosa vuoi condividere con il tuo Hub?",
+                hintText: "What would you like to share with your Hub?",
                 border: OutlineInputBorder(),
               ),
             ),
@@ -102,6 +109,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
               width: double.infinity,
               height: 55,
               child: FilledButton.icon(
+                onPressed: _loading ? null : _publish,
                 icon: _loading
                     ? const SizedBox(
                         width: 22,
@@ -112,8 +120,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                         ),
                       )
                     : const Icon(Icons.send),
-                label: const Text("Pubblica"),
-                onPressed: _loading ? null : _publish,
+                label: const Text("Publish"),
               ),
             ),
           ],

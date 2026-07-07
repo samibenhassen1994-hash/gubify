@@ -22,15 +22,14 @@ class MyHubsScreen extends StatelessWidget {
             padding: EdgeInsets.fromLTRB(16, 16, 16, 0),
             child: UserHeader(),
           ),
-
           Expanded(
-            child: StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance
+            child: FutureBuilder<QuerySnapshot>(
+              future: FirebaseFirestore.instance
                   .collection("users")
                   .doc(uid)
                   .collection("hubs")
                   .orderBy("joinedAt", descending: true)
-                  .snapshots(),
+                  .get(),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(

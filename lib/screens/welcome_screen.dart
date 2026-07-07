@@ -22,12 +22,11 @@ class WelcomeScreen extends StatelessWidget {
             child: Column(
               children: [
                 const UserHeader(
-  darkMode: true,
-),
+                  darkMode: true,
+                ),
 
                 const SizedBox(height: 10),
 
-                // Glow dietro al logo
                 Stack(
                   alignment: Alignment.center,
                   children: [
@@ -50,8 +49,6 @@ class WelcomeScreen extends StatelessWidget {
                   ],
                 ),
 
-                const SizedBox(height: 0),
-
                 const Text(
                   "Welcome",
                   style: TextStyle(
@@ -64,7 +61,7 @@ class WelcomeScreen extends StatelessWidget {
                 const SizedBox(height: 18),
 
                 const Text(
-                  "Organizza tutto.\nIn un unico posto.",
+                  "Organize everything.\nIn one place.",
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 21,
@@ -76,7 +73,7 @@ class WelcomeScreen extends StatelessWidget {
                 const SizedBox(height: 18),
 
                 const Text(
-                  "Crea il tuo Hub o unisciti ad uno esistente\nper collaborare con il tuo gruppo.",
+                  "Create your Hub or join an existing one\nto collaborate with your group.",
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 16,
@@ -88,7 +85,7 @@ class WelcomeScreen extends StatelessWidget {
                 const SizedBox(height: 45),
 
                 PrimaryButton(
-                  text: "Crea un Hub",
+                  text: "Create Hub",
                   onPressed: () {
                     Navigator.push(
                       context,
@@ -173,7 +170,7 @@ class WelcomeScreen extends StatelessWidget {
                         ),
                         SizedBox(width: 12),
                         Text(
-                          "Unisciti ad un Hub",
+                          "Join a Hub",
                           style: TextStyle(
                             fontSize: 18,
                             color: Colors.white,
@@ -190,7 +187,7 @@ class WelcomeScreen extends StatelessWidget {
                 TextButton(
                   onPressed: () {},
                   child: const Text(
-                    "Scopri di più",
+                    "Learn More",
                     style: TextStyle(
                       color: Color(0xFF3B82F6),
                       fontSize: 17,

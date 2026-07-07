@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../../repositories/hub_repository.dart';
 import '../../widgets/user_header.dart';
 
 class InviteMembersScreen extends StatelessWidget {
@@ -17,13 +18,10 @@ class InviteMembersScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Invita membri"),
+        title: const Text("Invite Members"),
       ),
-      body: StreamBuilder<DocumentSnapshot>(
-        stream: FirebaseFirestore.instance
-            .collection("hubs")
-            .doc(hubId)
-            .snapshots(),
+      body: FutureBuilder<Map<String, dynamic>?>(
+        future: HubRepository.instance.getHub(hubId),
         builder: (context, hubSnapshot) {
           if (hubSnapshot.connectionState == ConnectionState.waiting) {
             return const Center(
@@ -31,14 +29,13 @@ class InviteMembersScreen extends StatelessWidget {
             );
           }
 
-          if (!hubSnapshot.hasData || !hubSnapshot.data!.exists) {
+          if (!hubSnapshot.hasData || hubSnapshot.data == null) {
             return const Center(
-              child: Text("Hub non trovato"),
+              child: Text("Hub not found"),
             );
           }
 
-          final hub =
-              hubSnapshot.data!.data() as Map<String, dynamic>;
+          final hub = hubSnapshot.data!;
 
           final String hubName = hub["name"] ?? "Hub";
           final String inviteCode = hub["inviteCode"] ?? "";
@@ -61,7 +58,7 @@ class InviteMembersScreen extends StatelessWidget {
                 const SizedBox(height: 8),
 
                 const Text(
-                  "Invita persone nel tuo Hub",
+                  "Invite people to your Hub",
                   style: TextStyle(
                     color: Colors.grey,
                     fontSize: 17,
@@ -80,14 +77,12 @@ class InviteMembersScreen extends StatelessWidget {
                   child: Column(
                     children: [
                       const Text(
-                        "Codice Hub",
+                        "Hub Code",
                         style: TextStyle(
                           color: Colors.grey,
                         ),
                       ),
-
                       const SizedBox(height: 10),
-
                       Text(
                         inviteCode,
                         style: const TextStyle(
@@ -107,7 +102,7 @@ class InviteMembersScreen extends StatelessWidget {
                   height: 55,
                   child: FilledButton.icon(
                     icon: const Icon(Icons.copy),
-                    label: const Text("Copia codice"),
+                    label: const Text("Copy Code"),
                     onPressed: () async {
                       await Clipboard.setData(
                         ClipboardData(text: inviteCode),
@@ -116,9 +111,7 @@ class InviteMembersScreen extends StatelessWidget {
                       if (context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
-                            content: Text(
-                              "Codice copiato negli appunti",
-                            ),
+                            content: Text("Code copied to clipboard"),
                           ),
                         );
                       }
@@ -133,12 +126,12 @@ class InviteMembersScreen extends StatelessWidget {
                   height: 55,
                   child: OutlinedButton.icon(
                     icon: const Icon(Icons.share),
-                    label: const Text("Condividi"),
+                    label: const Text("Share"),
                     onPressed: () {
                       Share.share(
-                        "🏠 Ti invito nel mio Hub \"$hubName\"!\n\n"
-                        "Scarica Hubfy e inserisci questo codice:\n\n"
-                        "$inviteCode",
+                        '🏠 Join my Hub "$hubName" on Hubfy!\n\n'
+                        'Download Hubfy and enter this invite code:\n\n'
+                        '$inviteCode',
                       );
                     },
                   ),
@@ -147,7 +140,7 @@ class InviteMembersScreen extends StatelessWidget {
                 const SizedBox(height: 35),
 
                 const Text(
-                  "Membri",
+                  "Members",
                   style: TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
@@ -174,7 +167,7 @@ class InviteMembersScreen extends StatelessWidget {
                       if (!snapshot.hasData ||
                           snapshot.data!.docs.isEmpty) {
                         return const Center(
-                          child: Text("Nessun membro"),
+                          child: Text("No members yet"),
                         );
                       }
 
@@ -194,7 +187,7 @@ class InviteMembersScreen extends StatelessWidget {
                                 child: const Icon(Icons.person),
                               ),
                               title: Text(
-                                member["displayName"] ?? "Utente",
+                                member["displayName"] ?? "User",
                               ),
                               subtitle: Text(
                                 member["role"] ?? "",

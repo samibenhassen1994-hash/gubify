@@ -93,7 +93,7 @@ class _ModuleSelectionScreenState extends State<ModuleSelectionScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Scegli i moduli"),
+        title: const Text("Choose Modules"),
       ),
       body: Padding(
         padding: const EdgeInsets.all(20),
@@ -112,7 +112,7 @@ class _ModuleSelectionScreenState extends State<ModuleSelectionScreen> {
             const SizedBox(height: 8),
 
             const Text(
-              "Seleziona i moduli che vuoi utilizzare.\nPotrai modificarli anche in futuro.",
+              "Select the modules you want to enable.\nYou can change them later at any time.",
               textAlign: TextAlign.center,
             ),
 
@@ -123,12 +123,12 @@ class _ModuleSelectionScreenState extends State<ModuleSelectionScreen> {
                 children: [
                   buildTile(
                     keyName: "tasks",
-                    title: "Task",
+                    title: "Tasks",
                     icon: Icons.check_circle_outline,
                   ),
                   buildTile(
                     keyName: "calendar",
-                    title: "Calendario",
+                    title: "Calendar",
                     icon: Icons.calendar_month,
                   ),
                   buildTile(
@@ -138,7 +138,7 @@ class _ModuleSelectionScreenState extends State<ModuleSelectionScreen> {
                   ),
                   buildTile(
                     keyName: "photos",
-                    title: "Foto",
+                    title: "Photos",
                     icon: Icons.photo_library_outlined,
                   ),
                   buildTile(
@@ -148,12 +148,12 @@ class _ModuleSelectionScreenState extends State<ModuleSelectionScreen> {
                   ),
                   buildTile(
                     keyName: "expenses",
-                    title: "Spese",
+                    title: "Expenses",
                     icon: Icons.euro,
                   ),
                   buildTile(
                     keyName: "notes",
-                    title: "Note",
+                    title: "Notes",
                     icon: Icons.note_alt_outlined,
                   ),
                 ],
@@ -175,7 +175,7 @@ class _ModuleSelectionScreenState extends State<ModuleSelectionScreen> {
                         ),
                       )
                     : const Text(
-                        "Crea Hub",
+                        "Create Hub",
                         style: TextStyle(fontSize: 17),
                       ),
               ),

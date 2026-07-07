@@ -20,10 +20,12 @@ class _CreateHubScreenState extends State<CreateHubScreen> {
   }
 
   void _continue() {
-    if (_nameController.text.trim().isEmpty) {
+    final hubName = _nameController.text.trim();
+
+    if (hubName.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text("Inserisci il nome dell'Hub"),
+          content: Text("Please enter a Hub name"),
         ),
       );
       return;
@@ -33,7 +35,7 @@ class _CreateHubScreenState extends State<CreateHubScreen> {
       context,
       MaterialPageRoute(
         builder: (_) => ModuleSelectionScreen(
-          hubName: _nameController.text.trim(),
+          hubName: hubName,
         ),
       ),
     );
@@ -43,7 +45,7 @@ class _CreateHubScreenState extends State<CreateHubScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Crea Hub"),
+        title: const Text("Create Hub"),
       ),
       body: Padding(
         padding: const EdgeInsets.all(24),
@@ -61,7 +63,7 @@ class _CreateHubScreenState extends State<CreateHubScreen> {
             const SizedBox(height: 30),
 
             const Text(
-              "Crea il tuo Hub",
+              "Create your Hub",
               style: TextStyle(
                 fontSize: 30,
                 fontWeight: FontWeight.bold,
@@ -72,8 +74,10 @@ class _CreateHubScreenState extends State<CreateHubScreen> {
 
             TextField(
               controller: _nameController,
+              textInputAction: TextInputAction.done,
+              onSubmitted: (_) => _continue(),
               decoration: const InputDecoration(
-                labelText: "Nome Hub",
+                labelText: "Hub name",
                 border: OutlineInputBorder(),
               ),
             ),
@@ -85,7 +89,7 @@ class _CreateHubScreenState extends State<CreateHubScreen> {
               height: 55,
               child: FilledButton(
                 onPressed: _continue,
-                child: const Text("Continua"),
+                child: const Text("Continue"),
               ),
             ),
 

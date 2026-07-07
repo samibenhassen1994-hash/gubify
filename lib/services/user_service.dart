@@ -10,6 +10,7 @@ class UserService {
     await _firestore.collection('users').doc(userId).set({
       'displayName': displayName,
       'createdAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
       'activeHub': null,
       'avatar': null,
     });
@@ -17,7 +18,6 @@ class UserService {
 
   Future<bool> userExists(String userId) async {
     final doc = await _firestore.collection('users').doc(userId).get();
-
     return doc.exists;
   }
 }

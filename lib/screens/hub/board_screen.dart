@@ -68,6 +68,7 @@ class BoardScreen extends StatelessWidget {
                     .doc(hubId)
                     .collection("posts")
                     .orderBy("createdAt", descending: true)
+                    .limit(25)
                     .snapshots(),
                 builder: (context, snapshot) {
                   if (snapshot.connectionState ==

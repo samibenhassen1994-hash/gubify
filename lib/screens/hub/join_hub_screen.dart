@@ -17,29 +17,23 @@ class _JoinHubScreenState extends State<JoinHubScreen> {
   bool _loading = false;
 
   Future<void> _joinHub() async {
-    print(">>> PULSANTE PREMUTO <<<");
+    final inviteCode = _controller.text.trim();
 
-    if (_controller.text.trim().isEmpty) {
+    if (inviteCode.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text("Inserisci un codice."),
+          content: Text("Please enter an invite code."),
         ),
       );
       return;
     }
 
-    print("Codice digitato: ${_controller.text}");
-
     setState(() => _loading = true);
 
     try {
-      print("Chiamo HubService...");
-
       final hubId = await HubService().joinHub(
-        inviteCode: _controller.text,
+        inviteCode: inviteCode,
       );
-
-      print("Hub trovato: $hubId");
 
       if (!mounted) return;
 
@@ -53,8 +47,6 @@ class _JoinHubScreenState extends State<JoinHubScreen> {
         (_) => false,
       );
     } catch (e) {
-      print("ERRORE: $e");
-
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -62,10 +54,10 @@ class _JoinHubScreenState extends State<JoinHubScreen> {
           content: Text(e.toString()),
         ),
       );
-    }
-
-    if (mounted) {
-      setState(() => _loading = false);
+    } finally {
+      if (mounted) {
+        setState(() => _loading = false);
+      }
     }
   }
 
@@ -79,7 +71,7 @@ class _JoinHubScreenState extends State<JoinHubScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Unisciti ad un Hub"),
+        title: const Text("Join a Hub"),
       ),
       body: Padding(
         padding: const EdgeInsets.all(24),
@@ -97,7 +89,7 @@ class _JoinHubScreenState extends State<JoinHubScreen> {
             const SizedBox(height: 25),
 
             const Text(
-              "Hai ricevuto un invito?",
+              "Got an invitation?",
               style: TextStyle(
                 fontSize: 28,
                 fontWeight: FontWeight.bold,
@@ -107,7 +99,7 @@ class _JoinHubScreenState extends State<JoinHubScreen> {
             const SizedBox(height: 12),
 
             const Text(
-              "Inserisci il codice Hub che ti è stato condiviso.",
+              "Enter the Hub invite code that was shared with you.",
               textAlign: TextAlign.center,
             ),
 
@@ -116,8 +108,10 @@ class _JoinHubScreenState extends State<JoinHubScreen> {
             TextField(
               controller: _controller,
               textCapitalization: TextCapitalization.characters,
+              textInputAction: TextInputAction.done,
+              onSubmitted: (_) => _joinHub(),
               decoration: const InputDecoration(
-                labelText: "Codice Hub",
+                labelText: "Hub Code",
                 border: OutlineInputBorder(),
                 prefixIcon: Icon(Icons.vpn_key),
               ),
@@ -131,9 +125,16 @@ class _JoinHubScreenState extends State<JoinHubScreen> {
               child: FilledButton(
                 onPressed: _loading ? null : _joinHub,
                 child: _loading
-                    ? const CircularProgressIndicator()
+                    ? const SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 3,
+                          color: Colors.white,
+                        ),
+                      )
                     : const Text(
-                        "Entra nell'Hub",
+                        "Join Hub",
                         style: TextStyle(fontSize: 17),
                       ),
               ),

@@ -1,10 +1,10 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
+import '../../repositories/hub_repository.dart';
 import '../../widgets/user_header.dart';
 import '../welcome_screen.dart';
-import 'invite_members_screen.dart';
 import 'board_screen.dart';
+import 'invite_members_screen.dart';
 
 class HubScreen extends StatelessWidget {
   final String hubId;
@@ -31,11 +31,8 @@ class HubScreen extends StatelessWidget {
         ),
         title: const Text("Hubfy"),
       ),
-      body: StreamBuilder<DocumentSnapshot>(
-        stream: FirebaseFirestore.instance
-            .collection("hubs")
-            .doc(hubId)
-            .snapshots(),
+      body: FutureBuilder<Map<String, dynamic>?>(
+        future: HubRepository.instance.getHub(hubId),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(
@@ -43,13 +40,13 @@ class HubScreen extends StatelessWidget {
             );
           }
 
-          if (!snapshot.hasData || !snapshot.data!.exists) {
+          if (!snapshot.hasData || snapshot.data == null) {
             return const Center(
-              child: Text("Hub non trovato"),
+              child: Text("Hub not found"),
             );
           }
 
-          final data = snapshot.data!.data() as Map<String, dynamic>;
+          final data = snapshot.data!;
 
           final String hubName = data["name"] ?? "Hub";
           final String inviteCode = data["inviteCode"] ?? "";
@@ -81,7 +78,7 @@ class HubScreen extends StatelessWidget {
                 const SizedBox(height: 6),
 
                 const Text(
-                  "Benvenuto nel tuo Hub",
+                  "Welcome to your Hub",
                   style: TextStyle(
                     fontSize: 18,
                     color: Colors.grey,
@@ -90,32 +87,34 @@ class HubScreen extends StatelessWidget {
 
                 const SizedBox(height: 30),
 
-               Card(
-  child: ListTile(
-    leading: const Icon(Icons.campaign),
-    title: const Text("Bacheca"),
-    subtitle: const Text(
-      "Qui compariranno tutte le attività del gruppo.",
-    ),
-    trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-    onTap: () {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => BoardScreen(
-            hubId: hubId,
-          ),
-        ),
-      );
-    },
-  ),
-),
+                Card(
+                  child: ListTile(
+                    leading: const Icon(Icons.campaign),
+                    title: const Text("Board"),
+                    subtitle: const Text(
+                      "All group activities will appear here.",
+                    ),
+                    trailing:
+                        const Icon(Icons.arrow_forward_ios, size: 16),
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => BoardScreen(
+                            hubId: hubId,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+
                 const SizedBox(height: 12),
 
                 Card(
                   child: ListTile(
                     leading: const Icon(Icons.people),
-                    title: const Text("Membri"),
+                    title: const Text("Members"),
                     trailing: Text(
                       memberCount.toString(),
                       style: const TextStyle(
@@ -130,10 +129,10 @@ class HubScreen extends StatelessWidget {
                 Card(
                   child: ListTile(
                     leading: const Icon(Icons.extension),
-                    title: const Text("Moduli attivi"),
+                    title: const Text("Active modules"),
                     subtitle: Text(
                       activeModules.isEmpty
-                          ? "Nessun modulo selezionato"
+                          ? "No modules selected"
                           : activeModules.join(", "),
                     ),
                   ),
@@ -144,7 +143,7 @@ class HubScreen extends StatelessWidget {
                 Card(
                   child: ListTile(
                     leading: const Icon(Icons.vpn_key),
-                    title: const Text("Codice invito"),
+                    title: const Text("Invite code"),
                     subtitle: Text(inviteCode),
                   ),
                 ),
@@ -156,7 +155,7 @@ class HubScreen extends StatelessWidget {
                   height: 55,
                   child: FilledButton.icon(
                     icon: const Icon(Icons.person_add),
-                    label: const Text("Invita membri"),
+                    label: const Text("Invite members"),
                     onPressed: () {
                       Navigator.push(
                         context,
@@ -177,7 +176,7 @@ class HubScreen extends StatelessWidget {
                   height: 55,
                   child: OutlinedButton.icon(
                     icon: const Icon(Icons.settings),
-                    label: const Text("Gestisci Hub"),
+                    label: const Text("Manage Hub"),
                     onPressed: () {},
                   ),
                 ),
