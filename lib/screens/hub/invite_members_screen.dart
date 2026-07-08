@@ -127,11 +127,14 @@ class InviteMembersScreen extends StatelessWidget {
                   child: OutlinedButton.icon(
                     icon: const Icon(Icons.share),
                     label: const Text("Share"),
-                    onPressed: () {
-                      Share.share(
-                        '🏠 Join my Hub "$hubName" on Hubfy!\n\n'
-                        'Download Hubfy and enter this invite code:\n\n'
-                        '$inviteCode',
+                    onPressed: () async {
+                      await SharePlus.instance.share(
+                        ShareParams(
+                          text:
+                              '🏠 Join my Hub "$hubName" on Hubfy!\n\n'
+                              'Download Hubfy and enter this invite code:\n\n'
+                              '$inviteCode',
+                        ),
                       );
                     },
                   ),

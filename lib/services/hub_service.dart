@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../config/app_limits.dart';
 
 class HubService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -16,6 +17,18 @@ class HubService {
     if (user == null) {
       throw Exception("User not authenticated.");
     }
+    
+    final ownedHubs = await _firestore
+    .collection("hubs")
+    .where("ownerId", isEqualTo: user.uid)
+    .count()
+    .get();
+
+if ((ownedHubs.count ?? 0) >= AppLimits.freeMaxHubs) {
+  throw Exception(
+    "You have reached the maximum number of Hubs (${AppLimits.freeMaxHubs}).",
+  );
+}
 
     final hubRef = _firestore.collection("hubs").doc();
 

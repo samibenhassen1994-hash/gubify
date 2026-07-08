@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import '../../config/app_limits.dart';
 
 import '../../repositories/user_repository.dart';
 
@@ -28,18 +29,29 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   }
 
   Future<void> _publish() async {
-    final message = _controller.text.trim();
+  final message = _controller.text.trim();
 
-    if (message.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Write something."),
+  if (message.isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text("Write something."),
+      ),
+    );
+    return;
+  }
+
+  if (message.length > AppLimits.postMaxLength) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          "Posts cannot exceed ${AppLimits.postMaxLength} characters.",
         ),
-      );
-      return;
-    }
+      ),
+    );
+    return;
+  }
 
-    setState(() => _loading = true);
+  setState(() => _loading = true);
 
     try {
       final user = FirebaseAuth.instance.currentUser!;
@@ -94,14 +106,15 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         child: Column(
           children: [
             TextField(
-              controller: _controller,
-              maxLines: 8,
-              textInputAction: TextInputAction.newline,
-              decoration: const InputDecoration(
-                hintText: "What would you like to share with your Hub?",
-                border: OutlineInputBorder(),
-              ),
-            ),
+                 controller: _controller,
+                    maxLines: 8,
+                    maxLength: AppLimits.postMaxLength,
+                    textInputAction: TextInputAction.newline,
+                    decoration: const InputDecoration(
+                    hintText: "What would you like to share with your Hub?",
+                    border: OutlineInputBorder(),
+  ),
+),
 
             const Spacer(),
 

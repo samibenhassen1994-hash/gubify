@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
+import '../../config/app_limits.dart';
 import '../../services/hub_service.dart';
 import '../../widgets/user_header.dart';
 import 'hub_screen.dart';
@@ -107,9 +109,15 @@ class _JoinHubScreenState extends State<JoinHubScreen> {
 
             TextField(
               controller: _controller,
+              maxLength: AppLimits.inviteCodeLength,
               textCapitalization: TextCapitalization.characters,
               textInputAction: TextInputAction.done,
               onSubmitted: (_) => _joinHub(),
+              inputFormatters: [
+                FilteringTextInputFormatter.allow(
+                  RegExp(r'[A-Za-z0-9-]'),
+                ),
+              ],
               decoration: const InputDecoration(
                 labelText: "Hub Code",
                 border: OutlineInputBorder(),

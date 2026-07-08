@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
+import '../../config/app_limits.dart';
 import '../../widgets/user_header.dart';
 import 'module_selection_screen.dart';
 
@@ -22,10 +24,23 @@ class _CreateHubScreenState extends State<CreateHubScreen> {
   void _continue() {
     final hubName = _nameController.text.trim();
 
-    if (hubName.isEmpty) {
+    if (hubName.length < AppLimits.hubNameMinLength) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Please enter a Hub name"),
+        SnackBar(
+          content: Text(
+            "Hub name must be at least ${AppLimits.hubNameMinLength} characters.",
+          ),
+        ),
+      );
+      return;
+    }
+
+    if (hubName.length > AppLimits.hubNameMaxLength) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            "Hub name cannot exceed ${AppLimits.hubNameMaxLength} characters.",
+          ),
         ),
       );
       return;
@@ -74,10 +89,16 @@ class _CreateHubScreenState extends State<CreateHubScreen> {
 
             TextField(
               controller: _nameController,
+              maxLength: AppLimits.hubNameMaxLength,
               textInputAction: TextInputAction.done,
               onSubmitted: (_) => _continue(),
+              inputFormatters: [
+                FilteringTextInputFormatter.allow(
+                  RegExp(r"[a-zA-Z0-9À-ÿ '\-_]"),
+                ),
+              ],
               decoration: const InputDecoration(
-                labelText: "Hub name",
+                labelText: "Hub Name",
                 border: OutlineInputBorder(),
               ),
             ),
