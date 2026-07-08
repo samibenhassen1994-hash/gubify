@@ -21,6 +21,8 @@ class _ModuleSelectionScreenState extends State<ModuleSelectionScreen> {
   bool _loading = false;
 
   final Map<String, bool> _modules = {
+    "goals": true,
+
     "tasks": false,
     "calendar": false,
     "chat": false,
@@ -69,6 +71,7 @@ class _ModuleSelectionScreenState extends State<ModuleSelectionScreen> {
     required String keyName,
     required String title,
     required IconData icon,
+    bool enabled = true,
   }) {
     return Card(
       elevation: 0,
@@ -78,13 +81,18 @@ class _ModuleSelectionScreenState extends State<ModuleSelectionScreen> {
       ),
       child: SwitchListTile(
         value: _modules[keyName]!,
-        onChanged: (value) {
-          setState(() {
-            _modules[keyName] = value;
-          });
-        },
+        onChanged: enabled
+            ? (value) {
+                setState(() {
+                  _modules[keyName] = value;
+                });
+              }
+            : null,
         secondary: Icon(icon),
         title: Text(title),
+        subtitle: enabled
+            ? null
+            : const Text("Core module"),
       ),
     );
   }
@@ -112,7 +120,7 @@ class _ModuleSelectionScreenState extends State<ModuleSelectionScreen> {
             const SizedBox(height: 8),
 
             const Text(
-              "Select the modules you want to enable.\nYou can change them later at any time.",
+              "Core modules are always enabled.\nChoose any additional modules.",
               textAlign: TextAlign.center,
             ),
 
@@ -121,6 +129,37 @@ class _ModuleSelectionScreenState extends State<ModuleSelectionScreen> {
             Expanded(
               child: ListView(
                 children: [
+                  const Padding(
+                    padding: EdgeInsets.only(bottom: 12),
+                    child: Text(
+                      "Core Modules",
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+
+                  buildTile(
+                    keyName: "goals",
+                    title: "Group Goals",
+                    icon: Icons.flag,
+                    enabled: false,
+                  ),
+
+                  const SizedBox(height: 20),
+
+                  const Padding(
+                    padding: EdgeInsets.only(bottom: 12),
+                    child: Text(
+                      "Optional Modules",
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+
                   buildTile(
                     keyName: "tasks",
                     title: "Tasks",

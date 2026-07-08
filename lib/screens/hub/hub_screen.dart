@@ -1,13 +1,17 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
 import '../../repositories/hub_repository.dart';
 import '../../widgets/user_header.dart';
+import '../../modules/goals/widgets/goal_home_card.dart';
+
 import '../welcome_screen.dart';
-import 'board_screen.dart';
-import 'invite_members_screen.dart';
-import 'members_screen.dart';
-import 'modules_screen.dart';
+
+import 'widgets/board_card.dart';
+import 'widgets/invite_code_card.dart';
+import 'widgets/invite_members_button.dart';
+import 'widgets/manage_hub_button.dart';
+import 'widgets/members_card.dart';
+import 'widgets/modules_card.dart';
 
 class HubScreen extends StatelessWidget {
   final String hubId;
@@ -54,6 +58,7 @@ class HubScreen extends StatelessWidget {
           final String hubName = data["name"] ?? "Hub";
           final String inviteCode = data["inviteCode"] ?? "";
           final int memberCount = data["memberCount"] ?? 1;
+          final String ownerId = data["ownerId"] ?? "";
 
           final Map<String, dynamic> modules =
               Map<String, dynamic>.from(data["modules"] ?? {});
@@ -90,145 +95,47 @@ class HubScreen extends StatelessWidget {
 
                 const SizedBox(height: 30),
 
-                Card(
-                  child: ListTile(
-                    leading: const Icon(Icons.campaign),
-                    title: const Text("Board"),
-                    subtitle: const Text(
-                      "All group activities will appear here.",
-                    ),
-                    trailing: const Icon(
-                      Icons.arrow_forward_ios,
-                      size: 16,
-                    ),
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => BoardScreen(
-                            hubId: hubId,
-                          ),
-                        ),
-                      );
-                    },
-                  ),
+                BoardCard(
+                  hubId: hubId,
                 ),
 
                 const SizedBox(height: 12),
 
-                Card(
-                  child: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-                    stream: HubRepository.instance.hubStream(hubId),
-                    builder: (context, snapshot) {
-                      final liveData = snapshot.data?.data();
-
-                      final liveMemberCount =
-                          liveData?["memberCount"] ?? memberCount;
-
-                      return ListTile(
-                        leading: const Icon(Icons.people),
-                        title: const Text("Members"),
-                        subtitle: const Text("View all members"),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              liveMemberCount.toString(),
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            const Icon(
-                              Icons.arrow_forward_ios,
-                              size: 16,
-                            ),
-                          ],
-                        ),
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => MembersScreen(
-                                hubId: hubId,
-                              ),
-                            ),
-                          );
-                        },
-                      );
-                    },
-                  ),
+                GoalHomeCard(
+                  hubId: hubId,
+                  ownerId: ownerId,
                 ),
 
                 const SizedBox(height: 12),
 
-                Card(
-                  child: ListTile(
-                    leading: const Icon(Icons.extension),
-                    title: const Text("Active Modules"),
-                    subtitle: Text(
-                      activeModules.isEmpty
-                          ? "No modules selected"
-                          : activeModules.join(", "),
-                    ),
-                    trailing: const Icon(
-                      Icons.arrow_forward_ios,
-                      size: 16,
-                    ),
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => ModulesScreen(
-                            hubId: hubId,
-                          ),
-                        ),
-                      );
-                    },
-                  ),
+                MembersCard(
+                  hubId: hubId,
+                  memberCount: memberCount,
                 ),
 
                 const SizedBox(height: 12),
 
-                Card(
-                  child: ListTile(
-                    leading: const Icon(Icons.vpn_key),
-                    title: const Text("Invite code"),
-                    subtitle: Text(inviteCode),
-                  ),
+                ModulesCard(
+                  hubId: hubId,
+                  activeModules: activeModules,
+                ),
+
+                const SizedBox(height: 12),
+
+                InviteCodeCard(
+                  inviteCode: inviteCode,
                 ),
 
                 const SizedBox(height: 30),
 
-                SizedBox(
-                  width: double.infinity,
-                  height: 55,
-                  child: FilledButton.icon(
-                    icon: const Icon(Icons.person_add),
-                    label: const Text("Invite members"),
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => InviteMembersScreen(
-                            hubId: hubId,
-                          ),
-                        ),
-                      );
-                    },
-                  ),
+                InviteMembersButton(
+                  hubId: hubId,
                 ),
 
                 const SizedBox(height: 15),
 
-                SizedBox(
-                  width: double.infinity,
-                  height: 55,
-                  child: OutlinedButton.icon(
-                    icon: const Icon(Icons.settings),
-                    label: const Text("Manage Hub"),
-                    onPressed: () {},
-                  ),
+                ManageHubButton(
+                  hubId: hubId,
                 ),
               ],
             ),

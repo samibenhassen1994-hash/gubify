@@ -1,0 +1,148 @@
+HUBFY DEVELOPMENT RULES (v1)
+
+Filosofia del progetto
+
+Hubfy deve essere: - semplice da mantenere; - modulare; - facile da
+espandere; - con file piccoli; - con responsabilità ben separate.
+
+Ogni nuova funzione deve integrarsi senza rompere la logica esistente.
+
+REGOLA 1
+
+Non modificare parti stabili dell’app per sviluppare un nuovo modulo. Se
+Hub, Board, Login o My Hubs funzionano, non si toccano salvo bug o
+necessità indispensabili.
+
+REGOLA 2
+
+Sviluppare un modulo alla volta.
+
+Ordine consigliato: Goal → Task → Shopping → Expense → …
+
+REGOLA 3
+
+Ogni sviluppo deve essere incrementale.
+
+Esempio: Create Goal → funziona Lista Goal → funziona Dettaglio Goal →
+funziona Pagamenti → funziona
+
+Ogni step deve lasciare l’app perfettamente funzionante.
+
+REGOLA 4
+
+Ogni file ha una sola responsabilità.
+
+Screen → assembla la pagina. Widget → mostra un componente. Service →
+contiene la logica. Repository → legge/scrive i dati. Model →
+rappresenta i dati.
+
+REGOLA 5
+
+Le Screen non parlano mai direttamente con Firestore.
+
+Screen ↓ Service ↓ Repository ↓ Firestore
+
+REGOLA 6
+
+I Widget non contengono logica. Ricevono dati e li mostrano.
+
+REGOLA 7
+
+I Repository leggono e scrivono dati. Non fanno calcoli, business logic
+o UI.
+
+REGOLA 8
+
+I Service contengono tutta la logica. Mai Navigator. Mai SnackBar. Mai
+UI.
+
+REGOLA 9
+
+I Model contengono solo: - campi - fromFirestore() - toFirestore() -
+copyWith()
+
+REGOLA 10
+
+Mai duplicare codice. Se una funzione viene copiata in due punti,
+valutare un metodo comune. Non anticipare l’astrazione se serve solo a
+un modulo.
+
+REGOLA 11
+
+Non fare refactoring senza un motivo reale. Prima sviluppare, poi
+ottimizzare.
+
+REGOLA 12
+
+Non rompere la logica esistente. Se una modifica coinvolge troppi file,
+fermarsi e cercare una soluzione più semplice.
+
+REGOLA 13
+
+Ogni schermata deve essere comprensibile in pochi secondi.
+
+REGOLA 14
+
+Struttura standard:
+
+modules/ goal/ models/ screens/ widgets/
+
+repositories/ goal_repository.dart
+
+services/ goal_service.dart
+
+REGOLA 15
+
+Per Repository, Service e Model lavorare preferibilmente sostituendo il
+file completo.
+
+REGOLA 16
+
+Prima di passare allo step successivo: - nessun errore - progetto
+compilato - test manuale - commit Git
+
+REGOLA 17
+
+Un commit Git per ogni funzionalità completata.
+
+REGOLA 18
+
+Refactoring solo dopo aver completato e testato un modulo.
+
+REGOLA 19
+
+La stabilità viene prima della perfezione.
+
+Metodo di lavoro
+
+Idea ↓ Progettazione teorica ↓ Implementazione minima funzionante ↓ Test
+↓ Commit Git ↓ Step successivo
+
+Obiettivo finale
+
+Hubfy deve crescere mantenendo: - codice ordinato; - file piccoli; -
+logica separata; - facilità di manutenzione; - rischio minimo di
+introdurre bug.
+REGOLA 20
+
+Convenzione linguistica del progetto
+
+Hubfy deve seguire una convenzione linguistica chiara e costante durante tutto lo sviluppo.
+
+🇮🇹 La progettazione, le discussioni tecniche, la documentazione e i commenti di sviluppo vengono scritti in italiano.
+🇬🇧 L'applicazione deve essere interamente sviluppata in inglese per tutto ciò che vede l'utente finale, inclusi:
+schermate;
+pulsanti;
+messaggi;
+dialog;
+menu;
+nomi dei moduli;
+testi dell'interfaccia.
+🇬🇧 Anche il codice deve utilizzare nomi in inglese per classi, file, metodi, variabili e widget, mantenendo l'italiano esclusivamente per la progettazione e la documentazione interna.
+
+Obiettivo: mantenere un progetto professionale, coerente e facilmente espandibile, senza rinunciare alla comodità di progettare e discutere il progetto in italiano.
+REGOLA 21 
+Una Screen non dovrebbe superare indicativamente le 150-200 righe.
+Se cresce oltre questa dimensione perché contiene molte sezioni indipendenti, tali sezioni devono essere estratte in widget dedicati.
+
+Non è un limite rigido: ci saranno casi in cui una schermata avrà bisogno di qualche riga in più. L'importante è che ogni widget abbia una responsabilità chiara.

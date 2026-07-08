@@ -172,4 +172,56 @@ class HubService {
 
     return hubId;
   }
+
+  /// Deletes a Hub.
+  ///
+  /// Current implementation:
+  /// - deletes the Hub document
+  /// - removes the owner's Hub reference
+  ///
+  /// Future versions will also delete:
+  /// - members
+  /// - goals
+  /// - board
+  /// - tasks
+  /// - shopping
+  /// - expenses
+  Future<void> deleteHub({
+    required String hubId,
+  }) async {
+    final user = _auth.currentUser;
+
+    if (user == null) {
+      throw Exception("User not authenticated.");
+    }
+
+    final hubDoc =
+        await _firestore.collection("hubs").doc(hubId).get();
+
+    if (!hubDoc.exists) {
+      throw Exception("Hub not found.");
+    }
+
+    final data = hubDoc.data()!;
+
+    if (data["ownerId"] != user.uid) {
+      throw Exception("Only the owner can delete this Hub.");
+    }
+
+    final batch = _firestore.batch();
+
+    batch.delete(
+      _firestore.collection("hubs").doc(hubId),
+    );
+
+    batch.delete(
+      _firestore
+          .collection("users")
+          .doc(user.uid)
+          .collection("hubs")
+          .doc(hubId),
+    );
+
+    await batch.commit();
+  }
 }
