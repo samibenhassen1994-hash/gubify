@@ -83,12 +83,15 @@ class MyHubsScreen extends StatelessWidget {
                             fontSize: 17,
                           ),
                         ),
-                        subtitle: Padding(
-                          padding: const EdgeInsets.only(top: 4),
+                        subtitle: const Padding(
+                          padding: EdgeInsets.only(top: 4),
                           child: Text(
-                            "${hub["memberCount"] ?? 1} members",
+                                     "Tap to open",
+                           style: TextStyle(
+                              color: Colors.grey,
+                            ),
                           ),
-                        ),
+                          ),
                         trailing: const Icon(
                           Icons.arrow_forward_ios,
                           size: 18,

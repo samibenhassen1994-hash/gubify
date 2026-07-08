@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
 import '../../repositories/hub_repository.dart';
@@ -5,6 +6,8 @@ import '../../widgets/user_header.dart';
 import '../welcome_screen.dart';
 import 'board_screen.dart';
 import 'invite_members_screen.dart';
+import 'members_screen.dart';
+import 'modules_screen.dart';
 
 class HubScreen extends StatelessWidget {
   final String hubId;
@@ -94,8 +97,10 @@ class HubScreen extends StatelessWidget {
                     subtitle: const Text(
                       "All group activities will appear here.",
                     ),
-                    trailing:
-                        const Icon(Icons.arrow_forward_ios, size: 16),
+                    trailing: const Icon(
+                      Icons.arrow_forward_ios,
+                      size: 16,
+                    ),
                     onTap: () {
                       Navigator.push(
                         context,
@@ -112,15 +117,46 @@ class HubScreen extends StatelessWidget {
                 const SizedBox(height: 12),
 
                 Card(
-                  child: ListTile(
-                    leading: const Icon(Icons.people),
-                    title: const Text("Members"),
-                    trailing: Text(
-                      memberCount.toString(),
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
+                  child: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+                    stream: HubRepository.instance.hubStream(hubId),
+                    builder: (context, snapshot) {
+                      final liveData = snapshot.data?.data();
+
+                      final liveMemberCount =
+                          liveData?["memberCount"] ?? memberCount;
+
+                      return ListTile(
+                        leading: const Icon(Icons.people),
+                        title: const Text("Members"),
+                        subtitle: const Text("View all members"),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              liveMemberCount.toString(),
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            const Icon(
+                              Icons.arrow_forward_ios,
+                              size: 16,
+                            ),
+                          ],
+                        ),
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => MembersScreen(
+                                hubId: hubId,
+                              ),
+                            ),
+                          );
+                        },
+                      );
+                    },
                   ),
                 ),
 
@@ -129,12 +165,26 @@ class HubScreen extends StatelessWidget {
                 Card(
                   child: ListTile(
                     leading: const Icon(Icons.extension),
-                    title: const Text("Active modules"),
+                    title: const Text("Active Modules"),
                     subtitle: Text(
                       activeModules.isEmpty
                           ? "No modules selected"
                           : activeModules.join(", "),
                     ),
+                    trailing: const Icon(
+                      Icons.arrow_forward_ios,
+                      size: 16,
+                    ),
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => ModulesScreen(
+                            hubId: hubId,
+                          ),
+                        ),
+                      );
+                    },
                   ),
                 ),
 

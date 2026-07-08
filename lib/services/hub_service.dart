@@ -2,7 +2,9 @@ import 'dart:math';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+
 import '../config/app_limits.dart';
+import '../repositories/user_repository.dart';
 
 class HubService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -17,18 +19,22 @@ class HubService {
     if (user == null) {
       throw Exception("User not authenticated.");
     }
-    
-    final ownedHubs = await _firestore
-    .collection("hubs")
-    .where("ownerId", isEqualTo: user.uid)
-    .count()
-    .get();
 
-if ((ownedHubs.count ?? 0) >= AppLimits.freeMaxHubs) {
-  throw Exception(
-    "You have reached the maximum number of Hubs (${AppLimits.freeMaxHubs}).",
-  );
-}
+    final ownedHubs = await _firestore
+        .collection("hubs")
+        .where("ownerId", isEqualTo: user.uid)
+        .count()
+        .get();
+
+    if ((ownedHubs.count ?? 0) >= AppLimits.freeMaxHubs) {
+      throw Exception(
+        "You have reached the maximum number of Hubs (${AppLimits.freeMaxHubs}).",
+      );
+    }
+
+    final userData = await UserRepository.instance.getUser(user.uid);
+
+    final displayName = userData?["displayName"] ?? "User";
 
     final hubRef = _firestore.collection("hubs").doc();
 
@@ -57,7 +63,7 @@ if ((ownedHubs.count ?? 0) >= AppLimits.freeMaxHubs) {
       hubRef.collection("members").doc(user.uid),
       {
         "uid": user.uid,
-        "displayName": user.displayName ?? "User",
+        "displayName": displayName,
         "photoUrl": user.photoURL,
         "role": "owner",
         "joinedAt": FieldValue.serverTimestamp(),
@@ -95,6 +101,10 @@ if ((ownedHubs.count ?? 0) >= AppLimits.freeMaxHubs) {
       throw Exception("User not authenticated.");
     }
 
+    final userData = await UserRepository.instance.getUser(user.uid);
+
+    final displayName = userData?["displayName"] ?? "User";
+
     final query = await _firestore
         .collection("hubs")
         .where(
@@ -127,7 +137,7 @@ if ((ownedHubs.count ?? 0) >= AppLimits.freeMaxHubs) {
       memberRef,
       {
         "uid": user.uid,
-        "displayName": user.displayName ?? "User",
+        "displayName": displayName,
         "photoUrl": user.photoURL,
         "role": "member",
         "joinedAt": FieldValue.serverTimestamp(),
