@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../services/goal_service.dart';
+
 class CreateGoalScreen extends StatefulWidget {
   final String hubId;
 
@@ -18,6 +20,8 @@ class _CreateGoalScreenState extends State<CreateGoalScreen> {
   final _amountController = TextEditingController();
 
   DateTime? _deadline;
+
+  bool _isLoading = false;
 
   @override
   void dispose() {
@@ -38,6 +42,59 @@ class _CreateGoalScreenState extends State<CreateGoalScreen> {
     if (picked != null) {
       setState(() {
         _deadline = picked;
+      });
+    }
+  }
+
+  Future<void> _createGoal() async {
+    final title = _titleController.text.trim();
+    final description = _descriptionController.text.trim();
+    final amount =
+        double.tryParse(_amountController.text.trim());
+
+    if (title.isEmpty || amount == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            "Please enter a valid title and amount.",
+          ),
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      await GoalService.instance.createGoal(
+        hubId: widget.hubId,
+        title: title,
+        description: description,
+        targetAmount: amount,
+        deadline: _deadline,
+      );
+
+      if (!mounted) return;
+
+      Navigator.pop(context);
+
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            e.toString(),
+          ),
+        ),
+      );
+    }
+
+    if (mounted) {
+      setState(() {
+        _isLoading = false;
       });
     }
   }
@@ -110,17 +167,22 @@ class _CreateGoalScreenState extends State<CreateGoalScreen> {
               width: double.infinity,
               height: 55,
               child: FilledButton.icon(
-                icon: const Icon(Icons.flag),
-                label: const Text("Create Goal"),
-                onPressed: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text(
-                        "GoalService will be connected in the next step.",
-                      ),
-                    ),
-                  );
-                },
+                icon: _isLoading
+                    ? const SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                        ),
+                      )
+                    : const Icon(Icons.flag),
+                label: Text(
+                  _isLoading
+                      ? "Creating..."
+                      : "Create Goal",
+                ),
+                onPressed:
+                    _isLoading ? null : _createGoal,
               ),
             ),
           ],

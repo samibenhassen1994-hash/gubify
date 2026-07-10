@@ -3,8 +3,9 @@ import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
-import '../modules/goals/models/goal_model.dart';
-import '../repositories/goal_repository.dart';
+import '../models/goal_member_model.dart';
+import '../models/goal_model.dart';
+import '../../../repositories/goal_repository.dart';
 
 class GoalService {
   GoalService._();
@@ -25,27 +26,54 @@ class GoalService {
 
     final members = await _loadHubMembers(hubId);
 
-    final amountPerMember = _calculateAmountPerMember(
-      targetAmount,
-      members.length,
-    );
-
     final goal = _buildGoal(
       title: title,
       description: description,
       targetAmount: targetAmount,
-      amountPerMember: amountPerMember,
       memberCount: members.length,
       deadline: deadline,
     );
 
-    await _saveGoal(
+    await GoalRepository.instance.createGoal(
       hubId,
       goal,
     );
 
-    // La creazione dei GoalMember
-    // arriverà nello step successivo.
+    final goalMembers = members
+        .map(
+          (member) => GoalMemberModel(
+            uid: member["uid"],
+            displayName: member["displayName"] ?? "User",
+            photoUrl: member["photoUrl"],
+            amount: 0,
+            confirmed: false,
+            updatedAt: Timestamp.now(),
+            confirmedAt: null,
+          ),
+        )
+        .toList();
+
+    await GoalRepository.instance.createGoalMembers(
+      hubId: hubId,
+      goalId: goal.goalId,
+      members: goalMembers,
+    );
+  }
+
+  /// Future (lo lasciamo per compatibilità)
+  Future<GoalModel?> getActiveGoal(
+    String hubId,
+  ) {
+    return GoalRepository.instance.getActiveGoal(hubId);
+  }
+
+  /// Stream in tempo reale
+  Stream<GoalModel?> activeGoalStream(
+    String hubId,
+  ) {
+    return GoalRepository.instance.activeGoalStream(
+      hubId,
+    );
   }
 
   void _validate(
@@ -73,33 +101,21 @@ class GoalService {
     return snapshot.docs;
   }
 
-  double _calculateAmountPerMember(
-    double amount,
-    int members,
-  ) {
-    if (members == 0) return amount;
-
-    return amount / members;
-  }
-
   GoalModel _buildGoal({
     required String title,
     required String description,
     required double targetAmount,
-    required double amountPerMember,
     required int memberCount,
     DateTime? deadline,
   }) {
     final user = _auth.currentUser!;
 
-    final goalId = _generateGoalId();
-
     return GoalModel(
-      goalId: goalId,
+      goalId: _generateGoalId(),
       title: title,
       description: description,
       targetAmount: targetAmount,
-      amountPerMember: amountPerMember,
+      currentAmount: 0,
       ownerId: user.uid,
       completedMembers: 0,
       totalMembers: memberCount,
@@ -109,16 +125,6 @@ class GoalService {
       deadline: deadline == null
           ? null
           : Timestamp.fromDate(deadline),
-    );
-  }
-
-  Future<void> _saveGoal(
-    String hubId,
-    GoalModel goal,
-  ) async {
-    await GoalRepository.instance.createGoal(
-      hubId,
-      goal,
     );
   }
 

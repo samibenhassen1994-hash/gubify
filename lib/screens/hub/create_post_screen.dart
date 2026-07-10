@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../../config/app_limits.dart';
 
 import '../../repositories/user_repository.dart';
+import '../../modules/notifications/services/notification_service.dart';
 
 class CreatePostScreen extends StatefulWidget {
   final String hubId;
@@ -76,6 +77,17 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         "likes": 0,
         "comments": 0,
       });
+      await NotificationService.instance.send(
+  hubId: widget.hubId,
+  title: "New Board Post",
+  body: "$displayName published a new post.",
+  type: "board_post",
+  senderId: user.uid,
+  senderName: displayName,
+  data: {
+    "message": message,
+  },
+);
 
       if (mounted) {
         Navigator.pop(context);

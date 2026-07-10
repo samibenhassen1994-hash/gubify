@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
 import '../../repositories/hub_repository.dart';
@@ -12,6 +13,7 @@ import 'widgets/invite_members_button.dart';
 import 'widgets/manage_hub_button.dart';
 import 'widgets/members_card.dart';
 import 'widgets/modules_card.dart';
+import '../../widgets/hub_access_guard.dart';
 
 class HubScreen extends StatelessWidget {
   final String hubId;
@@ -38,30 +40,43 @@ class HubScreen extends StatelessWidget {
         ),
         title: const Text("Hubfy"),
       ),
-      body: FutureBuilder<Map<String, dynamic>?>(
-        future: HubRepository.instance.getHub(hubId),
+      body: HubAccessGuard(
+  hubId: hubId,
+  child: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+        stream: HubRepository.instance.hubStream(hubId),
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
+          if (snapshot.connectionState ==
+              ConnectionState.waiting) {
             return const Center(
               child: CircularProgressIndicator(),
             );
           }
 
-          if (!snapshot.hasData || snapshot.data == null) {
+          if (!snapshot.hasData ||
+              !snapshot.data!.exists) {
             return const Center(
               child: Text("Hub not found"),
             );
           }
 
-          final data = snapshot.data!;
+          final data = snapshot.data!.data()!;
 
-          final String hubName = data["name"] ?? "Hub";
-          final String inviteCode = data["inviteCode"] ?? "";
-          final int memberCount = data["memberCount"] ?? 1;
-          final String ownerId = data["ownerId"] ?? "";
+          final String hubName =
+              data["name"] ?? "Hub";
+
+          final String inviteCode =
+              data["inviteCode"] ?? "";
+
+          final int memberCount =
+              data["memberCount"] ?? 1;
+
+          final String ownerId =
+              data["ownerId"] ?? "";
 
           final Map<String, dynamic> modules =
-              Map<String, dynamic>.from(data["modules"] ?? {});
+              Map<String, dynamic>.from(
+            data["modules"] ?? {},
+          );
 
           final activeModules = modules.entries
               .where((e) => e.value == true)
@@ -71,9 +86,12 @@ class HubScreen extends StatelessWidget {
           return SingleChildScrollView(
             padding: const EdgeInsets.all(20),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment:
+                  CrossAxisAlignment.start,
               children: [
-                const UserHeader(),
+                 UserHeader(
+                   hubId: hubId,
+                    ),
 
                 Text(
                   hubName,
@@ -139,9 +157,10 @@ class HubScreen extends StatelessWidget {
                 ),
               ],
             ),
-          );
-        },
-      ),
-    );
-  }
+                  );
+      },
+    ),
+  ),
+);
+}
 }

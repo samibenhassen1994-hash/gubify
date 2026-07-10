@@ -6,7 +6,9 @@ class GoalModel {
   final String description;
 
   final double targetAmount;
-  final double amountPerMember;
+
+  /// Total confirmed contributions.
+  final double currentAmount;
 
   final String ownerId;
 
@@ -24,7 +26,7 @@ class GoalModel {
     required this.title,
     required this.description,
     required this.targetAmount,
-    required this.amountPerMember,
+    required this.currentAmount,
     required this.ownerId,
     required this.completedMembers,
     required this.totalMembers,
@@ -42,7 +44,7 @@ class GoalModel {
       title: json["title"] ?? "",
       description: json["description"] ?? "",
       targetAmount: (json["targetAmount"] ?? 0).toDouble(),
-      amountPerMember: (json["amountPerMember"] ?? 0).toDouble(),
+      currentAmount: (json["currentAmount"] ?? 0).toDouble(),
       ownerId: json["ownerId"] ?? "",
       completedMembers: json["completedMembers"] ?? 0,
       totalMembers: json["totalMembers"] ?? 0,
@@ -59,7 +61,7 @@ class GoalModel {
       "title": title,
       "description": description,
       "targetAmount": targetAmount,
-      "amountPerMember": amountPerMember,
+      "currentAmount": currentAmount,
       "ownerId": ownerId,
       "completedMembers": completedMembers,
       "totalMembers": totalMembers,
@@ -75,7 +77,7 @@ class GoalModel {
     String? title,
     String? description,
     double? targetAmount,
-    double? amountPerMember,
+    double? currentAmount,
     String? ownerId,
     int? completedMembers,
     int? totalMembers,
@@ -89,7 +91,7 @@ class GoalModel {
       title: title ?? this.title,
       description: description ?? this.description,
       targetAmount: targetAmount ?? this.targetAmount,
-      amountPerMember: amountPerMember ?? this.amountPerMember,
+      currentAmount: currentAmount ?? this.currentAmount,
       ownerId: ownerId ?? this.ownerId,
       completedMembers: completedMembers ?? this.completedMembers,
       totalMembers: totalMembers ?? this.totalMembers,

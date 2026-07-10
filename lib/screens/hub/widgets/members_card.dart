@@ -50,8 +50,9 @@ class MembersCard extends StatelessWidget {
                 context,
                 MaterialPageRoute(
                   builder: (_) => MembersScreen(
-                    hubId: hubId,
-                  ),
+  hubId: hubId,
+  ownerId: liveData?["ownerId"] ?? "",
+),
                 ),
               );
             },

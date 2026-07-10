@@ -1,6 +1,12 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import '../models/goal_model.dart';
+import '../screens/goal_members_screen.dart';
+import '../services/goal_service.dart';
+import 'goal_empty_card.dart';
+import 'goal_progress_card.dart';
+
 class GoalHomeCard extends StatelessWidget {
   final String hubId;
   final String ownerId;
@@ -14,80 +20,80 @@ class GoalHomeCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final currentUser = FirebaseAuth.instance.currentUser;
-
-    final bool isOwner =
+    final isOwner =
         currentUser != null && currentUser.uid == ownerId;
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(18),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Row(
-              children: [
-                Icon(
-                  Icons.flag,
-                  color: Colors.orange,
-                ),
-                SizedBox(width: 8),
-                Text(
-                  "Group Goal",
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
+    return StreamBuilder<GoalModel?>(
+      stream: GoalService.instance.activeGoalStream(hubId),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Card(
+            child: Padding(
+              padding: EdgeInsets.all(30),
+              child: Center(
+                child: CircularProgressIndicator(),
+              ),
             ),
+          );
+        }
 
-            const SizedBox(height: 20),
+        final goal = snapshot.data;
 
-            const Center(
+        return InkWell(
+          borderRadius: BorderRadius.circular(20),
+          onTap: goal == null
+              ? null
+              : () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => GoalMembersScreen(
+                        hubId: hubId,
+                        goalId: goal.goalId,
+                        ownerId: ownerId,
+                      ),
+                    ),
+                  );
+                },
+          child: Card(
+            elevation: 3,
+            color: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(20),
               child: Column(
                 children: [
-                  Icon(
-                    Icons.emoji_events_outlined,
-                    size: 56,
-                    color: Colors.grey,
+                  const Row(
+                    children: [
+                      Icon(Icons.account_balance_wallet,color: Colors.blue),
+                      SizedBox(width: 8),
+                      Text(
+                        "Shared Budget",
+                        style: TextStyle(
+                          fontSize: 19,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
                   ),
-                  SizedBox(height: 12),
-                  Text(
-                    "No group goal yet",
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
+                  const SizedBox(height: 25),
+                  if (goal == null)
+                    GoalEmptyCard(
+                      isOwner: isOwner,
+                      hubId: hubId,
+                    )
+                  else
+                    GoalProgressCard(
+                      goal: goal,
                     ),
-                  ),
-                  SizedBox(height: 6),
-                  Text(
-                    "Create the first shared goal for this Hub.",
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: Colors.grey,
-                    ),
-                  ),
                 ],
               ),
             ),
-
-            if (isOwner) ...[
-              const SizedBox(height: 20),
-
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton.icon(
-                  icon: const Icon(Icons.add),
-                  label: const Text("Create Goal"),
-                  onPressed: () {
-                    // TODO: Aprirà CreateGoalScreen
-                  },
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 }

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../widgets/user_header.dart';
 import 'hub_screen.dart';
+import '../../widgets/hub_access_guard.dart';
 
 class MyHubsScreen extends StatelessWidget {
   const MyHubsScreen({super.key});
@@ -31,13 +32,15 @@ class MyHubsScreen extends StatelessWidget {
                   .orderBy("joinedAt", descending: true)
                   .get(),
               builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
+                if (snapshot.connectionState ==
+                    ConnectionState.waiting) {
                   return const Center(
                     child: CircularProgressIndicator(),
                   );
                 }
 
-                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                if (!snapshot.hasData ||
+                    snapshot.data!.docs.isEmpty) {
                   return const Center(
                     child: Text(
                       "You haven't joined any Hub yet.",
@@ -58,19 +61,23 @@ class MyHubsScreen extends StatelessWidget {
 
                     return Card(
                       elevation: 0,
-                      margin: const EdgeInsets.only(bottom: 12),
+                      margin:
+                          const EdgeInsets.only(bottom: 12),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(18),
+                        borderRadius:
+                            BorderRadius.circular(18),
                       ),
                       child: ListTile(
-                        contentPadding: const EdgeInsets.symmetric(
+                        contentPadding:
+                            const EdgeInsets.symmetric(
                           horizontal: 18,
                           vertical: 10,
                         ),
                         leading: CircleAvatar(
                           radius: 26,
                           backgroundColor:
-                              Colors.blue.withValues(alpha: .12),
+                              Colors.blue.withValues(
+                                  alpha: .12),
                           child: const Icon(
                             Icons.groups,
                             color: Colors.blue,
@@ -84,27 +91,75 @@ class MyHubsScreen extends StatelessWidget {
                           ),
                         ),
                         subtitle: const Padding(
-                          padding: EdgeInsets.only(top: 4),
+                          padding:
+                              EdgeInsets.only(top: 4),
                           child: Text(
-                                     "Tap to open",
-                           style: TextStyle(
+                            "Tap to open",
+                            style: TextStyle(
                               color: Colors.grey,
                             ),
                           ),
-                          ),
+                        ),
                         trailing: const Icon(
                           Icons.arrow_forward_ios,
                           size: 18,
                         ),
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => HubScreen(
-                                hubId: hubId,
+                        onTap: () async {
+                          final memberDoc =
+                              await FirebaseFirestore
+                                  .instance
+                                  .collection("hubs")
+                                  .doc(hubId)
+                                  .collection("members")
+                                  .doc(uid)
+                                  .get();
+
+                          if (!memberDoc.exists) {
+                            // Rimuove l'Hub dalla lista personale
+                            await FirebaseFirestore
+                                .instance
+                                .collection("users")
+                                .doc(uid)
+                                .collection("hubs")
+                                .doc(hubId)
+                                .delete();
+
+                            if (!context.mounted) return;
+
+                            ScaffoldMessenger.of(context)
+                                .showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  "You are no longer a member of this Hub.",
+                                ),
                               ),
-                            ),
-                          );
+                            );
+
+                            // Ricarica la schermata
+                            Navigator.pushReplacement(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) =>
+                                    const MyHubsScreen(),
+                              ),
+                            );
+
+                            return;
+                          }
+
+                          if (!context.mounted) return;
+
+                          Navigator.push(
+  context,
+  MaterialPageRoute(
+    builder: (_) => HubAccessGuard(
+      hubId: hubId,
+      child: HubScreen(
+        hubId: hubId,
+      ),
+    ),
+  ),
+);
                         },
                       ),
                     );

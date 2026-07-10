@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../modules/goals/models/goal_member_model.dart';
 import '../modules/goals/models/goal_model.dart';
 
 class GoalRepository {
@@ -28,11 +29,11 @@ class GoalRepository {
         .set(goal.toFirestore());
   }
 
-  /// Crea tutti i membri del Goal
+  /// Crea automaticamente tutti i membri dello Shared Budget
   Future<void> createGoalMembers({
     required String hubId,
     required String goalId,
-    required List<Map<String, dynamic>> members,
+    required List<GoalMemberModel> members,
   }) async {
     final batch = _firestore.batch();
 
@@ -40,20 +41,79 @@ class GoalRepository {
       final doc = goalsCollection(hubId)
           .doc(goalId)
           .collection("members")
-          .doc(member["uid"]);
+          .doc(member.uid);
 
-      batch.set(doc, {
-        "uid": member["uid"],
-        "displayName": member["displayName"],
-        "photoUrl": member["photoUrl"],
-        "active": true,
-        "paid": false,
-        "paidAmount": 0,
-        "paidAt": null,
-      });
+      batch.set(
+        doc,
+        member.toFirestore(),
+      );
     }
 
     await batch.commit();
+  }
+
+  /// Rimuove un membro da tutti gli Shared Budget
+  Future<void> removeMemberFromAllGoals({
+    required String hubId,
+    required String uid,
+  }) async {
+    final goals = await goalsCollection(hubId).get();
+
+    for (final goal in goals.docs) {
+      final goalId = goal.id;
+
+      final memberRef = goalsCollection(hubId)
+          .doc(goalId)
+          .collection("members")
+          .doc(uid);
+
+      final memberDoc = await memberRef.get();
+
+      if (memberDoc.exists) {
+        await memberRef.delete();
+
+        await recalculateGoalProgress(
+          hubId: hubId,
+          goalId: goalId,
+        );
+      }
+    }
+  }
+
+  /// Ricalcola il progresso dello Shared Budget
+  Future<void> recalculateGoalProgress({
+    required String hubId,
+    required String goalId,
+  }) async {
+    final membersSnapshot = await goalsCollection(hubId)
+        .doc(goalId)
+        .collection("members")
+        .get();
+
+    double currentAmount = 0;
+    int completedMembers = 0;
+    final totalMembers = membersSnapshot.docs.length;
+
+    for (final doc in membersSnapshot.docs) {
+      final data = doc.data();
+
+      final confirmed = data["confirmed"] ?? false;
+
+      if (!confirmed) continue;
+
+      completedMembers++;
+
+      currentAmount +=
+          (data["amount"] ?? 0).toDouble();
+    }
+
+    await goalsCollection(hubId)
+        .doc(goalId)
+        .update({
+      "currentAmount": currentAmount,
+      "completedMembers": completedMembers,
+      "totalMembers": totalMembers,
+    });
   }
 
   /// Restituisce tutti gli obiettivi
@@ -95,6 +155,49 @@ class GoalRepository {
               )
               .toList(),
         );
+  }
+
+  /// Restituisce il Goal attivo (Future)
+  Future<GoalModel?> getActiveGoal(
+    String hubId,
+  ) async {
+    final snapshot = await goalsCollection(hubId)
+        .where(
+          "status",
+          isEqualTo: "active",
+        )
+        .limit(1)
+        .get();
+
+    if (snapshot.docs.isEmpty) {
+      return null;
+    }
+
+    return GoalModel.fromFirestore(
+      snapshot.docs.first.data(),
+    );
+  }
+
+  /// Stream del Goal attivo
+  Stream<GoalModel?> activeGoalStream(
+    String hubId,
+  ) {
+    return goalsCollection(hubId)
+        .where(
+          "status",
+          isEqualTo: "active",
+        )
+        .limit(1)
+        .snapshots()
+        .map((snapshot) {
+      if (snapshot.docs.isEmpty) {
+        return null;
+      }
+
+      return GoalModel.fromFirestore(
+        snapshot.docs.first.data(),
+      );
+    });
   }
 
   /// Restituisce un singolo obiettivo
