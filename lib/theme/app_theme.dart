@@ -13,11 +13,14 @@ class AppTheme {
       seedColor: AppColors.primary,
     ),
 
-    appBarTheme: const AppBarTheme(
-      elevation: 0,
-      backgroundColor: Colors.white,
-      foregroundColor: AppColors.textPrimary,
-      centerTitle: true,
-    ),
+   appBarTheme: const AppBarTheme(
+  elevation: 0,
+  backgroundColor: Colors.transparent,
+  foregroundColor: AppColors.textPrimary,
+  surfaceTintColor: Colors.transparent,
+  shadowColor: Colors.transparent,
+  scrolledUnderElevation: 0,
+  centerTitle: true,
+),
   );
 }

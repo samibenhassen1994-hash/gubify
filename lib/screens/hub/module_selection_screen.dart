@@ -22,7 +22,8 @@ class _ModuleSelectionScreenState
   bool _loading = false;
 
   final Map<String, bool> _modules = {
-    "sharedBudget": true,
+    "goals": true,
+     "proposals": true,
     "tasks": false,
     "calendar": false,
     "chat": false,
@@ -183,13 +184,21 @@ class _ModuleSelectionScreenState
                   ),
 
                   buildTile(
-                    keyName: "sharedBudget",
+                    keyName: "goals",
                     title: "Shared Budget",
                     icon: Icons.account_balance_wallet_outlined,
                     description:
                         "Create shared money goals for your Hub.\n\n"
                         "Useful for trips, group gifts and common purchases.",
                   ),
+                  buildTile(
+  keyName: "proposals",
+  title: "Proposals",
+  icon: Icons.how_to_vote_outlined,
+  description:
+      "Create proposals, let members vote and automatically approve decisions when the majority is reached.",
+  enabled: false,
+),
 
                   const SizedBox(height: 20),
 

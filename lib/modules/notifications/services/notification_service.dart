@@ -13,32 +13,27 @@ class NotificationService {
 
   Future<void> send({
     required String hubId,
-
     required String title,
-
     required String body,
-
     required String type,
-
     required String senderId,
-
     required String senderName,
-
     Map<String, dynamic> data = const {},
+    bool markSenderAsRead = true,
   }) async {
-   final notification = NotificationModel(
-  notificationId: _generateId(),
-  title: title,
-  body: body,
-  type: type,
-  senderId: senderId,
-  senderName: senderName,
-  createdAt: Timestamp.now(),
-  readBy: [senderId],
-  data: data,
-);
-    await NotificationRepository.instance
-        .createNotification(
+    final notification = NotificationModel(
+      notificationId: _generateId(),
+      title: title,
+      body: body,
+      type: type,
+      senderId: senderId,
+      senderName: senderName,
+      createdAt: Timestamp.now(),
+      readBy: markSenderAsRead ? [senderId] : [],
+      data: data,
+    );
+
+    await NotificationRepository.instance.createNotification(
       hubId: hubId,
       notification: notification,
     );
@@ -47,9 +42,7 @@ class NotificationService {
   String _generateId() {
     final random = Random();
 
-    return DateTime.now()
-            .millisecondsSinceEpoch
-            .toString() +
+    return DateTime.now().millisecondsSinceEpoch.toString() +
         random.nextInt(999).toString();
   }
 }

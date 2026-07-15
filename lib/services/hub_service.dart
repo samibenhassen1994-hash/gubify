@@ -105,18 +105,44 @@ class HubService {
 
     final displayName = userData?["displayName"] ?? "User";
 
-    final query = await _firestore
-        .collection("hubs")
-        .where(
-          "inviteCode",
-          isEqualTo: inviteCode.trim().toUpperCase(),
-        )
-        .limit(1)
-        .get();
+    QuerySnapshot<Map<String, dynamic>> query;
 
-    if (query.docs.isEmpty) {
-      throw Exception("Invalid Hub code.");
-    }
+try {
+  query = await _firestore
+      .collection("hubs")
+      .where(
+        "inviteCode",
+        isEqualTo: inviteCode.trim().toUpperCase(),
+      )
+      .limit(1)
+      .get();
+} on FirebaseException catch (e) {
+  switch (e.code) {
+    case "unavailable":
+      throw Exception(
+        "No internet connection. Please check your connection and try again.",
+      );
+
+    case "permission-denied":
+      throw Exception(
+        "You don't have permission to access Hubfy.",
+      );
+
+    case "deadline-exceeded":
+      throw Exception(
+        "The connection timed out. Please try again.",
+      );
+
+    default:
+      throw Exception(
+        e.message ?? "Unexpected connection error.",
+      );
+  }
+}
+
+if (query.docs.isEmpty) {
+  throw Exception("Invalid Hub code.");
+}
 
     final hubDoc = query.docs.first;
     final hubId = hubDoc.id;

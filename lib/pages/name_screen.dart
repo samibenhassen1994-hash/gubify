@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../widgets/hubfy_background.dart';
 import '../services/auth_service.dart';
 import '../screens/welcome_screen.dart';
+import '../widgets/hubfy_logo.dart';
 
 class NameScreen extends StatefulWidget {
   const NameScreen({super.key});
@@ -29,10 +30,9 @@ class _NameScreenState extends State<NameScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 30),
             child: Column(
               children: [
-                Image.asset(
-                  "assets/images/logo.png",
-                  height: 90,
-                ),
+                HubfyLogo(
+  width: MediaQuery.of(context).size.width * 0.7,
+),
 
                 const SizedBox(height: 35),
 
