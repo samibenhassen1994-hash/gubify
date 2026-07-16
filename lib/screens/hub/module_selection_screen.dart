@@ -7,19 +7,24 @@ import 'hub_screen.dart';
 class ModuleSelectionScreen extends StatefulWidget {
   final String hubName;
 
-  const ModuleSelectionScreen({super.key, required this.hubName});
+  const ModuleSelectionScreen({
+    super.key,
+    required this.hubName,
+  });
 
   @override
-  State<ModuleSelectionScreen> createState() => _ModuleSelectionScreenState();
+  State<ModuleSelectionScreen> createState() =>
+      _ModuleSelectionScreenState();
 }
 
-class _ModuleSelectionScreenState extends State<ModuleSelectionScreen> {
+class _ModuleSelectionScreenState
+    extends State<ModuleSelectionScreen> {
   bool _loading = false;
 
   final Map<String, bool> _modules = {
     "goals": true,
     "proposals": true,
-    "tasks": false,
+    "tasks": true,
     "calendar": false,
     "chat": false,
     "photos": false,
@@ -41,7 +46,11 @@ class _ModuleSelectionScreenState extends State<ModuleSelectionScreen> {
 
       Navigator.pushAndRemoveUntil(
         context,
-        MaterialPageRoute(builder: (_) => HubScreen(hubId: hubId)),
+        MaterialPageRoute(
+          builder: (_) => HubScreen(
+            hubId: hubId,
+          ),
+        ),
         (_) => false,
       );
     } catch (e) {
@@ -49,7 +58,11 @@ class _ModuleSelectionScreenState extends State<ModuleSelectionScreen> {
 
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(e.toString())));
+      ).showSnackBar(
+        SnackBar(
+          content: Text(e.toString()),
+        ),
+      );
     } finally {
       if (mounted) {
         setState(() => _loading = false);
@@ -57,7 +70,10 @@ class _ModuleSelectionScreenState extends State<ModuleSelectionScreen> {
     }
   }
 
-  void _showModuleInfo({required String title, required String description}) {
+  void _showModuleInfo({
+    required String title,
+    required String description,
+  }) {
     showDialog(
       context: context,
       builder: (_) {
@@ -87,7 +103,9 @@ class _ModuleSelectionScreenState extends State<ModuleSelectionScreen> {
     return Card(
       elevation: 0,
       margin: const EdgeInsets.only(bottom: 12),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
       child: SwitchListTile(
         value: _modules[keyName]!,
         onChanged: enabled
@@ -104,7 +122,10 @@ class _ModuleSelectionScreenState extends State<ModuleSelectionScreen> {
             const SizedBox(width: 8),
             GestureDetector(
               onTap: () {
-                _showModuleInfo(title: title, description: description);
+                _showModuleInfo(
+                  title: title,
+                  description: description,
+                );
               },
               child: const Icon(
                 Icons.info_outline,
@@ -114,7 +135,9 @@ class _ModuleSelectionScreenState extends State<ModuleSelectionScreen> {
             ),
           ],
         ),
-        subtitle: enabled ? null : const Text("Core module"),
+        subtitle: enabled
+            ? null
+            : const Text("Core module"),
       ),
     );
   }
@@ -122,7 +145,9 @@ class _ModuleSelectionScreenState extends State<ModuleSelectionScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Choose Modules")),
+      appBar: AppBar(
+        title: const Text("Choose Modules"),
+      ),
       body: Padding(
         padding: const EdgeInsets.all(20),
         child: Column(
@@ -131,7 +156,10 @@ class _ModuleSelectionScreenState extends State<ModuleSelectionScreen> {
 
             Text(
               widget.hubName,
-              style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
+              style: const TextStyle(
+                fontSize: 28,
+                fontWeight: FontWeight.bold,
+              ),
             ),
 
             const SizedBox(height: 8),
@@ -164,13 +192,24 @@ class _ModuleSelectionScreenState extends State<ModuleSelectionScreen> {
                     description:
                         "Create shared money goals for your Hub.\n\n"
                         "Useful for trips, group gifts and common purchases.",
+                    enabled: false,
                   ),
+
                   buildTile(
                     keyName: "proposals",
                     title: "Proposals",
                     icon: Icons.how_to_vote_outlined,
                     description:
                         "Create proposals, let members vote and automatically approve decisions when the majority is reached.",
+                    enabled: false,
+                  ),
+
+                  buildTile(
+                    keyName: "tasks",
+                    title: "Tasks",
+                    icon: Icons.check_circle_outline,
+                    description:
+                        "Create and manage shared tasks with Hub members.",
                     enabled: false,
                   ),
 
@@ -188,14 +227,6 @@ class _ModuleSelectionScreenState extends State<ModuleSelectionScreen> {
                   ),
 
                   buildTile(
-                    keyName: "tasks",
-                    title: "Tasks",
-                    icon: Icons.check_circle_outline,
-                    description:
-                        "Create and manage shared tasks with Hub members.",
-                  ),
-
-                  buildTile(
                     keyName: "calendar",
                     title: "Calendar",
                     icon: Icons.calendar_month,
@@ -207,35 +238,40 @@ class _ModuleSelectionScreenState extends State<ModuleSelectionScreen> {
                     keyName: "chat",
                     title: "Chat",
                     icon: Icons.chat_bubble_outline,
-                    description: "Communicate with all Hub members.",
+                    description:
+                        "Communicate with all Hub members.",
                   ),
 
                   buildTile(
                     keyName: "photos",
                     title: "Photos",
                     icon: Icons.photo_library_outlined,
-                    description: "Save and share photos inside your Hub.",
+                    description:
+                        "Save and share photos inside your Hub.",
                   ),
 
                   buildTile(
                     keyName: "shopping",
                     title: "Shopping",
                     icon: Icons.shopping_cart_outlined,
-                    description: "Create shared shopping lists.",
+                    description:
+                        "Create shared shopping lists.",
                   ),
 
                   buildTile(
                     keyName: "expenses",
                     title: "Expenses",
                     icon: Icons.euro,
-                    description: "Track shared expenses between members.",
+                    description:
+                        "Track shared expenses between members.",
                   ),
 
                   buildTile(
                     keyName: "notes",
                     title: "Notes",
                     icon: Icons.note_alt_outlined,
-                    description: "Create shared notes for your Hub.",
+                    description:
+                        "Create shared notes for your Hub.",
                   ),
                 ],
               ),
@@ -245,7 +281,9 @@ class _ModuleSelectionScreenState extends State<ModuleSelectionScreen> {
               width: double.infinity,
               height: 55,
               child: FilledButton(
-                onPressed: _loading ? null : _createHub,
+                onPressed: _loading
+                    ? null
+                    : _createHub,
                 child: _loading
                     ? const SizedBox(
                         width: 24,
@@ -255,7 +293,10 @@ class _ModuleSelectionScreenState extends State<ModuleSelectionScreen> {
                           color: Colors.white,
                         ),
                       )
-                    : const Text("Create Hub", style: TextStyle(fontSize: 17)),
+                    : const Text(
+                        "Create Hub",
+                        style: TextStyle(fontSize: 17),
+                      ),
               ),
             ),
           ],

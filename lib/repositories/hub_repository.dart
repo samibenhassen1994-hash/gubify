@@ -15,11 +15,8 @@ class HubRepository {
   Future<Map<String, dynamic>?> getHub(String hubId) async {
     // Cache
     if (_hubCache.containsKey(hubId)) {
-      print("📦 Hub preso dalla cache");
       return _hubCache[hubId];
     }
-
-    print("☁️ Hub scaricato da Firestore");
 
     final doc = await _firestore.collection("hubs").doc(hubId).get();
 

@@ -2,7 +2,7 @@ import 'dart:math';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-
+import '../../../core/models/member_option.dart';
 import '../config/app_limits.dart';
 import '../repositories/user_repository.dart';
 
@@ -87,7 +87,7 @@ class HubService {
     await batch.commit();
 
     return hubRef.id;
-  }
+}
 
   Future<String> joinHub({required String inviteCode}) async {
     final user = _auth.currentUser;
@@ -225,4 +225,39 @@ class HubService {
 
     await batch.commit();
   }
+  Stream<List<MemberOption>> membersStream(String hubId) {
+    return _firestore
+        .collection("hubs")
+        .doc(hubId)
+        .collection("members")
+        .snapshots()
+        .map(
+          (snapshot) => snapshot.docs.map((doc) {
+            final data = doc.data();
+
+            return MemberOption(
+              userId: data["uid"] ?? "",
+              userName: data["displayName"] ?? "User",
+            );
+          }).toList(),
+        );
+  }
+
+  Future<List<MemberOption>> getMembers(String hubId) async {
+    final snapshot = await _firestore
+        .collection("hubs")
+        .doc(hubId)
+        .collection("members")
+        .get();
+
+    return snapshot.docs.map((doc) {
+      final data = doc.data();
+
+      return MemberOption(
+        userId: data["uid"] ?? "",
+        userName: data["displayName"] ?? "User",
+      );
+    }).toList();
+  }
 }
+

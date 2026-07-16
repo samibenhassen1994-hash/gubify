@@ -99,7 +99,7 @@ class MembersScreen extends StatelessWidget {
                               hubId: hubId,
                               uid: uid,
                               ownerId: ownerId,
-                              currentUserId: currentUser!.uid,
+                              currentUserId: currentUser.uid,
                             );
 
                             if (context.mounted) {

@@ -2,8 +2,11 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
 import '../../modules/hub_calendar/screens/hub_calendar_screen.dart';
+
 import '../../modules/proposals/repositories/proposal_repository.dart';
 import '../../modules/proposals/screens/proposal_details_screen.dart';
+
+import '../../modules/tasks/screens/task_details_screen.dart';
 
 class NotificationRouter {
   NotificationRouter._();
@@ -21,7 +24,8 @@ class NotificationRouter {
 
         if (proposalId == null) return;
 
-        final proposal = await ProposalRepository.instance.getProposal(
+        final proposal =
+            await ProposalRepository.instance.getProposal(
           hubId: hubId,
           proposalId: proposalId,
         );
@@ -31,11 +35,14 @@ class NotificationRouter {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (_) => ProposalDetailsScreen(proposal: proposal),
+            builder: (_) => ProposalDetailsScreen(
+              proposal: proposal,
+            ),
           ),
         );
 
         break;
+
 
       case "calendar":
         final hubDoc = await FirebaseFirestore.instance
@@ -45,19 +52,44 @@ class NotificationRouter {
 
         if (!hubDoc.exists || !context.mounted) return;
 
-        final ownerId = hubDoc.data()?["ownerId"] ?? "";
+        final ownerId =
+            hubDoc.data()?["ownerId"] ?? "";
 
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (_) => HubCalendarScreen(hubId: hubId, ownerId: ownerId),
+            builder: (_) => HubCalendarScreen(
+              hubId: hubId,
+              ownerId: ownerId,
+            ),
           ),
         );
 
         break;
 
-        default:
-           return;
+
+      case "tasks":
+        final taskId = data["taskId"];
+
+        if (taskId == null) return;
+
+        if (!context.mounted) return;
+
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => TaskDetailsScreen(
+              hubId: hubId,
+              taskId: taskId,
+            ),
+          ),
+        );
+
+        break;
+
+
+      default:
+        return;
     }
   }
 }

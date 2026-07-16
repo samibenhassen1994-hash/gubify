@@ -9,26 +9,23 @@ class UserRepository {
 
   final Map<String, Map<String, dynamic>> _userCache = {};
 
-  Future<Map<String, dynamic>?> getUser(String uid) async {
-    if (_userCache.containsKey(uid)) {
-      print("📦 User preso dalla cache");
-      return _userCache[uid];
-    }
-
-    print("☁️ User scaricato da Firestore");
-
-    final doc = await _firestore.collection("users").doc(uid).get();
-
-    if (!doc.exists) return null;
-
-    final data = doc.data();
-
-    if (data != null) {
-      _userCache[uid] = data;
-    }
-
-    return data;
+ Future<Map<String, dynamic>?> getUser(String uid) async {
+  if (_userCache.containsKey(uid)) {
+    return _userCache[uid];
   }
+
+  final doc = await _firestore.collection("users").doc(uid).get();
+
+  if (!doc.exists) return null;
+
+  final data = doc.data();
+
+  if (data != null) {
+    _userCache[uid] = data;
+  }
+
+  return data;
+}
 
   void updateUser(String uid, Map<String, dynamic> data) {
     _userCache[uid] = data;

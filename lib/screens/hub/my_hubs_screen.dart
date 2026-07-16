@@ -2,7 +2,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
-import '../../widgets/user_header.dart';
 import '../../widgets/hub_home_background.dart';
 import 'hub_screen.dart';
 import '../../widgets/hub_access_guard.dart';

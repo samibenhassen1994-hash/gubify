@@ -10,17 +10,27 @@ class TaskRepository {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   CollectionReference<Map<String, dynamic>> tasksCollection(String hubId) {
-    return _firestore.collection("hubs").doc(hubId).collection("tasks");
+    return _firestore
+        .collection("hubs")
+        .doc(hubId)
+        .collection("tasks");
+  }
+
+  /// Generates a unique Task ID without creating any document.
+  String generateTaskId() {
+    return _firestore.collection("_").doc().id;
   }
 
   Future<void> createTask(TaskModel task) async {
-    await tasksCollection(task.hubId).doc(task.taskId).set(task.toFirestore());
+    await tasksCollection(task.hubId)
+        .doc(task.taskId)
+        .set(task.toFirestore());
   }
 
   Future<void> updateTask(TaskModel task) async {
-    await tasksCollection(
-      task.hubId,
-    ).doc(task.taskId).update(task.toFirestore());
+    await tasksCollection(task.hubId)
+        .doc(task.taskId)
+        .update(task.toFirestore());
   }
 
   Future<void> deleteTask({
@@ -34,7 +44,9 @@ class TaskRepository {
     required String hubId,
     required String taskId,
   }) async {
-    final doc = await tasksCollection(hubId).doc(taskId).get();
+    final doc = await tasksCollection(hubId)
+        .doc(taskId)
+        .get();
 
     if (!doc.exists) return null;
 
@@ -45,7 +57,10 @@ class TaskRepository {
     required String hubId,
     required String taskId,
   }) {
-    return tasksCollection(hubId).doc(taskId).snapshots().map((doc) {
+    return tasksCollection(hubId)
+        .doc(taskId)
+        .snapshots()
+        .map((doc) {
       if (!doc.exists) return null;
 
       return TaskModel.fromFirestore(doc.data()!);

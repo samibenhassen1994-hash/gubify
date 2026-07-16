@@ -116,7 +116,7 @@ class GoalMembersScreen extends StatelessWidget {
                                   hubId: hubId,
                                   goalId: goalId,
                                   uid: uid,
-                                  confirmedById: currentUser!.uid,
+                                  confirmedById: currentUser.uid,
                                 );
                           },
                         )

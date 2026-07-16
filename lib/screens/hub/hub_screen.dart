@@ -5,6 +5,7 @@ import '../../repositories/hub_repository.dart';
 import '../../widgets/hub_access_guard.dart';
 import '../../widgets/hub_home_background.dart';
 import '../../widgets/hub_page_header.dart';
+import '../../modules/tasks/widgets/task_home_card.dart';
 
 import 'widgets/hub_actions_section.dart';
 import 'widgets/hub_members_badge.dart';
@@ -16,7 +17,10 @@ import 'widgets/modules_card.dart';
 class HubScreen extends StatelessWidget {
   final String hubId;
 
-  const HubScreen({super.key, required this.hubId});
+  const HubScreen({
+    super.key,
+    required this.hubId,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -29,11 +33,15 @@ class HubScreen extends StatelessWidget {
             stream: HubRepository.instance.hubStream(hubId),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator());
+                return const Center(
+                  child: CircularProgressIndicator(),
+                );
               }
 
               if (!snapshot.hasData || !snapshot.data!.exists) {
-                return const Center(child: Text("Hub not found"));
+                return const Center(
+                  child: Text("Hub not found"),
+                );
               }
 
               final data = snapshot.data!.data()!;
@@ -43,7 +51,9 @@ class HubScreen extends StatelessWidget {
               final String ownerId = data["ownerId"] ?? "";
               final int memberCount = data["memberCount"] ?? 1;
 
-              final modules = Map<String, dynamic>.from(data["modules"] ?? {});
+              final modules = Map<String, dynamic>.from(
+                data["modules"] ?? {},
+              );
 
               final activeModules = modules.entries
                   .where((entry) => entry.value == true)
@@ -55,9 +65,14 @@ class HubScreen extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    HubPageHeader(title: hubName, hubId: hubId),
+                    HubPageHeader(
+                      title: hubName,
+                      hubId: hubId,
+                    ),
 
-                    HubMembersBadge(memberCount: memberCount),
+                    HubMembersBadge(
+                      memberCount: memberCount,
+                    ),
 
                     const SizedBox(height: 22),
 
@@ -68,19 +83,37 @@ class HubScreen extends StatelessWidget {
                       activeModules: activeModules,
                     ),
 
-                    MembersCard(hubId: hubId, memberCount: memberCount),
+                    const SizedBox(height: 12),
+
+                    TaskHomeCard(
+                      hubId: hubId,
+                    ),
 
                     const SizedBox(height: 12),
 
-                    ModulesCard(hubId: hubId, activeModules: activeModules),
+                    MembersCard(
+                      hubId: hubId,
+                      memberCount: memberCount,
+                    ),
 
                     const SizedBox(height: 12),
 
-                    InviteCodeCard(inviteCode: inviteCode),
+                    ModulesCard(
+                      hubId: hubId,
+                      activeModules: activeModules,
+                    ),
+
+                    const SizedBox(height: 12),
+
+                    InviteCodeCard(
+                      inviteCode: inviteCode,
+                    ),
 
                     const SizedBox(height: 30),
 
-                    HubActionsSection(hubId: hubId),
+                    HubActionsSection(
+                      hubId: hubId,
+                    ),
                   ],
                 ),
               );
