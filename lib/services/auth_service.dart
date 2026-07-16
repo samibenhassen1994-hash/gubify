@@ -22,9 +22,6 @@ class AuthService {
       throw Exception("No authenticated user.");
     }
 
-    await _userService.createUser(
-      userId: user.uid,
-      displayName: displayName,
-    );
+    await _userService.createUser(userId: user.uid, displayName: displayName);
   }
 }

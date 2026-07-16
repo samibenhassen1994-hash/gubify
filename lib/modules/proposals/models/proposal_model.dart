@@ -70,9 +70,7 @@ class ProposalModel {
     required this.tasksCreated,
   });
 
-  factory ProposalModel.fromFirestore(
-    Map<String, dynamic> json,
-  ) {
+  factory ProposalModel.fromFirestore(Map<String, dynamic> json) {
     return ProposalModel(
       hubId: json["hubId"] ?? "",
       proposalId: json["proposalId"] ?? "",
@@ -96,14 +94,11 @@ class ProposalModel {
       noVotes: json["noVotes"] ?? 0,
       memberCount: json["memberCount"] ?? 0,
 
-      resultProcessed:
-          json["resultProcessed"] ?? false,
+      resultProcessed: json["resultProcessed"] ?? false,
 
-      eventCreated:
-          json["eventCreated"] ?? false,
+      eventCreated: json["eventCreated"] ?? false,
 
-      tasksCreated:
-          json["tasksCreated"] ?? false,
+      tasksCreated: json["tasksCreated"] ?? false,
     );
   }
 
@@ -170,14 +165,11 @@ class ProposalModel {
       noVotes: noVotes ?? this.noVotes,
       memberCount: memberCount,
 
-      resultProcessed:
-          resultProcessed ?? this.resultProcessed,
+      resultProcessed: resultProcessed ?? this.resultProcessed,
 
-      eventCreated:
-          eventCreated ?? this.eventCreated,
+      eventCreated: eventCreated ?? this.eventCreated,
 
-      tasksCreated:
-          tasksCreated ?? this.tasksCreated,
+      tasksCreated: tasksCreated ?? this.tasksCreated,
     );
   }
 }

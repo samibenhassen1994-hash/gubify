@@ -9,11 +9,7 @@ class UserHeader extends StatelessWidget {
   final String? hubId;
   final bool darkMode;
 
-  const UserHeader({
-    super.key,
-    this.hubId,
-    this.darkMode = false,
-  });
+  const UserHeader({super.key, this.hubId, this.darkMode = false});
 
   @override
   Widget build(BuildContext context) {
@@ -53,8 +49,7 @@ class UserHeader extends StatelessWidget {
                 child: Text(
                   displayName,
                   style: TextStyle(
-                    color:
-                        darkMode ? Colors.white : Colors.black87,
+                    color: darkMode ? Colors.white : Colors.black87,
                     fontSize: 20,
                     fontWeight: FontWeight.w600,
                   ),
@@ -74,12 +69,9 @@ class UserHeader extends StatelessWidget {
                     final count = docs.where((doc) {
                       final data = doc.data();
 
-                      final readBy = List<String>.from(
-                        data["readBy"] ?? [],
-                      );
+                      final readBy = List<String>.from(data["readBy"] ?? []);
 
-                      final senderId =
-                          data["senderId"] ?? "";
+                      final senderId = data["senderId"] ?? "";
 
                       final type = data["type"] ?? "";
 
@@ -88,8 +80,7 @@ class UserHeader extends StatelessWidget {
                       }
 
                       if (type == "proposal_approved" ||
-                          type ==
-                              "proposal_rejected") {
+                          type == "proposal_rejected") {
                         return true;
                       }
 
@@ -102,16 +93,13 @@ class UserHeader extends StatelessWidget {
                       child: Material(
                         color: Colors.transparent,
                         child: InkWell(
-                          borderRadius:
-                              BorderRadius.circular(28),
+                          borderRadius: BorderRadius.circular(28),
                           onTap: () {
                             Navigator.push(
                               context,
                               MaterialPageRoute(
                                 builder: (_) =>
-                                    NotificationsScreen(
-                                  hubId: hubId!,
-                                ),
+                                    NotificationsScreen(hubId: hubId!),
                               ),
                             );
                           },
@@ -120,8 +108,7 @@ class UserHeader extends StatelessWidget {
                             alignment: Alignment.center,
                             children: [
                               Icon(
-                                Icons
-                                    .notifications_outlined,
+                                Icons.notifications_outlined,
                                 size: 28,
                                 color: darkMode
                                     ? Colors.white70
@@ -136,25 +123,17 @@ class UserHeader extends StatelessWidget {
                                     child: Container(
                                       width: 18,
                                       height: 18,
-                                      decoration:
-                                          const BoxDecoration(
+                                      decoration: const BoxDecoration(
                                         color: Colors.red,
                                         shape: BoxShape.circle,
                                       ),
-                                      alignment:
-                                          Alignment.center,
+                                      alignment: Alignment.center,
                                       child: Text(
-                                        count > 9
-                                            ? "9+"
-                                            : "$count",
-                                        style:
-                                            const TextStyle(
-                                          color:
-                                              Colors.white,
+                                        count > 9 ? "9+" : "$count",
+                                        style: const TextStyle(
+                                          color: Colors.white,
                                           fontSize: 10,
-                                          fontWeight:
-                                              FontWeight
-                                                  .bold,
+                                          fontWeight: FontWeight.bold,
                                         ),
                                       ),
                                     ),
@@ -174,9 +153,7 @@ class UserHeader extends StatelessWidget {
                 },
                 icon: Icon(
                   Icons.settings_outlined,
-                  color: darkMode
-                      ? Colors.white70
-                      : Colors.black54,
+                  color: darkMode ? Colors.white70 : Colors.black54,
                 ),
               ),
             ],

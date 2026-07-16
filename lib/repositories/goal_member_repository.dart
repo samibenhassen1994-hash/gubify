@@ -3,11 +3,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 class GoalMemberRepository {
   GoalMemberRepository._();
 
-  static final GoalMemberRepository instance =
-      GoalMemberRepository._();
+  static final GoalMemberRepository instance = GoalMemberRepository._();
 
-  final FirebaseFirestore _firestore =
-      FirebaseFirestore.instance;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   Stream<QuerySnapshot<Map<String, dynamic>>> membersStream({
     required String hubId,
@@ -36,11 +34,11 @@ class GoalMemberRepository {
         .collection("members")
         .doc(uid)
         .update({
-      "amount": amount,
-      "confirmed": false,
-      "updatedAt": Timestamp.now(),
-      "confirmedAt": null,
-    });
+          "amount": amount,
+          "confirmed": false,
+          "updatedAt": Timestamp.now(),
+          "confirmedAt": null,
+        });
   }
 
   Future<void> confirmContribution({
@@ -55,9 +53,6 @@ class GoalMemberRepository {
         .doc(goalId)
         .collection("members")
         .doc(uid)
-        .update({
-      "confirmed": true,
-      "confirmedAt": Timestamp.now(),
-    });
+        .update({"confirmed": true, "confirmedAt": Timestamp.now()});
   }
 }

@@ -5,28 +5,19 @@ import 'create_goal_screen.dart';
 class GoalsScreen extends StatelessWidget {
   final String hubId;
 
-  const GoalsScreen({
-    super.key,
-    required this.hubId,
-  });
+  const GoalsScreen({super.key, required this.hubId});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("Group Goals"),
-      ),
+      appBar: AppBar(title: const Text("Group Goals")),
       floatingActionButton: FloatingActionButton.extended(
         icon: const Icon(Icons.add),
         label: const Text("New Goal"),
         onPressed: () {
           Navigator.push(
             context,
-            MaterialPageRoute(
-              builder: (_) => CreateGoalScreen(
-                hubId: hubId,
-              ),
-            ),
+            MaterialPageRoute(builder: (_) => CreateGoalScreen(hubId: hubId)),
           );
         },
       ),
@@ -36,20 +27,13 @@ class GoalsScreen extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(
-                Icons.flag,
-                size: 80,
-                color: Colors.grey,
-              ),
+              Icon(Icons.flag, size: 80, color: Colors.grey),
 
               SizedBox(height: 24),
 
               Text(
                 "No goals yet",
-                style: TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                ),
+                style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
               ),
 
               SizedBox(height: 12),
@@ -57,11 +41,7 @@ class GoalsScreen extends StatelessWidget {
               Text(
                 "Create your first shared goal\nfor this Hub.",
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 16,
-                  color: Colors.grey,
-                  height: 1.5,
-                ),
+                style: TextStyle(fontSize: 16, color: Colors.grey, height: 1.5),
               ),
             ],
           ),

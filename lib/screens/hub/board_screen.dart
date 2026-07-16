@@ -6,26 +6,17 @@ import 'create_post_screen.dart';
 class BoardScreen extends StatelessWidget {
   final String hubId;
 
-  const BoardScreen({
-    super.key,
-    required this.hubId,
-  });
+  const BoardScreen({super.key, required this.hubId});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("Bacheca"),
-      ),
+      appBar: AppBar(title: const Text("Bacheca")),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () {
           Navigator.push(
             context,
-            MaterialPageRoute(
-              builder: (_) => CreatePostScreen(
-                hubId: hubId,
-              ),
-            ),
+            MaterialPageRoute(builder: (_) => CreatePostScreen(hubId: hubId)),
           );
         },
         icon: const Icon(Icons.add),
@@ -39,10 +30,7 @@ class BoardScreen extends StatelessWidget {
               alignment: Alignment.centerLeft,
               child: Text(
                 "Bacheca",
-                style: TextStyle(
-                  fontSize: 30,
-                  fontWeight: FontWeight.bold,
-                ),
+                style: TextStyle(fontSize: 30, fontWeight: FontWeight.bold),
               ),
             ),
 
@@ -52,10 +40,7 @@ class BoardScreen extends StatelessWidget {
               alignment: Alignment.centerLeft,
               child: Text(
                 "Condividi aggiornamenti con il tuo Hub.",
-                style: TextStyle(
-                  color: Colors.grey,
-                  fontSize: 16,
-                ),
+                style: TextStyle(color: Colors.grey, fontSize: 16),
               ),
             ),
 
@@ -71,15 +56,11 @@ class BoardScreen extends StatelessWidget {
                     .limit(25)
                     .snapshots(),
                 builder: (context, snapshot) {
-                  if (snapshot.connectionState ==
-                      ConnectionState.waiting) {
-                    return const Center(
-                      child: CircularProgressIndicator(),
-                    );
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator());
                   }
 
-                  if (!snapshot.hasData ||
-                      snapshot.data!.docs.isEmpty) {
+                  if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
                     return Center(
                       child: Card(
                         elevation: 0,
@@ -88,10 +69,7 @@ class BoardScreen extends StatelessWidget {
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: const [
-                              Icon(
-                                Icons.campaign_outlined,
-                                size: 50,
-                              ),
+                              Icon(Icons.campaign_outlined, size: 50),
                               SizedBox(height: 12),
                               Text(
                                 "Nessun post",
@@ -117,22 +95,18 @@ class BoardScreen extends StatelessWidget {
                   return ListView.builder(
                     itemCount: posts.length,
                     itemBuilder: (context, index) {
-                      final post =
-                          posts[index].data() as Map<String, dynamic>;
+                      final post = posts[index].data() as Map<String, dynamic>;
 
                       return Card(
                         margin: const EdgeInsets.only(bottom: 14),
                         child: Padding(
                           padding: const EdgeInsets.all(18),
                           child: Column(
-                            crossAxisAlignment:
-                                CrossAxisAlignment.start,
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Row(
                                 children: [
-                                  const CircleAvatar(
-                                    child: Icon(Icons.person),
-                                  ),
+                                  const CircleAvatar(child: Icon(Icons.person)),
                                   const SizedBox(width: 12),
                                   Expanded(
                                     child: Text(
@@ -150,32 +124,23 @@ class BoardScreen extends StatelessWidget {
 
                               Text(
                                 post["message"] ?? "",
-                                style: const TextStyle(
-                                  fontSize: 16,
-                                ),
+                                style: const TextStyle(fontSize: 16),
                               ),
 
                               const SizedBox(height: 18),
 
                               Row(
                                 children: [
-                                  const Icon(
-                                    Icons.favorite_border,
-                                    size: 20,
-                                  ),
+                                  const Icon(Icons.favorite_border, size: 20),
                                   const SizedBox(width: 6),
-                                  Text(
-                                    "${post["likes"] ?? 0}",
-                                  ),
+                                  Text("${post["likes"] ?? 0}"),
                                   const SizedBox(width: 20),
                                   const Icon(
                                     Icons.chat_bubble_outline,
                                     size: 20,
                                   ),
                                   const SizedBox(width: 6),
-                                  Text(
-                                    "${post["comments"] ?? 0}",
-                                  ),
+                                  Text("${post["comments"] ?? 0}"),
                                 ],
                               ),
                             ],

@@ -24,17 +24,14 @@ class GoalMemberModel {
     this.confirmedAt,
   });
 
-  factory GoalMemberModel.fromFirestore(
-    Map<String, dynamic> json,
-  ) {
+  factory GoalMemberModel.fromFirestore(Map<String, dynamic> json) {
     return GoalMemberModel(
       uid: json["uid"] ?? "",
       displayName: json["displayName"] ?? "",
       photoUrl: json["photoUrl"],
       amount: (json["amount"] ?? 0).toDouble(),
       confirmed: json["confirmed"] ?? false,
-      updatedAt:
-          json["updatedAt"] ?? Timestamp.now(),
+      updatedAt: json["updatedAt"] ?? Timestamp.now(),
       confirmedAt: json["confirmedAt"],
     );
   }

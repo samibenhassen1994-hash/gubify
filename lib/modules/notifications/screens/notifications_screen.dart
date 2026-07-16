@@ -3,9 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../repositories/notification_repository.dart';
-import '../../proposals/repositories/proposal_repository.dart';
-import '../../proposals/screens/proposal_details_screen.dart';
-import '../../hub_calendar/screens/hub_calendar_screen.dart';
+import '../../../core/navigation/notification_router.dart';
 
 class NotificationsScreen extends StatefulWidget {
   final String hubId;
@@ -94,9 +92,9 @@ class _NotificationsScreenState
             padding: const EdgeInsets.all(16),
             itemCount: notifications.length,
             itemBuilder: (context, index) {
-              final data =
-                  notifications[index].data();
-                final Map<String, dynamic> notificationData =
+              final data = notifications[index].data();
+
+final notificationData =
     Map<String, dynamic>.from(
   data["data"] ?? {},
 );
@@ -106,55 +104,11 @@ class _NotificationsScreenState
                         bottom: 12),
                 child: ListTile(
   onTap: () async {
-  final screen = notificationData["screen"];
-
-  switch (screen) {
-    case "proposal":
-      final proposalId = notificationData["proposalId"];
-
-      if (proposalId == null) return;
-
-      final proposal =
-          await ProposalRepository.instance.getProposal(
-        hubId: widget.hubId,
-        proposalId: proposalId,
-      );
-
-      if (!context.mounted || proposal == null) return;
-
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => ProposalDetailsScreen(
-            proposal: proposal,
-          ),
-        ),
-      );
-
-      break;
-
-    case "calendar":
-  final hubDoc = await FirebaseFirestore.instance
-      .collection("hubs")
-      .doc(widget.hubId)
-      .get();
-
-  if (!hubDoc.exists || !context.mounted) return;
-
-  final ownerId = hubDoc.data()?["ownerId"] ?? "";
-
-  Navigator.push(
-    context,
-    MaterialPageRoute(
-      builder: (_) => HubCalendarScreen(
-        hubId: widget.hubId,
-        ownerId: ownerId,
-      ),
-    ),
+  await NotificationRouter.navigate(
+    context: context,
+    hubId: widget.hubId,
+    data: notificationData,
   );
-
-  break;
-  }
 },
   leading: const CircleAvatar(
     child: Icon(

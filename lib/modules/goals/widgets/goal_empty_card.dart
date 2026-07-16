@@ -6,11 +6,7 @@ class GoalEmptyCard extends StatelessWidget {
   final bool isOwner;
   final String hubId;
 
-  const GoalEmptyCard({
-    super.key,
-    required this.isOwner,
-    required this.hubId,
-  });
+  const GoalEmptyCard({super.key, required this.isOwner, required this.hubId});
 
   @override
   Widget build(BuildContext context) {
@@ -26,10 +22,7 @@ class GoalEmptyCard extends StatelessWidget {
 
         const Text(
           "No Shared Budget yet",
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-          ),
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
         ),
 
         const SizedBox(height: 8),
@@ -37,9 +30,7 @@ class GoalEmptyCard extends StatelessWidget {
         const Text(
           "Create the first Shared Budget for this Hub.",
           textAlign: TextAlign.center,
-          style: TextStyle(
-            color: Colors.grey,
-          ),
+          style: TextStyle(color: Colors.grey),
         ),
 
         if (isOwner) ...[
@@ -54,9 +45,7 @@ class GoalEmptyCard extends StatelessWidget {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => CreateGoalScreen(
-                      hubId: hubId,
-                    ),
+                    builder: (_) => CreateGoalScreen(hubId: hubId),
                   ),
                 );
               },

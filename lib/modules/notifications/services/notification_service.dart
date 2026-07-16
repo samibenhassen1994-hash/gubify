@@ -8,8 +8,7 @@ import '../repositories/notification_repository.dart';
 class NotificationService {
   NotificationService._();
 
-  static final NotificationService instance =
-      NotificationService._();
+  static final NotificationService instance = NotificationService._();
 
   Future<void> send({
     required String hubId,

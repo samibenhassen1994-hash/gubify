@@ -20,17 +20,13 @@ class WelcomeScreen extends StatelessWidget {
           builder: (context, constraints) {
             return SingleChildScrollView(
               child: ConstrainedBox(
-                constraints: BoxConstraints(
-                  minHeight: constraints.maxHeight,
-                ),
+                constraints: BoxConstraints(minHeight: constraints.maxHeight),
                 child: IntrinsicHeight(
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 30),
                     child: Column(
                       children: [
-                        const UserHeader(
-                          darkMode: true,
-                        ),
+                        const UserHeader(darkMode: true),
 
                         const Spacer(),
 
@@ -44,8 +40,9 @@ class WelcomeScreen extends StatelessWidget {
                                 shape: BoxShape.circle,
                                 boxShadow: [
                                   BoxShadow(
-                                    color: const Color(0xFF2563EB)
-                                        .withValues(alpha: .45),
+                                    color: const Color(
+                                      0xFF2563EB,
+                                    ).withValues(alpha: .45),
                                     blurRadius: 120,
                                     spreadRadius: 30,
                                   ),
@@ -174,10 +171,7 @@ class WelcomeScreen extends StatelessWidget {
                             child: const Row(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                Icon(
-                                  Icons.group_outlined,
-                                  color: Colors.white,
-                                ),
+                                Icon(Icons.group_outlined, color: Colors.white),
                                 SizedBox(width: 12),
                                 Text(
                                   "Join a Hub",

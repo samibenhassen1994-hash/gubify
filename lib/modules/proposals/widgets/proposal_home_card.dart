@@ -18,17 +18,13 @@ class ProposalHomeCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<List<ProposalModel>>(
-      stream: ProposalService.instance.proposalsStream(
-        hubId,
-      ),
+      stream: ProposalService.instance.proposalsStream(hubId),
       builder: (context, snapshot) {
         if (!snapshot.hasData) {
           return const Card(
             child: Padding(
               padding: EdgeInsets.all(24),
-              child: Center(
-                child: CircularProgressIndicator(),
-              ),
+              child: Center(child: CircularProgressIndicator()),
             ),
           );
         }
@@ -61,9 +57,8 @@ class ProposalHomeCard extends StatelessWidget {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (_) => ProposalDetailsScreen(
-                    proposal: activeProposal!,
-                  ),
+                  builder: (_) =>
+                      ProposalDetailsScreen(proposal: activeProposal!),
                 ),
               );
             }
@@ -76,15 +71,11 @@ class ProposalHomeCard extends StatelessWidget {
             child: Padding(
               padding: const EdgeInsets.all(18),
               child: Column(
-                crossAxisAlignment:
-                    CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Row(
                     children: [
-                      Icon(
-                        Icons.how_to_vote,
-                        color: Colors.blue,
-                      ),
+                      Icon(Icons.how_to_vote, color: Colors.blue),
                       SizedBox(width: 10),
                       Text(
                         "Proposals",
@@ -109,9 +100,7 @@ class ProposalHomeCard extends StatelessWidget {
 
                     const SizedBox(height: 6),
 
-                    const Text(
-                      "Create your first proposal for this Hub.",
-                    ),
+                    const Text("Create your first proposal for this Hub."),
                   ] else ...[
                     Text(
                       activeProposal.title,
@@ -139,10 +128,7 @@ class ProposalHomeCard extends StatelessWidget {
                           size: 18,
                         ),
                         const SizedBox(width: 4),
-                        Text(
-                          activeProposal.yesVotes
-                              .toString(),
-                        ),
+                        Text(activeProposal.yesVotes.toString()),
 
                         const SizedBox(width: 18),
 
@@ -152,10 +138,7 @@ class ProposalHomeCard extends StatelessWidget {
                           size: 18,
                         ),
                         const SizedBox(width: 4),
-                        Text(
-                          activeProposal.noVotes
-                              .toString(),
-                        ),
+                        Text(activeProposal.noVotes.toString()),
                       ],
                     ),
                   ],

@@ -7,11 +7,7 @@ class HubPageHeader extends StatelessWidget {
   final String title;
   final String? hubId;
 
-  const HubPageHeader({
-    super.key,
-    required this.title,
-    this.hubId,
-  });
+  const HubPageHeader({super.key, required this.title, this.hubId});
 
   @override
   Widget build(BuildContext context) {
@@ -28,17 +24,17 @@ class HubPageHeader extends StatelessWidget {
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
                   onPressed: () {
-  if (Navigator.canPop(context)) {
-    Navigator.pop(context);
-  } else {
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(
-        builder: (_) => const WelcomeScreen(),
-      ),
-    );
-  }
-},
+                    if (Navigator.canPop(context)) {
+                      Navigator.pop(context);
+                    } else {
+                      Navigator.pushReplacement(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const WelcomeScreen(),
+                        ),
+                      );
+                    }
+                  },
                   icon: const Icon(
                     Icons.arrow_back_ios_new_rounded,
                     size: 22,
@@ -63,9 +59,7 @@ class HubPageHeader extends StatelessWidget {
 
             const SizedBox(height: 18),
 
-            UserHeader(
-              hubId: hubId,
-            ),
+            UserHeader(hubId: hubId),
           ],
         ),
       ),

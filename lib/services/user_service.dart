@@ -17,15 +17,13 @@ class UserService {
   }
 
   Future<bool> userExists(String userId) async {
-    final doc =
-        await _firestore.collection('users').doc(userId).get();
+    final doc = await _firestore.collection('users').doc(userId).get();
 
     return doc.exists;
   }
 
   Future<String> getDisplayName(String userId) async {
-    final doc =
-        await _firestore.collection('users').doc(userId).get();
+    final doc = await _firestore.collection('users').doc(userId).get();
 
     if (!doc.exists) {
       return "User";

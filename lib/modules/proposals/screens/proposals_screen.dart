@@ -18,9 +18,7 @@ class ProposalsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("Proposals"),
-      ),
+      appBar: AppBar(title: const Text("Proposals")),
       floatingActionButton: FloatingActionButton.extended(
         icon: const Icon(Icons.add),
         label: const Text("Proposal"),
@@ -28,32 +26,21 @@ class ProposalsScreen extends StatelessWidget {
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (_) => CreateProposalScreen(
-                hubId: hubId,
-                memberCount: memberCount,
-              ),
+              builder: (_) =>
+                  CreateProposalScreen(hubId: hubId, memberCount: memberCount),
             ),
           );
         },
       ),
       body: StreamBuilder<List<ProposalModel>>(
-        stream: ProposalService.instance
-            .proposalsStream(hubId),
+        stream: ProposalService.instance.proposalsStream(hubId),
         builder: (context, snapshot) {
-          if (snapshot.connectionState ==
-              ConnectionState.waiting) {
-            return const Center(
-              child: CircularProgressIndicator(),
-            );
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
           }
 
-          if (!snapshot.hasData ||
-              snapshot.data!.isEmpty) {
-            return const Center(
-              child: Text(
-                "No proposals yet.",
-              ),
-            );
+          if (!snapshot.hasData || snapshot.data!.isEmpty) {
+            return const Center(child: Text("No proposals yet."));
           }
 
           final proposals = snapshot.data!;
@@ -62,9 +49,7 @@ class ProposalsScreen extends StatelessWidget {
             padding: const EdgeInsets.all(16),
             itemCount: proposals.length,
             itemBuilder: (context, index) {
-              return ProposalCard(
-                proposal: proposals[index],
-              );
+              return ProposalCard(proposal: proposals[index]);
             },
           );
         },

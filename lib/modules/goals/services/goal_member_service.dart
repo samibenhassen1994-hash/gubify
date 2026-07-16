@@ -8,8 +8,7 @@ import '../../notifications/services/notification_service.dart';
 class GoalMemberService {
   GoalMemberService._();
 
-  static final GoalMemberService instance =
-      GoalMemberService._();
+  static final GoalMemberService instance = GoalMemberService._();
 
   Stream<QuerySnapshot<Map<String, dynamic>>> membersStream({
     required String hubId,
@@ -28,9 +27,7 @@ class GoalMemberService {
     required double amount,
   }) async {
     if (amount <= 0) {
-      throw Exception(
-        "Contribution must be greater than zero.",
-      );
+      throw Exception("Contribution must be greater than zero.");
     }
 
     await GoalMemberRepository.instance.updateContribution(
@@ -47,10 +44,7 @@ class GoalMemberService {
       type: "goal_submitted",
       senderId: uid,
       senderName: "System",
-      data: {
-        "goalId": goalId,
-        "memberId": uid,
-      },
+      data: {"goalId": goalId, "memberId": uid},
     );
   }
 
@@ -78,32 +72,24 @@ class GoalMemberService {
 
     final memberData = memberDoc.data()!;
 
-    final memberName =
-        memberData["displayName"] ?? "Member";
+    final memberName = memberData["displayName"] ?? "Member";
 
-    final amount =
-        (memberData["amount"] ?? 0).toDouble();
+    final amount = (memberData["amount"] ?? 0).toDouble();
 
     // Recupera il nome dell'amministratore
-    final owner =
-        await UserRepository.instance.getUser(
-      confirmedById,
-    );
+    final owner = await UserRepository.instance.getUser(confirmedById);
 
-    final ownerName =
-        owner?["displayName"] ?? "Administrator";
+    final ownerName = owner?["displayName"] ?? "Administrator";
 
     // Conferma il contributo
-    await GoalMemberRepository.instance
-        .confirmContribution(
+    await GoalMemberRepository.instance.confirmContribution(
       hubId: hubId,
       goalId: goalId,
       uid: uid,
     );
 
     // Aggiorna il budget
-    await GoalRepository.instance
-        .recalculateGoalProgress(
+    await GoalRepository.instance.recalculateGoalProgress(
       hubId: hubId,
       goalId: goalId,
     );
@@ -117,10 +103,7 @@ class GoalMemberService {
       type: "goal_confirmation",
       senderId: confirmedById,
       senderName: ownerName,
-      data: {
-        "goalId": goalId,
-        "memberId": uid,
-      },
+      data: {"goalId": goalId, "memberId": uid},
     );
   }
 }

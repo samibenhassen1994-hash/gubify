@@ -3,10 +3,7 @@ import 'package:flutter/material.dart';
 class HubBackground extends StatelessWidget {
   final Widget child;
 
-  const HubBackground({
-    super.key,
-    required this.child,
-  });
+  const HubBackground({super.key, required this.child});
 
   @override
   Widget build(BuildContext context) {
@@ -19,10 +16,7 @@ class HubBackground extends StatelessWidget {
               gradient: LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
-                colors: [
-                  Color(0xFFF8FAFC),
-                  Color(0xFFF2F5FA),
-                ],
+                colors: [Color(0xFFF8FAFC), Color(0xFFF2F5FA)],
               ),
             ),
           ),
@@ -37,8 +31,7 @@ class HubBackground extends StatelessWidget {
             height: 500,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: const Color(0xFF2563EB)
-                  .withValues(alpha: .025),
+              color: const Color(0xFF2563EB).withValues(alpha: .025),
             ),
           ),
         ),
@@ -52,8 +45,7 @@ class HubBackground extends StatelessWidget {
             height: 560,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: const Color(0xFF2563EB)
-                  .withValues(alpha: .018),
+              color: const Color(0xFF2563EB).withValues(alpha: .018),
             ),
           ),
         ),

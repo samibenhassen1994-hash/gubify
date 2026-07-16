@@ -6,60 +6,42 @@ import '../welcome_screen.dart';
 class ManageHubScreen extends StatelessWidget {
   final String hubId;
 
-  const ManageHubScreen({
-    super.key,
-    required this.hubId,
-  });
+  const ManageHubScreen({super.key, required this.hubId});
 
   Future<void> _deleteHub(BuildContext context) async {
     try {
-      await HubService().deleteHub(
-        hubId: hubId,
-      );
+      await HubService().deleteHub(hubId: hubId);
 
       if (!context.mounted) return;
 
       Navigator.pushAndRemoveUntil(
         context,
-        MaterialPageRoute(
-          builder: (_) => const WelcomeScreen(),
-        ),
+        MaterialPageRoute(builder: (_) => const WelcomeScreen()),
         (_) => false,
       );
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Hub deleted successfully."),
-        ),
+        const SnackBar(content: Text("Hub deleted successfully.")),
       );
     } catch (e) {
       if (!context.mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            e.toString(),
-          ),
-        ),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(e.toString())));
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("Manage Hub"),
-      ),
+      appBar: AppBar(title: const Text("Manage Hub")),
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
           const Text(
             "General",
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-            ),
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
 
           const SizedBox(height: 12),
@@ -100,10 +82,7 @@ class ManageHubScreen extends StatelessWidget {
           Card(
             color: Colors.red.withValues(alpha: .05),
             child: ListTile(
-              leading: const Icon(
-                Icons.delete_forever,
-                color: Colors.red,
-              ),
+              leading: const Icon(Icons.delete_forever, color: Colors.red),
               title: const Text(
                 "Delete Hub",
                 style: TextStyle(
@@ -111,13 +90,8 @@ class ManageHubScreen extends StatelessWidget {
                   fontWeight: FontWeight.bold,
                 ),
               ),
-              subtitle: const Text(
-                "Permanently delete this Hub.",
-              ),
-              trailing: const Icon(
-                Icons.arrow_forward_ios,
-                size: 16,
-              ),
+              subtitle: const Text("Permanently delete this Hub."),
+              trailing: const Icon(Icons.arrow_forward_ios, size: 16),
               onTap: () {
                 showDialog(
                   context: context,

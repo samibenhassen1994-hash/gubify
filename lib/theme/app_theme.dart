@@ -9,18 +9,16 @@ class AppTheme {
 
     scaffoldBackgroundColor: AppColors.background,
 
-    colorScheme: ColorScheme.fromSeed(
-      seedColor: AppColors.primary,
-    ),
+    colorScheme: ColorScheme.fromSeed(seedColor: AppColors.primary),
 
-   appBarTheme: const AppBarTheme(
-  elevation: 0,
-  backgroundColor: Colors.transparent,
-  foregroundColor: AppColors.textPrimary,
-  surfaceTintColor: Colors.transparent,
-  shadowColor: Colors.transparent,
-  scrolledUnderElevation: 0,
-  centerTitle: true,
-),
+    appBarTheme: const AppBarTheme(
+      elevation: 0,
+      backgroundColor: Colors.transparent,
+      foregroundColor: AppColors.textPrimary,
+      surfaceTintColor: Colors.transparent,
+      shadowColor: Colors.transparent,
+      scrolledUnderElevation: 0,
+      centerTitle: true,
+    ),
   );
 }

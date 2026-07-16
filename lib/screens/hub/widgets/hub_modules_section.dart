@@ -27,32 +27,21 @@ class HubModulesSection extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        BoardCard(
-          hubId: hubId,
-        ),
+        BoardCard(hubId: hubId),
 
         const SizedBox(height: 12),
 
-        ProposalHomeCard(
-          hubId: hubId,
-          memberCount: memberCount,
-        ),
+        ProposalHomeCard(hubId: hubId, memberCount: memberCount),
 
         const SizedBox(height: 12),
 
         if (isModuleEnabled("calendar")) ...[
-          HubCalendarHomeCard(
-            hubId: hubId,
-            ownerId: ownerId,
-          ),
+          HubCalendarHomeCard(hubId: hubId, ownerId: ownerId),
           const SizedBox(height: 12),
         ],
 
         if (isModuleEnabled("goals")) ...[
-          GoalHomeCard(
-            hubId: hubId,
-            ownerId: ownerId,
-          ),
+          GoalHomeCard(hubId: hubId, ownerId: ownerId),
           const SizedBox(height: 12),
         ],
       ],

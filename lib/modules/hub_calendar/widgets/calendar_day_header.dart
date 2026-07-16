@@ -3,18 +3,12 @@ import 'package:flutter/material.dart';
 class CalendarDayHeader extends StatelessWidget {
   final DateTime date;
 
-  const CalendarDayHeader({
-    super.key,
-    required this.date,
-  });
+  const CalendarDayHeader({super.key, required this.date});
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(
-        top: 20,
-        bottom: 12,
-      ),
+      padding: const EdgeInsets.only(top: 20, bottom: 12),
       child: Row(
         children: [
           Container(
@@ -39,8 +33,7 @@ class CalendarDayHeader extends StatelessWidget {
           const SizedBox(width: 16),
 
           Column(
-            crossAxisAlignment:
-                CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 _monthName(date.month),
@@ -52,9 +45,7 @@ class CalendarDayHeader extends StatelessWidget {
 
               Text(
                 date.year.toString(),
-                style: const TextStyle(
-                  color: Colors.grey,
-                ),
+                style: const TextStyle(color: Colors.grey),
               ),
             ],
           ),

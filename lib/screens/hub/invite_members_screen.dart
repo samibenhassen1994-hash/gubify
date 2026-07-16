@@ -9,30 +9,21 @@ import '../../widgets/user_header.dart';
 class InviteMembersScreen extends StatelessWidget {
   final String hubId;
 
-  const InviteMembersScreen({
-    super.key,
-    required this.hubId,
-  });
+  const InviteMembersScreen({super.key, required this.hubId});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("Invite Members"),
-      ),
+      appBar: AppBar(title: const Text("Invite Members")),
       body: FutureBuilder<Map<String, dynamic>?>(
         future: HubRepository.instance.getHub(hubId),
         builder: (context, hubSnapshot) {
           if (hubSnapshot.connectionState == ConnectionState.waiting) {
-            return const Center(
-              child: CircularProgressIndicator(),
-            );
+            return const Center(child: CircularProgressIndicator());
           }
 
           if (!hubSnapshot.hasData || hubSnapshot.data == null) {
-            return const Center(
-              child: Text("Hub not found"),
-            );
+            return const Center(child: Text("Hub not found"));
           }
 
           final hub = hubSnapshot.data!;
@@ -59,10 +50,7 @@ class InviteMembersScreen extends StatelessWidget {
 
                 const Text(
                   "Invite people to your Hub",
-                  style: TextStyle(
-                    color: Colors.grey,
-                    fontSize: 17,
-                  ),
+                  style: TextStyle(color: Colors.grey, fontSize: 17),
                 ),
 
                 const SizedBox(height: 30),
@@ -78,9 +66,7 @@ class InviteMembersScreen extends StatelessWidget {
                     children: [
                       const Text(
                         "Hub Code",
-                        style: TextStyle(
-                          color: Colors.grey,
-                        ),
+                        style: TextStyle(color: Colors.grey),
                       ),
                       const SizedBox(height: 10),
                       Text(
@@ -104,9 +90,7 @@ class InviteMembersScreen extends StatelessWidget {
                     icon: const Icon(Icons.copy),
                     label: const Text("Copy Code"),
                     onPressed: () async {
-                      await Clipboard.setData(
-                        ClipboardData(text: inviteCode),
-                      );
+                      await Clipboard.setData(ClipboardData(text: inviteCode));
 
                       if (context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
@@ -144,10 +128,7 @@ class InviteMembersScreen extends StatelessWidget {
 
                 const Text(
                   "Members",
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
                 ),
 
                 const SizedBox(height: 15),
@@ -160,18 +141,12 @@ class InviteMembersScreen extends StatelessWidget {
                         .collection("members")
                         .snapshots(),
                     builder: (context, snapshot) {
-                      if (snapshot.connectionState ==
-                          ConnectionState.waiting) {
-                        return const Center(
-                          child: CircularProgressIndicator(),
-                        );
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Center(child: CircularProgressIndicator());
                       }
 
-                      if (!snapshot.hasData ||
-                          snapshot.data!.docs.isEmpty) {
-                        return const Center(
-                          child: Text("No members yet"),
-                        );
+                      if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                        return const Center(child: Text("No members yet"));
                       }
 
                       final members = snapshot.data!.docs;
@@ -189,12 +164,8 @@ class InviteMembersScreen extends StatelessWidget {
                                 backgroundColor: Colors.blue.shade100,
                                 child: const Icon(Icons.person),
                               ),
-                              title: Text(
-                                member["displayName"] ?? "User",
-                              ),
-                              subtitle: Text(
-                                member["role"] ?? "",
-                              ),
+                              title: Text(member["displayName"] ?? "User"),
+                              subtitle: Text(member["role"] ?? ""),
                             ),
                           );
                         },

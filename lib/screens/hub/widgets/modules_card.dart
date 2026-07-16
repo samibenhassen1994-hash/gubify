@@ -23,18 +23,11 @@ class ModulesCard extends StatelessWidget {
               ? "No modules selected"
               : activeModules.join(", "),
         ),
-        trailing: const Icon(
-          Icons.arrow_forward_ios,
-          size: 16,
-        ),
+        trailing: const Icon(Icons.arrow_forward_ios, size: 16),
         onTap: () {
           Navigator.push(
             context,
-            MaterialPageRoute(
-              builder: (_) => ModulesScreen(
-                hubId: hubId,
-              ),
-            ),
+            MaterialPageRoute(builder: (_) => ModulesScreen(hubId: hubId)),
           );
         },
       ),

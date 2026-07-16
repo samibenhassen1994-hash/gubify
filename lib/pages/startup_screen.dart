@@ -38,16 +38,12 @@ class _StartupScreenState extends State<StartupScreen> {
     if (exists) {
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(
-          builder: (_) => const WelcomeScreen(),
-        ),
+        MaterialPageRoute(builder: (_) => const WelcomeScreen()),
       );
     } else {
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(
-          builder: (_) => const NameScreen(),
-        ),
+        MaterialPageRoute(builder: (_) => const NameScreen()),
       );
     }
   }
@@ -56,11 +52,7 @@ class _StartupScreenState extends State<StartupScreen> {
   Widget build(BuildContext context) {
     return const Scaffold(
       backgroundColor: Color(0xFF04091A),
-      body: Center(
-        child: CircularProgressIndicator(
-          color: Colors.white,
-        ),
-      ),
+      body: Center(child: CircularProgressIndicator(color: Colors.white)),
     );
   }
 }

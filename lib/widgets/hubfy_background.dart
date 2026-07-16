@@ -3,21 +3,16 @@ import 'package:flutter/material.dart';
 class HubfyBackground extends StatelessWidget {
   final Widget child;
 
-  const HubfyBackground({
-    super.key,
-    required this.child,
-  });
+  const HubfyBackground({super.key, required this.child});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: Stack(
         children: [
-
           // ===============================
           // IMMAGINE DI SFONDO
           // ===============================
-
           Positioned.fill(
             child: Image.asset(
               'assets/backgrounds/welcome_background.png',
@@ -28,7 +23,6 @@ class HubfyBackground extends StatelessWidget {
           // ===============================
           // CERCHIO ESTERNO
           // ===============================
-
           Positioned.fill(
             child: Center(
               child: Container(
@@ -47,7 +41,6 @@ class HubfyBackground extends StatelessWidget {
           // ===============================
           // CERCHIO INTERNO
           // ===============================
-
           Positioned.fill(
             child: Center(
               child: Container(
@@ -66,7 +59,6 @@ class HubfyBackground extends StatelessWidget {
           // ===============================
           // GLOW DIETRO IL LOGO
           // ===============================
-
           Positioned.fill(
             child: Center(
               child: Transform.translate(
@@ -78,8 +70,7 @@ class HubfyBackground extends StatelessWidget {
                     shape: BoxShape.circle,
                     boxShadow: [
                       BoxShadow(
-                        color: const Color(0xFF2563EB)
-                            .withValues(alpha: .45),
+                        color: const Color(0xFF2563EB).withValues(alpha: .45),
                         blurRadius: 120,
                         spreadRadius: 35,
                       ),
@@ -93,7 +84,6 @@ class HubfyBackground extends StatelessWidget {
           // ===============================
           // CONTENUTO
           // ===============================
-
           child,
         ],
       ),

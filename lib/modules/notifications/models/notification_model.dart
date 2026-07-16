@@ -29,8 +29,7 @@ class NotificationModel {
     required this.data,
   });
 
-  factory NotificationModel.fromFirestore(
-      Map<String, dynamic> json) {
+  factory NotificationModel.fromFirestore(Map<String, dynamic> json) {
     return NotificationModel(
       notificationId: json["notificationId"] ?? "",
       title: json["title"] ?? "",
@@ -38,12 +37,9 @@ class NotificationModel {
       type: json["type"] ?? "",
       senderId: json["senderId"] ?? "",
       senderName: json["senderName"] ?? "",
-      createdAt:
-          json["createdAt"] ?? Timestamp.now(),
-      readBy:
-          List<String>.from(json["readBy"] ?? []),
-      data: Map<String, dynamic>.from(
-          json["data"] ?? {}),
+      createdAt: json["createdAt"] ?? Timestamp.now(),
+      readBy: List<String>.from(json["readBy"] ?? []),
+      data: Map<String, dynamic>.from(json["data"] ?? {}),
     );
   }
 

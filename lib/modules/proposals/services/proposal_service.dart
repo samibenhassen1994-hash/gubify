@@ -35,25 +35,20 @@ class ProposalService {
     );
   }
 
-  Future<void> createProposal({
-  required ProposalModel proposal,
-}) async {
-  await ProposalRepository.instance.createProposal(proposal);
+  Future<void> createProposal({required ProposalModel proposal}) async {
+    await ProposalRepository.instance.createProposal(proposal);
 
-  await NotificationService.instance.send(
-  hubId: proposal.hubId,
-  title: "New proposal",
-  body: "${proposal.creatorName} created a new proposal.",
-  type: "proposal_created",
-  senderId: proposal.creatorId,
-  senderName: proposal.creatorName,
-  markSenderAsRead: true,
-  data: {
-    "screen": "proposal",
-    "proposalId": proposal.proposalId,
-  },
-);
-}
+    await NotificationService.instance.send(
+      hubId: proposal.hubId,
+      title: "New proposal",
+      body: "${proposal.creatorName} created a new proposal.",
+      type: "proposal_created",
+      senderId: proposal.creatorId,
+      senderName: proposal.creatorName,
+      markSenderAsRead: true,
+      data: {"screen": "proposal", "proposalId": proposal.proposalId},
+    );
+  }
 
   Future<void> vote({
     required String hubId,
@@ -62,11 +57,7 @@ class ProposalService {
     required String vote,
   }) async {
     final existingVote = await ProposalRepository.instance
-        .userVoteStream(
-          hubId: hubId,
-          proposalId: proposalId,
-          uid: uid,
-        )
+        .userVoteStream(hubId: hubId, proposalId: proposalId, uid: uid)
         .first;
 
     if (existingVote != null) return;
@@ -84,10 +75,10 @@ class ProposalService {
     );
 
     if (proposal == null) return;
-    
+
     if (proposal.resultProcessed) {
-  return;
-}
+      return;
+    }
     final votes = await ProposalRepository.instance.getVotes(
       hubId: hubId,
       proposalId: proposalId,
@@ -104,10 +95,7 @@ class ProposalService {
     }
 
     await ProposalRepository.instance.updateProposal(
-      proposal.copyWith(
-        yesVotes: yesVotes,
-        noVotes: noVotes,
-      ),
+      proposal.copyWith(yesVotes: yesVotes, noVotes: noVotes),
     );
 
     final result = ProposalEngine.instance.checkResult(
@@ -116,56 +104,49 @@ class ProposalService {
       memberCount: proposal.memberCount,
     );
 
-   if (result == ProposalResult.approved) {
-  final updatedProposal = proposal.copyWith(
-    yesVotes: yesVotes,
-    noVotes: noVotes,
-    status: "approved",
-    resultProcessed: true,
-  );
+    if (result == ProposalResult.approved) {
+      final updatedProposal = proposal.copyWith(
+        yesVotes: yesVotes,
+        noVotes: noVotes,
+        status: "approved",
+        resultProcessed: true,
+      );
 
-  await ProposalRepository.instance.updateProposal(updatedProposal);
+      await ProposalRepository.instance.updateProposal(updatedProposal);
 
-  await NotificationService.instance.send(
-    hubId: updatedProposal.hubId,
-    title: "Proposal approved",
-    body: "\"${updatedProposal.title}\" has been approved.",
-    type: "proposal_approved",
-    senderId: updatedProposal.creatorId,
-    senderName: updatedProposal.creatorName,
-    markSenderAsRead: false,
-    data: {
-      "screen": "calendar",
-      "proposalId": updatedProposal.proposalId,
-    },
-  );
+      await NotificationService.instance.send(
+        hubId: updatedProposal.hubId,
+        title: "Proposal approved",
+        body: "\"${updatedProposal.title}\" has been approved.",
+        type: "proposal_approved",
+        senderId: updatedProposal.creatorId,
+        senderName: updatedProposal.creatorName,
+        markSenderAsRead: false,
+        data: {"screen": "calendar", "proposalId": updatedProposal.proposalId},
+      );
 
-  await EventService.instance.createFromProposal(updatedProposal);
-}
+      await EventService.instance.createFromProposal(updatedProposal);
+    }
 
-if (result == ProposalResult.rejected) {
-  final updatedProposal = proposal.copyWith(
-    yesVotes: yesVotes,
-    noVotes: noVotes,
-    status: "rejected",
-    resultProcessed: true,
-  );
+    if (result == ProposalResult.rejected) {
+      final updatedProposal = proposal.copyWith(
+        yesVotes: yesVotes,
+        noVotes: noVotes,
+        status: "rejected",
+        resultProcessed: true,
+      );
 
-  await ProposalRepository.instance.updateProposal(updatedProposal);
+      await ProposalRepository.instance.updateProposal(updatedProposal);
 
-  await NotificationService.instance.send(
-    hubId: updatedProposal.hubId,
-    title: "Proposal rejected",
-    body: "\"${updatedProposal.title}\" has been rejected.",
-    type: "proposal_rejected",
-    senderId: updatedProposal.creatorId,
-    senderName: updatedProposal.creatorName,
-    data: {
-      "screen": "proposal",
-      "proposalId": updatedProposal.proposalId,
-    },
-  );
-}
+      await NotificationService.instance.send(
+        hubId: updatedProposal.hubId,
+        title: "Proposal rejected",
+        body: "\"${updatedProposal.title}\" has been rejected.",
+        type: "proposal_rejected",
+        senderId: updatedProposal.creatorId,
+        senderName: updatedProposal.creatorName,
+        data: {"screen": "proposal", "proposalId": updatedProposal.proposalId},
+      );
     }
   }
-
+}

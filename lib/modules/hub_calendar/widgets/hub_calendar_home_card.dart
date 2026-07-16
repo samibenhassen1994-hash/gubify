@@ -20,8 +20,7 @@ class HubCalendarHomeCard extends StatelessWidget {
       stream: EventService.instance.eventsStream(hubId),
       builder: (context, snapshot) {
         final events = snapshot.data ?? [];
-        final EventModel? nextEvent =
-            events.isNotEmpty ? events.first : null;
+        final EventModel? nextEvent = events.isNotEmpty ? events.first : null;
 
         return InkWell(
           borderRadius: BorderRadius.circular(20),
@@ -29,10 +28,8 @@ class HubCalendarHomeCard extends StatelessWidget {
             Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (_) => HubCalendarScreen(
-                  hubId: hubId,
-                  ownerId: ownerId,
-                ),
+                builder: (_) =>
+                    HubCalendarScreen(hubId: hubId, ownerId: ownerId),
               ),
             );
           },
@@ -49,10 +46,7 @@ class HubCalendarHomeCard extends StatelessWidget {
                 children: [
                   const Row(
                     children: [
-                      Icon(
-                        Icons.calendar_month,
-                        color: Colors.blue,
-                      ),
+                      Icon(Icons.calendar_month, color: Colors.blue),
                       SizedBox(width: 8),
                       Expanded(
                         child: Text(
@@ -87,9 +81,7 @@ class HubCalendarHomeCard extends StatelessWidget {
                         SizedBox(height: 6),
                         Text(
                           "Tap to open the calendar.",
-                          style: TextStyle(
-                            color: Colors.grey,
-                          ),
+                          style: TextStyle(color: Colors.grey),
                         ),
                       ],
                     )

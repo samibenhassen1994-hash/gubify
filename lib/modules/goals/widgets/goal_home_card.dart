@@ -11,17 +11,12 @@ class GoalHomeCard extends StatelessWidget {
   final String hubId;
   final String ownerId;
 
-  const GoalHomeCard({
-    super.key,
-    required this.hubId,
-    required this.ownerId,
-  });
+  const GoalHomeCard({super.key, required this.hubId, required this.ownerId});
 
   @override
   Widget build(BuildContext context) {
     final currentUser = FirebaseAuth.instance.currentUser;
-    final isOwner =
-        currentUser != null && currentUser.uid == ownerId;
+    final isOwner = currentUser != null && currentUser.uid == ownerId;
 
     return StreamBuilder<GoalModel?>(
       stream: GoalService.instance.activeGoalStream(hubId),
@@ -30,9 +25,7 @@ class GoalHomeCard extends StatelessWidget {
           return const Card(
             child: Padding(
               padding: EdgeInsets.all(30),
-              child: Center(
-                child: CircularProgressIndicator(),
-              ),
+              child: Center(child: CircularProgressIndicator()),
             ),
           );
         }
@@ -67,7 +60,7 @@ class GoalHomeCard extends StatelessWidget {
                 children: [
                   const Row(
                     children: [
-                      Icon(Icons.account_balance_wallet,color: Colors.blue),
+                      Icon(Icons.account_balance_wallet, color: Colors.blue),
                       SizedBox(width: 8),
                       Text(
                         "Shared Budget",
@@ -80,14 +73,9 @@ class GoalHomeCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 25),
                   if (goal == null)
-                    GoalEmptyCard(
-                      isOwner: isOwner,
-                      hubId: hubId,
-                    )
+                    GoalEmptyCard(isOwner: isOwner, hubId: hubId)
                   else
-                    GoalProgressCard(
-                      goal: goal,
-                    ),
+                    GoalProgressCard(goal: goal),
                 ],
               ),
             ),

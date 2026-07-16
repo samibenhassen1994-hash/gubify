@@ -9,10 +9,7 @@ import '../../modules/notifications/services/notification_service.dart';
 class CreatePostScreen extends StatefulWidget {
   final String hubId;
 
-  const CreatePostScreen({
-    super.key,
-    required this.hubId,
-  });
+  const CreatePostScreen({super.key, required this.hubId});
 
   @override
   State<CreatePostScreen> createState() => _CreatePostScreenState();
@@ -30,64 +27,58 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   }
 
   Future<void> _publish() async {
-  final message = _controller.text.trim();
+    final message = _controller.text.trim();
 
-  if (message.isEmpty) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text("Write something."),
-      ),
-    );
-    return;
-  }
+    if (message.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("Write something.")));
+      return;
+    }
 
-  if (message.length > AppLimits.postMaxLength) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          "Posts cannot exceed ${AppLimits.postMaxLength} characters.",
+    if (message.length > AppLimits.postMaxLength) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            "Posts cannot exceed ${AppLimits.postMaxLength} characters.",
+          ),
         ),
-      ),
-    );
-    return;
-  }
+      );
+      return;
+    }
 
-  setState(() => _loading = true);
+    setState(() => _loading = true);
 
     try {
       final user = FirebaseAuth.instance.currentUser!;
 
-      final userData =
-          await UserRepository.instance.getUser(user.uid);
+      final userData = await UserRepository.instance.getUser(user.uid);
 
-      final displayName =
-          userData?["displayName"] ?? "User";
+      final displayName = userData?["displayName"] ?? "User";
 
       await FirebaseFirestore.instance
           .collection("hubs")
           .doc(widget.hubId)
           .collection("posts")
           .add({
-        "authorId": user.uid,
-        "authorName": displayName,
-        "authorPhoto": user.photoURL,
-        "message": message,
-        "createdAt": FieldValue.serverTimestamp(),
-        "updatedAt": FieldValue.serverTimestamp(),
-        "likes": 0,
-        "comments": 0,
-      });
+            "authorId": user.uid,
+            "authorName": displayName,
+            "authorPhoto": user.photoURL,
+            "message": message,
+            "createdAt": FieldValue.serverTimestamp(),
+            "updatedAt": FieldValue.serverTimestamp(),
+            "likes": 0,
+            "comments": 0,
+          });
       await NotificationService.instance.send(
-  hubId: widget.hubId,
-  title: "New Board Post",
-  body: "$displayName published a new post.",
-  type: "board_post",
-  senderId: user.uid,
-  senderName: displayName,
-  data: {
-    "message": message,
-  },
-);
+        hubId: widget.hubId,
+        title: "New Board Post",
+        body: "$displayName published a new post.",
+        type: "board_post",
+        senderId: user.uid,
+        senderName: displayName,
+        data: {"message": message},
+      );
 
       if (mounted) {
         Navigator.pop(context);
@@ -95,11 +86,9 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     } catch (e) {
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(e.toString()),
-        ),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(e.toString())));
     } finally {
       if (mounted) {
         setState(() => _loading = false);
@@ -110,23 +99,21 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("New Post"),
-      ),
+      appBar: AppBar(title: const Text("New Post")),
       body: Padding(
         padding: const EdgeInsets.all(20),
         child: Column(
           children: [
             TextField(
-                 controller: _controller,
-                    maxLines: 8,
-                    maxLength: AppLimits.postMaxLength,
-                    textInputAction: TextInputAction.newline,
-                    decoration: const InputDecoration(
-                    hintText: "What would you like to share with your Hub?",
-                    border: OutlineInputBorder(),
-  ),
-),
+              controller: _controller,
+              maxLines: 8,
+              maxLength: AppLimits.postMaxLength,
+              textInputAction: TextInputAction.newline,
+              decoration: const InputDecoration(
+                hintText: "What would you like to share with your Hub?",
+                border: OutlineInputBorder(),
+              ),
+            ),
 
             const Spacer(),
 

@@ -5,10 +5,7 @@ import '../models/goal_model.dart';
 class GoalProgressCard extends StatelessWidget {
   final GoalModel goal;
 
-  const GoalProgressCard({
-    super.key,
-    required this.goal,
-  });
+  const GoalProgressCard({super.key, required this.goal});
 
   @override
   Widget build(BuildContext context) {
@@ -23,10 +20,7 @@ class GoalProgressCard extends StatelessWidget {
       children: [
         Center(
           child: Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 14,
-              vertical: 8,
-            ),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
             decoration: BoxDecoration(
               color: Colors.blue.shade50,
               borderRadius: BorderRadius.circular(30),
@@ -34,10 +28,7 @@ class GoalProgressCard extends StatelessWidget {
             child: const Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(
-                  Icons.account_balance_wallet_rounded,
-                  color: Colors.blue,
-                ),
+                Icon(Icons.account_balance_wallet_rounded, color: Colors.blue),
                 SizedBox(width: 8),
                 Text(
                   "Shared Budget",
@@ -54,30 +45,21 @@ class GoalProgressCard extends StatelessWidget {
         Text(
           goal.title,
           textAlign: TextAlign.center,
-          style: const TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.bold,
-          ),
+          style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
         ),
         if (goal.description.isNotEmpty) ...[
           const SizedBox(height: 8),
           Text(
             goal.description,
             textAlign: TextAlign.center,
-            style: TextStyle(
-              color: Colors.grey.shade600,
-              height: 1.4,
-            ),
+            style: TextStyle(color: Colors.grey.shade600, height: 1.4),
           ),
         ],
         if (goal.deadline != null) ...[
           const SizedBox(height: 18),
           Center(
             child: Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 14,
-                vertical: 8,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               decoration: BoxDecoration(
                 color: Colors.orange.shade50,
                 borderRadius: BorderRadius.circular(25),
@@ -93,9 +75,7 @@ class GoalProgressCard extends StatelessWidget {
                   const SizedBox(width: 6),
                   Text(
                     "${goal.deadline!.toDate().day}/${goal.deadline!.toDate().month}/${goal.deadline!.toDate().year}",
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w600,
-                    ),
+                    style: const TextStyle(fontWeight: FontWeight.w600),
                   ),
                 ],
               ),
@@ -115,10 +95,7 @@ class GoalProgressCard extends StatelessWidget {
         ),
         const SizedBox(height: 6),
         const Center(
-          child: Text(
-            "Budget completed",
-            style: TextStyle(color: Colors.grey),
-          ),
+          child: Text("Budget completed", style: TextStyle(color: Colors.grey)),
         ),
         const SizedBox(height: 22),
         ClipRRect(
@@ -177,23 +154,16 @@ class GoalProgressCard extends StatelessWidget {
                   children: [
                     const Text(
                       "Participants",
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                      ),
+                      style: TextStyle(fontWeight: FontWeight.bold),
                     ),
                     Text(
                       "${goal.completedMembers} of ${goal.totalMembers} confirmed",
-                      style: TextStyle(
-                        color: Colors.grey.shade600,
-                      ),
+                      style: TextStyle(color: Colors.grey.shade600),
                     ),
                   ],
                 ),
               ),
-              const Icon(
-                Icons.chevron_right,
-                color: Colors.grey,
-              )
+              const Icon(Icons.chevron_right, color: Colors.grey),
             ],
           ),
         ),

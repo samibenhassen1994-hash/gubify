@@ -14,7 +14,7 @@ class NameScreen extends StatefulWidget {
 
 class _NameScreenState extends State<NameScreen> {
   final TextEditingController _controller = TextEditingController();
- bool _isLoading = false;
+  bool _isLoading = false;
   @override
   void dispose() {
     _controller.dispose();
@@ -30,9 +30,7 @@ class _NameScreenState extends State<NameScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 30),
             child: Column(
               children: [
-                HubfyLogo(
-  width: MediaQuery.of(context).size.width * 0.7,
-),
+                HubfyLogo(width: MediaQuery.of(context).size.width * 0.7),
 
                 const SizedBox(height: 35),
 
@@ -83,67 +81,67 @@ class _NameScreenState extends State<NameScreen> {
                   height: 55,
                   child: ElevatedButton(
                     onPressed: _isLoading
-    ? null
-    : () async {
-        final name = _controller.text.trim();
+                        ? null
+                        : () async {
+                            final name = _controller.text.trim();
 
-        if (name.isEmpty) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text("Please enter your name"),
-            ),
-          );
-          return;
-        }
+                            if (name.isEmpty) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text("Please enter your name"),
+                                ),
+                              );
+                              return;
+                            }
 
-        setState(() {
-          _isLoading = true;
-        });
+                            setState(() {
+                              _isLoading = true;
+                            });
 
-        try {
-          print("PROFILE UID: ${AuthService().currentUser?.uid}");
-          await AuthService().createProfile(name);
+                            try {
+                              print(
+                                "PROFILE UID: ${AuthService().currentUser?.uid}",
+                              );
+                              await AuthService().createProfile(name);
 
-          if (!context.mounted) return;
+                              if (!context.mounted) return;
 
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(
-              builder: (_) => const WelcomeScreen(),
-            ),
-          );
-        } catch (e) {
-          if (!context.mounted) return;
+                              Navigator.pushReplacement(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => const WelcomeScreen(),
+                                ),
+                              );
+                            } catch (e) {
+                              if (!context.mounted) return;
 
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text("Error: $e"),
-            ),
-          );
-        }
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text("Error: $e")),
+                              );
+                            }
 
-        if (context.mounted) {
-          setState(() {
-            _isLoading = false;
-          });
-        }
-      },
-                  child: _isLoading
-    ? const SizedBox(
-        width: 24,
-        height: 24,
-        child: CircularProgressIndicator(
-          strokeWidth: 2.5,
-          color: Colors.white,
-        ),
-      )
-    : const Text(
-        "Continue",
-        style: TextStyle(
-          fontSize: 17,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
+                            if (context.mounted) {
+                              setState(() {
+                                _isLoading = false;
+                              });
+                            }
+                          },
+                    child: _isLoading
+                        ? const SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.5,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Text(
+                            "Continue",
+                            style: TextStyle(
+                              fontSize: 17,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
                   ),
                 ),
               ],

@@ -49,9 +49,7 @@ class _CreateHubScreenState extends State<CreateHubScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => ModuleSelectionScreen(
-          hubName: hubName,
-        ),
+        builder: (_) => ModuleSelectionScreen(hubName: hubName),
       ),
     );
   }
@@ -59,9 +57,7 @@ class _CreateHubScreenState extends State<CreateHubScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("Create Hub"),
-      ),
+      appBar: AppBar(title: const Text("Create Hub")),
       body: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
@@ -70,19 +66,13 @@ class _CreateHubScreenState extends State<CreateHubScreen> {
 
             const SizedBox(height: 20),
 
-            const Icon(
-              Icons.groups,
-              size: 80,
-            ),
+            const Icon(Icons.groups, size: 80),
 
             const SizedBox(height: 30),
 
             const Text(
               "Create your Hub",
-              style: TextStyle(
-                fontSize: 30,
-                fontWeight: FontWeight.bold,
-              ),
+              style: TextStyle(fontSize: 30, fontWeight: FontWeight.bold),
             ),
 
             const SizedBox(height: 15),

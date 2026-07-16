@@ -3,10 +3,7 @@ import 'package:flutter/material.dart';
 class HubfyLogo extends StatelessWidget {
   final double width;
 
-  const HubfyLogo({
-    super.key,
-    this.width = 220,
-  });
+  const HubfyLogo({super.key, this.width = 220});
 
   @override
   Widget build(BuildContext context) {

@@ -15,17 +15,11 @@ class PostService {
       throw Exception("Utente non autenticato");
     }
 
-    final userDoc =
-        await _firestore.collection("users").doc(user.uid).get();
+    final userDoc = await _firestore.collection("users").doc(user.uid).get();
 
-    final displayName =
-        userDoc.data()?["displayName"] ?? "Utente";
+    final displayName = userDoc.data()?["displayName"] ?? "Utente";
 
-    await _firestore
-        .collection("hubs")
-        .doc(hubId)
-        .collection("posts")
-        .add({
+    await _firestore.collection("hubs").doc(hubId).collection("posts").add({
       "authorId": user.uid,
       "authorName": displayName,
       "message": message.trim(),

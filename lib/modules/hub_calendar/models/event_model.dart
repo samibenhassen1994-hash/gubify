@@ -42,9 +42,7 @@ class EventModel {
     required this.status,
   });
 
-  factory EventModel.fromFirestore(
-    Map<String, dynamic> json,
-  ) {
+  factory EventModel.fromFirestore(Map<String, dynamic> json) {
     return EventModel(
       hubId: json["hubId"] ?? "",
       eventId: json["eventId"] ?? "",
@@ -76,10 +74,7 @@ class EventModel {
     };
   }
 
-  EventModel copyWith({
-    String? status,
-    Timestamp? eventDate,
-  }) {
+  EventModel copyWith({String? status, Timestamp? eventDate}) {
     return EventModel(
       hubId: hubId,
       eventId: eventId,

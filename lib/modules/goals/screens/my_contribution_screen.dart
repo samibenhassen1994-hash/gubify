@@ -14,12 +14,10 @@ class MyContributionScreen extends StatefulWidget {
   });
 
   @override
-  State<MyContributionScreen> createState() =>
-      _MyContributionScreenState();
+  State<MyContributionScreen> createState() => _MyContributionScreenState();
 }
 
-class _MyContributionScreenState
-    extends State<MyContributionScreen> {
+class _MyContributionScreenState extends State<MyContributionScreen> {
   final _amountController = TextEditingController();
 
   bool _loading = false;
@@ -35,18 +33,12 @@ class _MyContributionScreenState
 
     if (user == null) return;
 
-    final amount = double.tryParse(
-      _amountController.text.replaceAll(",", "."),
-    );
+    final amount = double.tryParse(_amountController.text.replaceAll(",", "."));
 
     if (amount == null || amount <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            "Enter a valid amount.",
-          ),
-        ),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("Enter a valid amount.")));
       return;
     }
 
@@ -62,25 +54,17 @@ class _MyContributionScreenState
 
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            "Contribution submitted.",
-          ),
-        ),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("Contribution submitted.")));
 
       Navigator.pop(context);
     } catch (e) {
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            e.toString(),
-          ),
-        ),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(e.toString())));
     } finally {
       if (mounted) {
         setState(() => _loading = false);
@@ -91,17 +75,14 @@ class _MyContributionScreenState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("My Contribution"),
-      ),
+      appBar: AppBar(title: const Text("My Contribution")),
       body: Padding(
         padding: const EdgeInsets.all(20),
         child: Column(
           children: [
             TextField(
               controller: _amountController,
-              keyboardType:
-                  const TextInputType.numberWithOptions(
+              keyboardType: const TextInputType.numberWithOptions(
                 decimal: true,
               ),
               decoration: const InputDecoration(
@@ -118,12 +99,8 @@ class _MyContributionScreenState
               child: FilledButton(
                 onPressed: _loading ? null : _submit,
                 child: _loading
-                    ? const CircularProgressIndicator(
-                        color: Colors.white,
-                      )
-                    : const Text(
-                        "Submit Contribution",
-                      ),
+                    ? const CircularProgressIndicator(color: Colors.white)
+                    : const Text("Submit Contribution"),
               ),
             ),
           ],

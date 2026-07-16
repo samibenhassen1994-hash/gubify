@@ -23,9 +23,7 @@ class _JoinHubScreenState extends State<JoinHubScreen> {
 
     if (inviteCode.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Please enter an invite code."),
-        ),
+        const SnackBar(content: Text("Please enter an invite code.")),
       );
       return;
     }
@@ -33,29 +31,21 @@ class _JoinHubScreenState extends State<JoinHubScreen> {
     setState(() => _loading = true);
 
     try {
-      final hubId = await HubService().joinHub(
-        inviteCode: inviteCode,
-      );
+      final hubId = await HubService().joinHub(inviteCode: inviteCode);
 
       if (!mounted) return;
 
       Navigator.pushAndRemoveUntil(
         context,
-        MaterialPageRoute(
-          builder: (_) => HubScreen(
-            hubId: hubId,
-          ),
-        ),
+        MaterialPageRoute(builder: (_) => HubScreen(hubId: hubId)),
         (_) => false,
       );
     } catch (e) {
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(e.toString()),
-        ),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(e.toString())));
     } finally {
       if (mounted) {
         setState(() => _loading = false);
@@ -72,9 +62,7 @@ class _JoinHubScreenState extends State<JoinHubScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("Join a Hub"),
-      ),
+      appBar: AppBar(title: const Text("Join a Hub")),
       body: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
@@ -83,19 +71,13 @@ class _JoinHubScreenState extends State<JoinHubScreen> {
 
             const SizedBox(height: 20),
 
-            const Icon(
-              Icons.group_add,
-              size: 80,
-            ),
+            const Icon(Icons.group_add, size: 80),
 
             const SizedBox(height: 25),
 
             const Text(
               "Got an invitation?",
-              style: TextStyle(
-                fontSize: 28,
-                fontWeight: FontWeight.bold,
-              ),
+              style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
             ),
 
             const SizedBox(height: 12),
@@ -114,9 +96,7 @@ class _JoinHubScreenState extends State<JoinHubScreen> {
               textInputAction: TextInputAction.done,
               onSubmitted: (_) => _joinHub(),
               inputFormatters: [
-                FilteringTextInputFormatter.allow(
-                  RegExp(r'[A-Za-z0-9-]'),
-                ),
+                FilteringTextInputFormatter.allow(RegExp(r'[A-Za-z0-9-]')),
               ],
               decoration: const InputDecoration(
                 labelText: "Hub Code",
@@ -141,10 +121,7 @@ class _JoinHubScreenState extends State<JoinHubScreen> {
                           color: Colors.white,
                         ),
                       )
-                    : const Text(
-                        "Join Hub",
-                        style: TextStyle(fontSize: 17),
-                      ),
+                    : const Text("Join Hub", style: TextStyle(fontSize: 17)),
               ),
             ),
           ],

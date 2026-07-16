@@ -36,9 +36,7 @@ class GoalModel {
     this.deadline,
   });
 
-  factory GoalModel.fromFirestore(
-    Map<String, dynamic> json,
-  ) {
+  factory GoalModel.fromFirestore(Map<String, dynamic> json) {
     return GoalModel(
       goalId: json["goalId"] ?? "",
       title: json["title"] ?? "",

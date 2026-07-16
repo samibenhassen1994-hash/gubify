@@ -16,13 +16,10 @@ class MyHubsScreen extends StatelessWidget {
     final uid = FirebaseAuth.instance.currentUser!.uid;
 
     return Scaffold(
-      
       body: HubBackground(
         child: Column(
           children: [
-            const HubPageHeader(
-  title: "My Hubs",
-),
+            const HubPageHeader(title: "My Hubs"),
             Expanded(
               child: FutureBuilder<QuerySnapshot>(
                 future: FirebaseFirestore.instance
@@ -32,19 +29,13 @@ class MyHubsScreen extends StatelessWidget {
                     .orderBy("joinedAt", descending: true)
                     .get(),
                 builder: (context, snapshot) {
-                  if (snapshot.connectionState ==
-                      ConnectionState.waiting) {
-                    return const Center(
-                      child: CircularProgressIndicator(),
-                    );
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator());
                   }
 
-                  if (!snapshot.hasData ||
-                      snapshot.data!.docs.isEmpty) {
+                  if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
                     return const Center(
-                      child: Text(
-                        "You haven't joined any Hub yet.",
-                      ),
+                      child: Text("You haven't joined any Hub yet."),
                     );
                   }
 
@@ -54,8 +45,7 @@ class MyHubsScreen extends StatelessWidget {
                     padding: const EdgeInsets.all(16),
                     itemCount: hubs.length,
                     itemBuilder: (context, index) {
-                      final hub =
-                          hubs[index].data() as Map<String, dynamic>;
+                      final hub = hubs[index].data() as Map<String, dynamic>;
 
                       final hubId = hub["hubId"];
 
@@ -66,19 +56,14 @@ class MyHubsScreen extends StatelessWidget {
                           borderRadius: BorderRadius.circular(18),
                         ),
                         child: ListTile(
-                          contentPadding:
-                              const EdgeInsets.symmetric(
+                          contentPadding: const EdgeInsets.symmetric(
                             horizontal: 18,
                             vertical: 10,
                           ),
                           leading: CircleAvatar(
                             radius: 26,
-                            backgroundColor:
-                                Colors.blue.withValues(alpha: .12),
-                            child: const Icon(
-                              Icons.groups,
-                              color: Colors.blue,
-                            ),
+                            backgroundColor: Colors.blue.withValues(alpha: .12),
+                            child: const Icon(Icons.groups, color: Colors.blue),
                           ),
                           title: Text(
                             hub["name"] ?? "Hub",
@@ -91,9 +76,7 @@ class MyHubsScreen extends StatelessWidget {
                             padding: EdgeInsets.only(top: 4),
                             child: Text(
                               "Tap to open",
-                              style: TextStyle(
-                                color: Colors.grey,
-                              ),
+                              style: TextStyle(color: Colors.grey),
                             ),
                           ),
                           trailing: const Icon(
@@ -101,13 +84,12 @@ class MyHubsScreen extends StatelessWidget {
                             size: 18,
                           ),
                           onTap: () async {
-                            final memberDoc =
-                                await FirebaseFirestore.instance
-                                    .collection("hubs")
-                                    .doc(hubId)
-                                    .collection("members")
-                                    .doc(uid)
-                                    .get();
+                            final memberDoc = await FirebaseFirestore.instance
+                                .collection("hubs")
+                                .doc(hubId)
+                                .collection("members")
+                                .doc(uid)
+                                .get();
 
                             if (!memberDoc.exists) {
                               await FirebaseFirestore.instance
@@ -119,8 +101,7 @@ class MyHubsScreen extends StatelessWidget {
 
                               if (!context.mounted) return;
 
-                              ScaffoldMessenger.of(context)
-                                  .showSnackBar(
+                              ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
                                   content: Text(
                                     "You are no longer a member of this Hub.",
@@ -131,8 +112,7 @@ class MyHubsScreen extends StatelessWidget {
                               Navigator.pushReplacement(
                                 context,
                                 MaterialPageRoute(
-                                  builder: (_) =>
-                                      const MyHubsScreen(),
+                                  builder: (_) => const MyHubsScreen(),
                                 ),
                               );
 
@@ -146,9 +126,7 @@ class MyHubsScreen extends StatelessWidget {
                               MaterialPageRoute(
                                 builder: (_) => HubAccessGuard(
                                   hubId: hubId,
-                                  child: HubScreen(
-                                    hubId: hubId,
-                                  ),
+                                  child: HubScreen(hubId: hubId),
                                 ),
                               ),
                             );

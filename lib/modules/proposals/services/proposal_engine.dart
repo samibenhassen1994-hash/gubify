@@ -1,16 +1,14 @@
 class ProposalEngine {
   ProposalEngine._();
 
-  static final ProposalEngine instance =
-      ProposalEngine._();
+  static final ProposalEngine instance = ProposalEngine._();
 
   ProposalResult checkResult({
     required int yesVotes,
     required int noVotes,
     required int memberCount,
   }) {
-    final remainingVotes =
-        memberCount - yesVotes - noVotes;
+    final remainingVotes = memberCount - yesVotes - noVotes;
 
     // Approvata matematicamente
     if (yesVotes > noVotes + remainingVotes) {
@@ -26,8 +24,4 @@ class ProposalEngine {
   }
 }
 
-enum ProposalResult {
-  pending,
-  approved,
-  rejected,
-}
+enum ProposalResult { pending, approved, rejected }

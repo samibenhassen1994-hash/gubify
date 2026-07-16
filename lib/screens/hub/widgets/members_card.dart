@@ -22,8 +22,7 @@ class MembersCard extends StatelessWidget {
         builder: (context, snapshot) {
           final liveData = snapshot.data?.data();
 
-          final liveMemberCount =
-              liveData?["memberCount"] ?? memberCount;
+          final liveMemberCount = liveData?["memberCount"] ?? memberCount;
 
           return ListTile(
             leading: const Icon(Icons.people),
@@ -34,15 +33,10 @@ class MembersCard extends StatelessWidget {
               children: [
                 Text(
                   liveMemberCount.toString(),
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: const TextStyle(fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(width: 10),
-                const Icon(
-                  Icons.arrow_forward_ios,
-                  size: 16,
-                ),
+                const Icon(Icons.arrow_forward_ios, size: 16),
               ],
             ),
             onTap: () {
@@ -50,9 +44,9 @@ class MembersCard extends StatelessWidget {
                 context,
                 MaterialPageRoute(
                   builder: (_) => MembersScreen(
-  hubId: hubId,
-  ownerId: liveData?["ownerId"] ?? "",
-),
+                    hubId: hubId,
+                    ownerId: liveData?["ownerId"] ?? "",
+                  ),
                 ),
               );
             },

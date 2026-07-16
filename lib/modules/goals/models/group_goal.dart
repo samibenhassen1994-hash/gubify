@@ -24,10 +24,7 @@ class GroupGoal {
 
   int get progressPercentage => (progress * 100).round();
 
-  factory GroupGoal.fromMap(
-    String id,
-    Map<String, dynamic> map,
-  ) {
+  factory GroupGoal.fromMap(String id, Map<String, dynamic> map) {
     return GroupGoal(
       id: id,
       title: map['title'] ?? '',
@@ -35,7 +32,8 @@ class GroupGoal {
       currentAmount: (map['currentAmount'] ?? 0).toDouble(),
       active: map['active'] ?? true,
       createdBy: map['createdBy'] ?? '',
-      createdAt: DateTime.tryParse(map['createdAt'] ?? '') ??
+      createdAt:
+          DateTime.tryParse(map['createdAt'] ?? '') ??
           DateTime.fromMillisecondsSinceEpoch(0),
     );
   }

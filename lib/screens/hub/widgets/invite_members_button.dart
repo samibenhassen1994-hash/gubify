@@ -5,10 +5,7 @@ import '../invite_members_screen.dart';
 class InviteMembersButton extends StatelessWidget {
   final String hubId;
 
-  const InviteMembersButton({
-    super.key,
-    required this.hubId,
-  });
+  const InviteMembersButton({super.key, required this.hubId});
 
   @override
   Widget build(BuildContext context) {
@@ -22,9 +19,7 @@ class InviteMembersButton extends StatelessWidget {
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (_) => InviteMembersScreen(
-                hubId: hubId,
-              ),
+              builder: (_) => InviteMembersScreen(hubId: hubId),
             ),
           );
         },

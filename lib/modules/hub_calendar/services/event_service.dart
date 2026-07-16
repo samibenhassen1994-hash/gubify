@@ -10,9 +10,7 @@ class EventService {
 
   static final EventService instance = EventService._();
 
-  Stream<List<EventModel>> eventsStream(
-    String hubId,
-  ) {
+  Stream<List<EventModel>> eventsStream(String hubId) {
     return EventRepository.instance.eventsStream(hubId);
   }
 
@@ -20,31 +18,21 @@ class EventService {
     required String hubId,
     required String eventId,
   }) {
-    return EventRepository.instance.eventStream(
-      hubId: hubId,
-      eventId: eventId,
-    );
+    return EventRepository.instance.eventStream(hubId: hubId, eventId: eventId);
   }
 
-  Future<void> createEvent(
-    EventModel event,
-  ) async {
+  Future<void> createEvent(EventModel event) async {
     await EventRepository.instance.createEvent(event);
   }
 
-  Future<void> createFromProposal(
-    ProposalModel proposal,
-  ) async {
+  Future<void> createFromProposal(ProposalModel proposal) async {
     // Evita di creare due eventi per la stessa proposal
     if (proposal.eventCreated) return;
 
     // Se non è presente una data evento, non creare nulla
     if (proposal.eventDate == null) return;
 
-    final eventId = FirebaseFirestore.instance
-        .collection("temp")
-        .doc()
-        .id;
+    final eventId = FirebaseFirestore.instance.collection("temp").doc().id;
 
     final event = EventModel(
       hubId: proposal.hubId,
@@ -62,17 +50,12 @@ class EventService {
 
     await EventRepository.instance.createEvent(event);
 
-await ProposalRepository.instance.updateProposal(
-  proposal.copyWith(
-    eventCreated: true,
-  ),
-);
-  
+    await ProposalRepository.instance.updateProposal(
+      proposal.copyWith(eventCreated: true),
+    );
   }
 
-  Future<void> updateEvent(
-    EventModel event,
-  ) async {
+  Future<void> updateEvent(EventModel event) async {
     await EventRepository.instance.updateEvent(event);
   }
 
@@ -80,9 +63,6 @@ await ProposalRepository.instance.updateProposal(
     required String hubId,
     required String eventId,
   }) async {
-    await EventRepository.instance.deleteEvent(
-      hubId: hubId,
-      eventId: eventId,
-    );
+    await EventRepository.instance.deleteEvent(hubId: hubId, eventId: eventId);
   }
 }

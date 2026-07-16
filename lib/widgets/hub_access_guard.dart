@@ -10,19 +10,13 @@ class HubAccessGuard extends StatefulWidget {
   final String hubId;
   final Widget child;
 
-  const HubAccessGuard({
-    super.key,
-    required this.hubId,
-    required this.child,
-  });
+  const HubAccessGuard({super.key, required this.hubId, required this.child});
 
   @override
-  State<HubAccessGuard> createState() =>
-      _HubAccessGuardState();
+  State<HubAccessGuard> createState() => _HubAccessGuardState();
 }
 
-class _HubAccessGuardState
-    extends State<HubAccessGuard> {
+class _HubAccessGuardState extends State<HubAccessGuard> {
   late final StreamSubscription _subscription;
 
   bool _dialogShown = false;
@@ -63,14 +57,13 @@ class _HubAccessGuardState
 
     if (!mounted) return;
 
-    final result = await showDialog<bool>(
+    final result =
+        await showDialog<bool>(
           context: context,
           barrierDismissible: false,
           builder: (_) => AlertDialog(
             title: const Text("Removed from Hub"),
-            content: const Text(
-              "An administrator removed you from this Hub.",
-            ),
+            content: const Text("An administrator removed you from this Hub."),
             actions: [
               FilledButton(
                 onPressed: () {
@@ -87,9 +80,7 @@ class _HubAccessGuardState
 
     if (result) {
       Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(
-          builder: (_) => const MyHubsScreen(),
-        ),
+        MaterialPageRoute(builder: (_) => const MyHubsScreen()),
         (_) => false,
       );
     }

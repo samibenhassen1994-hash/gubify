@@ -5,10 +5,7 @@ import '../services/goal_service.dart';
 class CreateGoalScreen extends StatefulWidget {
   final String hubId;
 
-  const CreateGoalScreen({
-    super.key,
-    required this.hubId,
-  });
+  const CreateGoalScreen({super.key, required this.hubId});
 
   @override
   State<CreateGoalScreen> createState() => _CreateGoalScreenState();
@@ -49,16 +46,11 @@ class _CreateGoalScreenState extends State<CreateGoalScreen> {
   Future<void> _createGoal() async {
     final title = _titleController.text.trim();
     final description = _descriptionController.text.trim();
-    final amount =
-        double.tryParse(_amountController.text.trim());
+    final amount = double.tryParse(_amountController.text.trim());
 
     if (title.isEmpty || amount == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            "Please enter a valid title and amount.",
-          ),
-        ),
+        const SnackBar(content: Text("Please enter a valid title and amount.")),
       );
       return;
     }
@@ -79,17 +71,12 @@ class _CreateGoalScreenState extends State<CreateGoalScreen> {
       if (!mounted) return;
 
       Navigator.pop(context);
-
     } catch (e) {
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            e.toString(),
-          ),
-        ),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(e.toString())));
     }
 
     if (mounted) {
@@ -102,9 +89,7 @@ class _CreateGoalScreenState extends State<CreateGoalScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("New Goal"),
-      ),
+      appBar: AppBar(title: const Text("New Goal")),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
         child: Column(
@@ -171,18 +156,11 @@ class _CreateGoalScreenState extends State<CreateGoalScreen> {
                     ? const SizedBox(
                         width: 22,
                         height: 22,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                        ),
+                        child: CircularProgressIndicator(strokeWidth: 2),
                       )
                     : const Icon(Icons.flag),
-                label: Text(
-                  _isLoading
-                      ? "Creating..."
-                      : "Create Goal",
-                ),
-                onPressed:
-                    _isLoading ? null : _createGoal,
+                label: Text(_isLoading ? "Creating..." : "Create Goal"),
+                onPressed: _isLoading ? null : _createGoal,
               ),
             ),
           ],

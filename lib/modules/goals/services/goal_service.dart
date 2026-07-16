@@ -34,10 +34,7 @@ class GoalService {
       deadline: deadline,
     );
 
-    await GoalRepository.instance.createGoal(
-      hubId,
-      goal,
-    );
+    await GoalRepository.instance.createGoal(hubId, goal);
 
     final goalMembers = members
         .map(
@@ -61,25 +58,16 @@ class GoalService {
   }
 
   /// Future (lo lasciamo per compatibilità)
-  Future<GoalModel?> getActiveGoal(
-    String hubId,
-  ) {
+  Future<GoalModel?> getActiveGoal(String hubId) {
     return GoalRepository.instance.getActiveGoal(hubId);
   }
 
   /// Stream in tempo reale
-  Stream<GoalModel?> activeGoalStream(
-    String hubId,
-  ) {
-    return GoalRepository.instance.activeGoalStream(
-      hubId,
-    );
+  Stream<GoalModel?> activeGoalStream(String hubId) {
+    return GoalRepository.instance.activeGoalStream(hubId);
   }
 
-  void _validate(
-    String title,
-    double targetAmount,
-  ) {
+  void _validate(String title, double targetAmount) {
     if (title.trim().isEmpty) {
       throw Exception("Goal title is required.");
     }
@@ -122,9 +110,7 @@ class GoalService {
       status: "active",
       archived: false,
       createdAt: Timestamp.now(),
-      deadline: deadline == null
-          ? null
-          : Timestamp.fromDate(deadline),
+      deadline: deadline == null ? null : Timestamp.fromDate(deadline),
     );
   }
 

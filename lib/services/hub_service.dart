@@ -59,16 +59,13 @@ class HubService {
       "createdAt": FieldValue.serverTimestamp(),
     });
 
-    batch.set(
-      hubRef.collection("members").doc(user.uid),
-      {
-        "uid": user.uid,
-        "displayName": displayName,
-        "photoUrl": user.photoURL,
-        "role": "owner",
-        "joinedAt": FieldValue.serverTimestamp(),
-      },
-    );
+    batch.set(hubRef.collection("members").doc(user.uid), {
+      "uid": user.uid,
+      "displayName": displayName,
+      "photoUrl": user.photoURL,
+      "role": "owner",
+      "joinedAt": FieldValue.serverTimestamp(),
+    });
 
     batch.set(
       _firestore
@@ -92,9 +89,7 @@ class HubService {
     return hubRef.id;
   }
 
-  Future<String> joinHub({
-    required String inviteCode,
-  }) async {
+  Future<String> joinHub({required String inviteCode}) async {
     final user = _auth.currentUser;
 
     if (user == null) {
@@ -107,42 +102,33 @@ class HubService {
 
     QuerySnapshot<Map<String, dynamic>> query;
 
-try {
-  query = await _firestore
-      .collection("hubs")
-      .where(
-        "inviteCode",
-        isEqualTo: inviteCode.trim().toUpperCase(),
-      )
-      .limit(1)
-      .get();
-} on FirebaseException catch (e) {
-  switch (e.code) {
-    case "unavailable":
-      throw Exception(
-        "No internet connection. Please check your connection and try again.",
-      );
+    try {
+      query = await _firestore
+          .collection("hubs")
+          .where("inviteCode", isEqualTo: inviteCode.trim().toUpperCase())
+          .limit(1)
+          .get();
+    } on FirebaseException catch (e) {
+      switch (e.code) {
+        case "unavailable":
+          throw Exception(
+            "No internet connection. Please check your connection and try again.",
+          );
 
-    case "permission-denied":
-      throw Exception(
-        "You don't have permission to access Hubfy.",
-      );
+        case "permission-denied":
+          throw Exception("You don't have permission to access Hubfy.");
 
-    case "deadline-exceeded":
-      throw Exception(
-        "The connection timed out. Please try again.",
-      );
+        case "deadline-exceeded":
+          throw Exception("The connection timed out. Please try again.");
 
-    default:
-      throw Exception(
-        e.message ?? "Unexpected connection error.",
-      );
-  }
-}
+        default:
+          throw Exception(e.message ?? "Unexpected connection error.");
+      }
+    }
 
-if (query.docs.isEmpty) {
-  throw Exception("Invalid Hub code.");
-}
+    if (query.docs.isEmpty) {
+      throw Exception("Invalid Hub code.");
+    }
 
     final hubDoc = query.docs.first;
     final hubId = hubDoc.id;
@@ -159,23 +145,17 @@ if (query.docs.isEmpty) {
 
     final batch = _firestore.batch();
 
-    batch.set(
-      memberRef,
-      {
-        "uid": user.uid,
-        "displayName": displayName,
-        "photoUrl": user.photoURL,
-        "role": "member",
-        "joinedAt": FieldValue.serverTimestamp(),
-      },
-    );
+    batch.set(memberRef, {
+      "uid": user.uid,
+      "displayName": displayName,
+      "photoUrl": user.photoURL,
+      "role": "member",
+      "joinedAt": FieldValue.serverTimestamp(),
+    });
 
-    batch.update(
-      _firestore.collection("hubs").doc(hubId),
-      {
-        "memberCount": FieldValue.increment(1),
-      },
-    );
+    batch.update(_firestore.collection("hubs").doc(hubId), {
+      "memberCount": FieldValue.increment(1),
+    });
 
     batch.set(
       _firestore
@@ -212,17 +192,14 @@ if (query.docs.isEmpty) {
   /// - tasks
   /// - shopping
   /// - expenses
-  Future<void> deleteHub({
-    required String hubId,
-  }) async {
+  Future<void> deleteHub({required String hubId}) async {
     final user = _auth.currentUser;
 
     if (user == null) {
       throw Exception("User not authenticated.");
     }
 
-    final hubDoc =
-        await _firestore.collection("hubs").doc(hubId).get();
+    final hubDoc = await _firestore.collection("hubs").doc(hubId).get();
 
     if (!hubDoc.exists) {
       throw Exception("Hub not found.");
@@ -236,9 +213,7 @@ if (query.docs.isEmpty) {
 
     final batch = _firestore.batch();
 
-    batch.delete(
-      _firestore.collection("hubs").doc(hubId),
-    );
+    batch.delete(_firestore.collection("hubs").doc(hubId));
 
     batch.delete(
       _firestore

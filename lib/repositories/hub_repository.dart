@@ -35,11 +35,8 @@ class HubRepository {
   }
 
   Stream<DocumentSnapshot<Map<String, dynamic>>> hubStream(String hubId) {
-  return _firestore
-      .collection("hubs")
-      .doc(hubId)
-      .snapshots();
-}
+    return _firestore.collection("hubs").doc(hubId).snapshots();
+  }
 
   /// Aggiorna la cache dopo una modifica
   void updateHub(String hubId, Map<String, dynamic> data) {
