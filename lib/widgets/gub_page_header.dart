@@ -1,20 +1,24 @@
 import 'package:flutter/material.dart';
 
 import 'user_header.dart';
-import '../screens/welcome_screen.dart'; // usa il percorso corretto
+import '../screens/welcome_screen.dart';
 
-class HubPageHeader extends StatelessWidget {
+class GubPageHeader extends StatelessWidget {
   final String title;
   final String? hubId;
 
-  const HubPageHeader({super.key, required this.title, this.hubId});
+  const GubPageHeader({
+    super.key,
+    required this.title,
+    this.hubId,
+  });
 
   @override
   Widget build(BuildContext context) {
     return SafeArea(
       bottom: false,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -23,6 +27,7 @@ class HubPageHeader extends StatelessWidget {
                 IconButton(
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
+                  splashRadius: 22,
                   onPressed: () {
                     if (Navigator.canPop(context)) {
                       Navigator.pop(context);
@@ -37,27 +42,28 @@ class HubPageHeader extends StatelessWidget {
                   },
                   icon: const Icon(
                     Icons.arrow_back_ios_new_rounded,
-                    size: 22,
+                    size: 20,
                     color: Color(0xFF1E293B),
                   ),
                 ),
 
-                const SizedBox(width: 10),
+                const SizedBox(width: 8),
 
                 Expanded(
                   child: Text(
                     title,
                     style: const TextStyle(
-                      fontSize: 32,
+                      fontSize: 30,
                       fontWeight: FontWeight.w800,
                       color: Color(0xFF1E293B),
+                      height: 1,
                     ),
                   ),
                 ),
               ],
             ),
 
-            const SizedBox(height: 18),
+            const SizedBox(height: 14),
 
             UserHeader(hubId: hubId),
           ],

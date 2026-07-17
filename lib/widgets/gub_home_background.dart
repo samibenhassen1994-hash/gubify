@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 
-class HubBackground extends StatelessWidget {
+class GubHomeBackground extends StatelessWidget {
   final Widget child;
 
-  const HubBackground({super.key, required this.child});
+  const GubHomeBackground({
+    super.key,
+    required this.child,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -16,7 +19,10 @@ class HubBackground extends StatelessWidget {
               gradient: LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
-                colors: [Color(0xFFF8FAFC), Color(0xFFF2F5FA)],
+                colors: [
+                  Color(0xFFF8FAFC),
+                  Color(0xFFF2F5FA),
+                ],
               ),
             ),
           ),

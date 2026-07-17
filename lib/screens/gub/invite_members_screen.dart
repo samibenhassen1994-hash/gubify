@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 
-import '../../repositories/hub_repository.dart';
+import '../../repositories/gub_repository.dart';
 import '../../widgets/user_header.dart';
 
 class InviteMembersScreen extends StatelessWidget {
@@ -16,7 +16,7 @@ class InviteMembersScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(title: const Text("Invite Members")),
       body: FutureBuilder<Map<String, dynamic>?>(
-        future: HubRepository.instance.getHub(hubId),
+        future: GubRepository.instance.getHub(hubId),
         builder: (context, hubSnapshot) {
           if (hubSnapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());

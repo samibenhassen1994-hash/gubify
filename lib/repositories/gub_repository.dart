@@ -1,9 +1,9 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-class HubRepository {
-  HubRepository._();
+class GubRepository {
+  GubRepository._();
 
-  static final HubRepository instance = HubRepository._();
+  static final GubRepository instance = GubRepository._();
 
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 

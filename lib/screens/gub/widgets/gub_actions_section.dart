@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 
 import 'invite_members_button.dart';
-import 'manage_hub_button.dart';
+import 'manage_gub_button.dart';
 
-class HubActionsSection extends StatelessWidget {
+class GubActionsSection extends StatelessWidget {
   final String hubId;
 
-  const HubActionsSection({super.key, required this.hubId});
+  const GubActionsSection({super.key, required this.hubId});
 
   @override
   Widget build(BuildContext context) {
@@ -16,7 +16,7 @@ class HubActionsSection extends StatelessWidget {
 
         const SizedBox(height: 15),
 
-        ManageHubButton(hubId: hubId),
+        ManageGubButton(hubId: hubId),
       ],
     );
   }

@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 
-import '../manage_hub_screen.dart';
+import '../manage_gub_screen.dart';
 
-class ManageHubButton extends StatelessWidget {
+class ManageGubButton extends StatelessWidget {
   final String hubId;
 
-  const ManageHubButton({super.key, required this.hubId});
+  const ManageGubButton({super.key, required this.hubId});
 
   @override
   Widget build(BuildContext context) {
@@ -18,7 +18,7 @@ class ManageHubButton extends StatelessWidget {
         onPressed: () {
           Navigator.push(
             context,
-            MaterialPageRoute(builder: (_) => ManageHubScreen(hubId: hubId)),
+            MaterialPageRoute(builder: (_) => ManageGubScreen(hubId: hubId)),
           );
         },
       ),

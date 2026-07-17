@@ -2,23 +2,24 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
-import '../../widgets/hub_home_background.dart';
-import 'hub_screen.dart';
-import '../../widgets/hub_access_guard.dart';
-import '../../widgets/hub_page_header.dart';
+import '../../widgets/gub_home_background.dart';
+import 'gub_screen.dart';
+import '../../widgets/gub_access_guard.dart';
+import '../../widgets/gub_page_header.dart';
 
-class MyHubsScreen extends StatelessWidget {
-  const MyHubsScreen({super.key});
+class MyGubsScreen extends StatelessWidget {
+  const MyGubsScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
     final uid = FirebaseAuth.instance.currentUser!.uid;
 
     return Scaffold(
-      body: HubBackground(
+      body: GubHomeBackground(
         child: Column(
           children: [
-            const HubPageHeader(title: "My Hubs"),
+            const GubPageHeader(title: "My Gubs"),
+
             Expanded(
               child: FutureBuilder<QuerySnapshot>(
                 future: FirebaseFirestore.instance
@@ -29,12 +30,20 @@ class MyHubsScreen extends StatelessWidget {
                     .get(),
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(child: CircularProgressIndicator());
+                    return const Center(
+                      child: CircularProgressIndicator(),
+                    );
                   }
 
                   if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
                     return const Center(
-                      child: Text("You haven't joined any Hub yet."),
+                      child: Text(
+                        "You haven't joined any Gub yet.",
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: Colors.black54,
+                        ),
+                      ),
                     );
                   }
 
@@ -50,9 +59,10 @@ class MyHubsScreen extends StatelessWidget {
 
                       return Card(
                         elevation: 0,
-                        margin: const EdgeInsets.only(bottom: 12),
+                        color: Colors.white.withValues(alpha: .88),
+                        margin: const EdgeInsets.only(bottom: 14),
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(18),
+                          borderRadius: BorderRadius.circular(22),
                         ),
                         child: ListTile(
                           contentPadding: const EdgeInsets.symmetric(
@@ -61,11 +71,16 @@ class MyHubsScreen extends StatelessWidget {
                           ),
                           leading: CircleAvatar(
                             radius: 26,
-                            backgroundColor: Colors.blue.withValues(alpha: .12),
-                            child: const Icon(Icons.groups, color: Colors.blue),
+                            backgroundColor: const Color(
+                              0xFF2563EB,
+                            ).withValues(alpha: .12),
+                            child: const Icon(
+                              Icons.hub_outlined,
+                              color: Color(0xFF2563EB),
+                            ),
                           ),
                           title: Text(
-                            hub["name"] ?? "Hub",
+                            hub["name"] ?? "Gub",
                             style: const TextStyle(
                               fontWeight: FontWeight.bold,
                               fontSize: 17,
@@ -74,13 +89,13 @@ class MyHubsScreen extends StatelessWidget {
                           subtitle: const Padding(
                             padding: EdgeInsets.only(top: 4),
                             child: Text(
-                              "Tap to open",
+                              "Open Gub",
                               style: TextStyle(color: Colors.grey),
                             ),
                           ),
                           trailing: const Icon(
-                            Icons.arrow_forward_ios,
-                            size: 18,
+                            Icons.chevron_right_rounded,
+                            size: 22,
                           ),
                           onTap: () async {
                             final memberDoc = await FirebaseFirestore.instance
@@ -103,7 +118,7 @@ class MyHubsScreen extends StatelessWidget {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
                                   content: Text(
-                                    "You are no longer a member of this Hub.",
+                                    "You are no longer a member of this Gub.",
                                   ),
                                 ),
                               );
@@ -111,7 +126,7 @@ class MyHubsScreen extends StatelessWidget {
                               Navigator.pushReplacement(
                                 context,
                                 MaterialPageRoute(
-                                  builder: (_) => const MyHubsScreen(),
+                                  builder: (_) => const MyGubsScreen(),
                                 ),
                               );
 
@@ -123,9 +138,9 @@ class MyHubsScreen extends StatelessWidget {
                             Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (_) => HubAccessGuard(
+                                builder: (_) => GubAccessGuard(
                                   hubId: hubId,
-                                  child: HubScreen(hubId: hubId),
+                                  child: GubScreen(hubId: hubId),
                                 ),
                               ),
                             );

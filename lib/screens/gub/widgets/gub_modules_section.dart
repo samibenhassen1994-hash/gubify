@@ -5,13 +5,13 @@ import '../../../modules/hub_calendar/widgets/hub_calendar_home_card.dart';
 import '../../../modules/proposals/widgets/proposal_home_card.dart';
 import 'board_card.dart';
 
-class HubModulesSection extends StatelessWidget {
+class GubModulesSection extends StatelessWidget {
   final String hubId;
   final int memberCount;
   final String ownerId;
   final List<String> activeModules;
 
-  const HubModulesSection({
+  const GubModulesSection({
     super.key,
     required this.hubId,
     required this.memberCount,

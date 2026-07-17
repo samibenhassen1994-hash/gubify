@@ -4,19 +4,19 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
-import '../screens/hub/my_hubs_screen.dart';
+import '../screens/gub/my_gubs_screen.dart';
 
-class HubAccessGuard extends StatefulWidget {
+class GubAccessGuard extends StatefulWidget {
   final String hubId;
   final Widget child;
 
-  const HubAccessGuard({super.key, required this.hubId, required this.child});
+  const GubAccessGuard({super.key, required this.hubId, required this.child});
 
   @override
-  State<HubAccessGuard> createState() => _HubAccessGuardState();
+  State<GubAccessGuard> createState() => _GubAccessGuardState();
 }
 
-class _HubAccessGuardState extends State<HubAccessGuard> {
+class _GubAccessGuardState extends State<GubAccessGuard> {
   late final StreamSubscription _subscription;
 
   bool _dialogShown = false;
@@ -80,7 +80,7 @@ class _HubAccessGuardState extends State<HubAccessGuard> {
 
     if (result) {
       Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const MyHubsScreen()),
+        MaterialPageRoute(builder: (_) => const MyGubsScreen()),
         (_) => false,
       );
     }

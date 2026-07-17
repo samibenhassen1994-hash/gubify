@@ -1,16 +1,16 @@
 import 'package:flutter/material.dart';
 
-import '../../services/hub_service.dart';
+import '../../services/gub_service.dart';
 import '../welcome_screen.dart';
 
-class ManageHubScreen extends StatelessWidget {
+class ManageGubScreen extends StatelessWidget {
   final String hubId;
 
-  const ManageHubScreen({super.key, required this.hubId});
+  const ManageGubScreen({super.key, required this.hubId});
 
   Future<void> _deleteHub(BuildContext context) async {
     try {
-      await HubService().deleteHub(hubId: hubId);
+      await GubService().deleteHub(hubId: hubId);
 
       if (!context.mounted) return;
 

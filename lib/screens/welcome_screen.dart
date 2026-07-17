@@ -8,9 +8,9 @@ import '../widgets/user_header.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../repositories/user_repository.dart';
 
-import 'hub/create_hub_screen.dart';
-import 'hub/join_hub_screen.dart';
-import 'hub/my_hubs_screen.dart';
+import 'gub/create_gub_screen.dart';
+import 'gub/join_gub_screen.dart';
+import 'gub/my_gubs_screen.dart';
 
 class WelcomeScreen extends StatefulWidget {
   const WelcomeScreen({super.key});
@@ -143,7 +143,7 @@ PrimaryButton(
                             Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (_) => const CreateHubScreen(),
+                                builder: (_) => const CreateGubScreen(),
                               ),
                             );
                           },
@@ -158,7 +158,7 @@ PrimaryButton(
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(
-                                  builder: (_) => const MyHubsScreen(),
+                                  builder: (_) => const MyGubsScreen(),
                                 ),
                               );
                             },
@@ -202,7 +202,7 @@ PrimaryButton(
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(
-                                  builder: (_) => const JoinHubScreen(),
+                                  builder: (_) => const JoinGubScreen(),
                                 ),
                               );
                             },

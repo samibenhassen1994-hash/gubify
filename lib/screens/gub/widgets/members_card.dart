@@ -1,7 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
-import '../../../repositories/hub_repository.dart';
+import '../../../repositories/gub_repository.dart';
 import '../members_screen.dart';
 
 class MembersCard extends StatelessWidget {
@@ -18,7 +18,7 @@ class MembersCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Card(
       child: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-        stream: HubRepository.instance.hubStream(hubId),
+        stream: GubRepository.instance.hubStream(hubId),
         builder: (context, snapshot) {
           final liveData = snapshot.data?.data();
 

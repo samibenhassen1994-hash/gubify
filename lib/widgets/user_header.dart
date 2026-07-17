@@ -9,7 +9,11 @@ class UserHeader extends StatelessWidget {
   final String? hubId;
   final bool darkMode;
 
-  const UserHeader({super.key, this.hubId, this.darkMode = false});
+  const UserHeader({
+    super.key,
+    this.hubId,
+    this.darkMode = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -21,7 +25,7 @@ class UserHeader extends StatelessWidget {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Padding(
             padding: EdgeInsets.only(bottom: 24),
-            child: SizedBox(height: 40),
+            child: SizedBox(height: 44),
           );
         }
 
@@ -29,17 +33,19 @@ class UserHeader extends StatelessWidget {
         final displayName = data?["displayName"] ?? "User";
 
         return Padding(
-          padding: const EdgeInsets.only(bottom: 24),
+          padding: const EdgeInsets.only(bottom: 20),
           child: Row(
             children: [
               CircleAvatar(
-                radius: 20,
+                radius: 22,
                 backgroundColor: darkMode
-                    ? Colors.white.withOpacity(.12)
-                    : Colors.blue.shade100,
+                    ? Colors.white.withValues(alpha: .12)
+                    : const Color(0xFF2563EB).withValues(alpha: .12),
                 child: Icon(
                   Icons.person,
-                  color: darkMode ? Colors.white : Colors.blue,
+                  color: darkMode
+                      ? Colors.white
+                      : const Color(0xFF2563EB),
                 ),
               ),
 
@@ -50,7 +56,7 @@ class UserHeader extends StatelessWidget {
                   displayName,
                   style: TextStyle(
                     color: darkMode ? Colors.white : Colors.black87,
-                    fontSize: 20,
+                    fontSize: 18,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -98,8 +104,9 @@ class UserHeader extends StatelessWidget {
                             Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (_) =>
-                                    NotificationsScreen(hubId: hubId!),
+                                builder: (_) => NotificationsScreen(
+                                  hubId: hubId!,
+                                ),
                               ),
                             );
                           },
@@ -109,7 +116,7 @@ class UserHeader extends StatelessWidget {
                             children: [
                               Icon(
                                 Icons.notifications_outlined,
-                                size: 28,
+                                size: 26,
                                 color: darkMode
                                     ? Colors.white70
                                     : Colors.black54,
@@ -121,8 +128,8 @@ class UserHeader extends StatelessWidget {
                                   top: 6,
                                   child: IgnorePointer(
                                     child: Container(
-                                      width: 18,
-                                      height: 18,
+                                      width: 19,
+                                      height: 19,
                                       decoration: const BoxDecoration(
                                         color: Colors.red,
                                         shape: BoxShape.circle,
@@ -132,7 +139,7 @@ class UserHeader extends StatelessWidget {
                                         count > 9 ? "9+" : "$count",
                                         style: const TextStyle(
                                           color: Colors.white,
-                                          fontSize: 10,
+                                          fontSize: 9,
                                           fontWeight: FontWeight.bold,
                                         ),
                                       ),
@@ -153,7 +160,10 @@ class UserHeader extends StatelessWidget {
                 },
                 icon: Icon(
                   Icons.settings_outlined,
-                  color: darkMode ? Colors.white70 : Colors.black54,
+                  size: 26,
+                  color: darkMode
+                      ? Colors.white70
+                      : Colors.black54,
                 ),
               ),
             ],

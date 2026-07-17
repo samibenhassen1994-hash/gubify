@@ -1,36 +1,36 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
-import '../../repositories/hub_repository.dart';
-import '../../widgets/hub_access_guard.dart';
-import '../../widgets/hub_home_background.dart';
-import '../../widgets/hub_page_header.dart';
+import '../../repositories/gub_repository.dart';
+import '../../widgets/gub_access_guard.dart';
+import '../../widgets/gub_home_background.dart';
+import '../../widgets/gub_page_header.dart';
 import '../../modules/tasks/widgets/task_home_card.dart';
 
-import 'widgets/hub_actions_section.dart';
-import 'widgets/hub_members_badge.dart';
-import 'widgets/hub_modules_section.dart';
+import 'widgets/gub_actions_section.dart';
+import 'widgets/gub_members_badge.dart';
+import 'widgets/gub_modules_section.dart';
 import 'widgets/invite_code_card.dart';
 import 'widgets/members_card.dart';
 import 'widgets/modules_card.dart';
 
-class HubScreen extends StatelessWidget {
+class GubScreen extends StatelessWidget {
   final String hubId;
 
-  const HubScreen({
+  const GubScreen({
     super.key,
     required this.hubId,
   });
 
   @override
   Widget build(BuildContext context) {
-    return HubBackground(
+    return GubHomeBackground(
       child: Scaffold(
         backgroundColor: Colors.transparent,
-        body: HubAccessGuard(
+        body: GubAccessGuard(
           hubId: hubId,
           child: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-            stream: HubRepository.instance.hubStream(hubId),
+            stream: GubRepository.instance.hubStream(hubId),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const Center(
@@ -65,18 +65,18 @@ class HubScreen extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    HubPageHeader(
+                    GubPageHeader(
                       title: hubName,
                       hubId: hubId,
                     ),
 
-                    HubMembersBadge(
+                    GubMembersBadge(
                       memberCount: memberCount,
                     ),
 
                     const SizedBox(height: 22),
 
-                    HubModulesSection(
+                    GubModulesSection(
                       hubId: hubId,
                       memberCount: memberCount,
                       ownerId: ownerId,
@@ -111,7 +111,7 @@ class HubScreen extends StatelessWidget {
 
                     const SizedBox(height: 30),
 
-                    HubActionsSection(
+                    GubActionsSection(
                       hubId: hubId,
                     ),
                   ],

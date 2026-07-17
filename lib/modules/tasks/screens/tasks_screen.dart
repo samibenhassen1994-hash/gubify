@@ -1,7 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
-import '../../../widgets/hub_home_background.dart';
+import '../../../widgets/gub_home_background.dart';
 
 import '../models/task_model.dart';
 import '../services/task_service.dart';
@@ -21,7 +21,7 @@ class TasksScreen extends StatelessWidget {
     final currentUserId =
         FirebaseAuth.instance.currentUser!.uid;
 
-    return HubBackground(
+    return GubHomeBackground(
       child: Scaffold(
         backgroundColor: Colors.transparent,
 

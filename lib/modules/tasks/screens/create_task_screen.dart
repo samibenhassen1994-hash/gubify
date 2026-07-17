@@ -6,7 +6,7 @@ import '../../../core/models/member_option.dart';
 
 import '../../../repositories/user_repository.dart';
 
-import '../../../services/hub_service.dart';
+import '../../../services/gub_service.dart';
 
 import '../models/task_model.dart';
 import '../repositories/task_repository.dart';
@@ -171,7 +171,7 @@ class _CreateTaskScreenState
         title: const Text("Create Task"),
       ),
       body: FutureBuilder<List<MemberOption>>(
-        future: HubService().getMembers(widget.hubId),
+        future: GubService().getMembers(widget.hubId),
         builder: (context, snapshot) {
 
           if (snapshot.connectionState ==

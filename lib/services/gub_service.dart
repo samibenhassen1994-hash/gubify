@@ -6,7 +6,7 @@ import '../../../core/models/member_option.dart';
 import '../config/app_limits.dart';
 import '../repositories/user_repository.dart';
 
-class HubService {
+class GubService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
 

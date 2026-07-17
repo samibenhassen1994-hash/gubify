@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
-class HubMembersBadge extends StatelessWidget {
+class GubMembersBadge extends StatelessWidget {
   final int memberCount;
 
-  const HubMembersBadge({super.key, required this.memberCount});
+  const GubMembersBadge({super.key, required this.memberCount});
 
   @override
   Widget build(BuildContext context) {
