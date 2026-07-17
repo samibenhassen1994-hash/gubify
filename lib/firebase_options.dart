@@ -52,12 +52,11 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions android = FirebaseOptions(
     apiKey: 'AIzaSyCG0No3BY78nR-UB_3Td5oR8RyUipp6aeo',
-    appId: '1:57532357766:android:2d21d801f66b8fd2afc507',
+    appId: '1:57532357766:android:f06d03a7a687f209afc507',
     messagingSenderId: '57532357766',
     projectId: 'hubfy-34c2e',
     storageBucket: 'hubfy-34c2e.firebasestorage.app',
   );
-
   static const FirebaseOptions ios = FirebaseOptions(
     apiKey: 'AIzaSyA9yMNaUDQpjNSMcoO7PiAo1Yo6C9Kn7Mg',
     appId: '1:57532357766:ios:3ff904482452a571afc507',

@@ -115,8 +115,8 @@ class InviteMembersScreen extends StatelessWidget {
                       await SharePlus.instance.share(
                         ShareParams(
                           text:
-                              '🏠 Join my Hub "$hubName" on Hubfy!\n\n'
-                              'Download Hubfy and enter this invite code:\n\n'
+                              '🏠 Join my Hub "$hubName" on Gubify!\n\n'
+                              'Download Gubify and enter this invite code:\n\n'
                               '$inviteCode',
                         ),
                       );

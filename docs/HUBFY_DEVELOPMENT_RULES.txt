@@ -1,8 +1,8 @@
-HUBFY DEVELOPMENT RULES (v1)
+Gubify DEVELOPMENT RULES (v1)
 
 Filosofia del progetto
 
-Hubfy deve essere: - semplice da mantenere; - modulare; - facile da
+Gubify deve essere: - semplice da mantenere; - modulare; - facile da
 espandere; - con file piccoli; - con responsabilità ben separate.
 
 Ogni nuova funzione deve integrarsi senza rompere la logica esistente.
@@ -120,14 +120,14 @@ Idea ↓ Progettazione teorica ↓ Implementazione minima funzionante ↓ Test
 
 Obiettivo finale
 
-Hubfy deve crescere mantenendo: - codice ordinato; - file piccoli; -
+Gubify deve crescere mantenendo: - codice ordinato; - file piccoli; -
 logica separata; - facilità di manutenzione; - rischio minimo di
 introdurre bug.
 REGOLA 20
 
 Convenzione linguistica del progetto
 
-Hubfy deve seguire una convenzione linguistica chiara e costante durante tutto lo sviluppo.
+Gubify deve seguire una convenzione linguistica chiara e costante durante tutto lo sviluppo.
 
 🇮🇹 La progettazione, le discussioni tecniche, la documentazione e i commenti di sviluppo vengono scritti in italiano.
 🇬🇧 L'applicazione deve essere interamente sviluppata in inglese per tutto ciò che vede l'utente finale, inclusi:

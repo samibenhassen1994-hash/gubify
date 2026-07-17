@@ -1,26 +1,59 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
-import '../widgets/hubfy_background.dart';
-import '../widgets/hubfy_logo.dart';
+import '../widgets/gubify_background.dart';
+import '../widgets/gubify_logo.dart';
 import '../widgets/primary_button.dart';
 import '../widgets/user_header.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import '../repositories/user_repository.dart';
 
 import 'hub/create_hub_screen.dart';
 import 'hub/join_hub_screen.dart';
 import 'hub/my_hubs_screen.dart';
 
-class WelcomeScreen extends StatelessWidget {
+class WelcomeScreen extends StatefulWidget {
   const WelcomeScreen({super.key});
 
   @override
+  State<WelcomeScreen> createState() => _WelcomeScreenState();
+}
+
+class _WelcomeScreenState extends State<WelcomeScreen> {
+  Future<void> _openWebsite() async {
+    final uri = Uri.parse('https://www.gubify.com');
+
+    if (!await launchUrl(
+      uri,
+      mode: LaunchMode.externalApplication,
+    )) {
+      throw Exception('Could not launch $uri');
+    }
+  }
+
+  Future<void> _openSupport() async {
+    // Cambierai questo link quando creerai la pagina crowdfunding.
+    final uri = Uri.parse('https://www.gubify.com/support');
+
+    if (!await launchUrl(
+      uri,
+      mode: LaunchMode.externalApplication,
+    )) {
+      throw Exception('Could not launch $uri');
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return HubfyBackground(
+    return GubifyBackground(
       child: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
             return SingleChildScrollView(
               child: ConstrainedBox(
-                constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                constraints: BoxConstraints(
+                  minHeight: constraints.maxHeight,
+                ),
                 child: IntrinsicHeight(
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 30),
@@ -41,36 +74,47 @@ class WelcomeScreen extends StatelessWidget {
                                 boxShadow: [
                                   BoxShadow(
                                     color: const Color(
-                                      0xFF2563EB,
-                                    ).withValues(alpha: .45),
-                                    blurRadius: 120,
-                                    spreadRadius: 30,
+                                      0xFF3B82F6,
+                                    ).withValues(alpha: .50),
+                                    blurRadius: 150,
+                                    spreadRadius: 45,
                                   ),
                                 ],
                               ),
                             ),
-                            const HubfyLogo(width: 380),
+
+                            const GubifyLogo(width: 340),
                           ],
                         ),
 
                         const SizedBox(height: 18),
 
-                        const Text(
-                          "Welcome",
-                          style: TextStyle(
-                            fontSize: 40,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                        ),
+                        FutureBuilder<Map<String, dynamic>?>(
+  future: UserRepository.instance.getUser(
+    FirebaseAuth.instance.currentUser!.uid,
+  ),
+  builder: (context, snapshot) {
+    final displayName =
+        snapshot.data?["displayName"] ?? "User";
+
+    return Text(
+      "Hi, $displayName",
+      style: const TextStyle(
+        fontSize: 38,
+        fontWeight: FontWeight.w700,
+        color: Colors.white,
+      ),
+    );
+  },
+),
 
                         const SizedBox(height: 14),
 
                         const Text(
-                          "Organize everything.\nIn one place.",
+                          "Everything your group needs.\nOne app.",
                           textAlign: TextAlign.center,
                           style: TextStyle(
-                            fontSize: 20,
+                            fontSize: 17,
                             height: 1.45,
                             color: Color(0xFFD1D5DB),
                           ),
@@ -79,20 +123,22 @@ class WelcomeScreen extends StatelessWidget {
                         const SizedBox(height: 14),
 
                         const Text(
-                          "Create your Hub or join an existing one\n"
+                          "Create your Gub or join an existing one\n"
                           "to collaborate with your group.",
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             fontSize: 16,
                             height: 1.6,
-                            color: Color(0xFF9CA3AF),
+                            color: Color.fromARGB(255, 181, 188, 201),
                           ),
                         ),
 
                         const Spacer(),
 
-                        PrimaryButton(
-                          text: "Create Hub",
+const SizedBox(height: 24),
+
+PrimaryButton(
+                          text: "Create Gub",
                           onPressed: () {
                             Navigator.push(
                               context,
@@ -104,8 +150,7 @@ class WelcomeScreen extends StatelessWidget {
                         ),
 
                         const SizedBox(height: 16),
-
-                        SizedBox(
+                                                SizedBox(
                           width: double.infinity,
                           height: 58,
                           child: OutlinedButton(
@@ -118,8 +163,9 @@ class WelcomeScreen extends StatelessWidget {
                               );
                             },
                             style: OutlinedButton.styleFrom(
+                              backgroundColor: Colors.white.withValues(alpha: .06),
                               side: BorderSide(
-                                color: Colors.white.withValues(alpha: .18),
+                                color: Colors.white.withValues(alpha: .15),
                               ),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(18),
@@ -134,7 +180,7 @@ class WelcomeScreen extends StatelessWidget {
                                 ),
                                 SizedBox(width: 12),
                                 Text(
-                                  "My Hubs",
+                                  "My Gubs",
                                   style: TextStyle(
                                     fontSize: 18,
                                     color: Colors.white,
@@ -161,8 +207,9 @@ class WelcomeScreen extends StatelessWidget {
                               );
                             },
                             style: OutlinedButton.styleFrom(
+                              backgroundColor: Colors.white.withValues(alpha: .06),
                               side: BorderSide(
-                                color: Colors.white.withValues(alpha: .18),
+                                color: Colors.white.withValues(alpha: .15),
                               ),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(18),
@@ -171,10 +218,13 @@ class WelcomeScreen extends StatelessWidget {
                             child: const Row(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                Icon(Icons.group_outlined, color: Colors.white),
+                                Icon(
+                                  Icons.group_outlined,
+                                  color: Colors.white,
+                                ),
                                 SizedBox(width: 12),
                                 Text(
-                                  "Join a Hub",
+                                  "Join a Gub",
                                   style: TextStyle(
                                     fontSize: 18,
                                     color: Colors.white,
@@ -186,21 +236,49 @@ class WelcomeScreen extends StatelessWidget {
                           ),
                         ),
 
-                        const SizedBox(height: 16),
-
-                        TextButton(
-                          onPressed: () {},
-                          child: const Text(
-                            "Learn More",
-                            style: TextStyle(
-                              color: Color(0xFF3B82F6),
-                              fontSize: 17,
-                            ),
-                          ),
-                        ),
-
                         const SizedBox(height: 12),
-                      ],
+
+                        Row(mainAxisAlignment: MainAxisAlignment.center,
+  children: [
+
+    TextButton.icon(
+      onPressed: _openWebsite,
+      icon: const Icon(
+        Icons.language,
+        color: Color(0xFF60A5FA),
+        size: 20,
+      ),
+      label: const Text(
+        "Learn More",
+        style: TextStyle(
+          color: Color(0xFF60A5FA),
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    ),
+
+    const SizedBox(width: 12),
+
+    TextButton.icon(
+      onPressed: _openSupport,
+      icon: const Icon(
+        Icons.favorite_border,
+        color: Color(0xFFF87171),
+        size: 20,
+      ),
+      label: const Text(
+        "Support Us",
+        style: TextStyle(
+          color: Color(0xFFF87171),
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    ),
+  ],
+),
+
+const SizedBox(height: 18),
+                                              ],
                     ),
                   ),
                 ),

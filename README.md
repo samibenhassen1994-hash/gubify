@@ -1,4 +1,4 @@
-# Hubfy
+# Gubify
 
 A new Flutter project.
 

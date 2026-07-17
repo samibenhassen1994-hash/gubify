@@ -1,4 +1,4 @@
-package com.hubfy.app
+package com.gubify.app
 
 import io.flutter.embedding.android.FlutterActivity
 

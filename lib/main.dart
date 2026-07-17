@@ -9,21 +9,27 @@ import 'pages/startup_screen.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  if (Firebase.apps.isEmpty) {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+  }
 
-  await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
+  await SystemChrome.setPreferredOrientations([
+    DeviceOrientation.portraitUp,
+  ]);
 
-  runApp(const HubfyApp());
+  runApp(const GubifyApp());
 }
 
-class HubfyApp extends StatelessWidget {
-  const HubfyApp({super.key});
+class GubifyApp extends StatelessWidget {
+  const GubifyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'Hubfy',
+      title: 'Gubify',
       theme: AppTheme.lightTheme,
       home: const StartupScreen(),
     );

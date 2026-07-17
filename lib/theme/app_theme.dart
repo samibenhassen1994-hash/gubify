@@ -7,9 +7,14 @@ class AppTheme {
   static ThemeData lightTheme = ThemeData(
     useMaterial3: true,
 
+    // Font globale dell'app
+    fontFamily: 'PlusJakartaSans',
+
     scaffoldBackgroundColor: AppColors.background,
 
-    colorScheme: ColorScheme.fromSeed(seedColor: AppColors.primary),
+    colorScheme: ColorScheme.fromSeed(
+      seedColor: AppColors.primary,
+    ),
 
     appBarTheme: const AppBarTheme(
       elevation: 0,

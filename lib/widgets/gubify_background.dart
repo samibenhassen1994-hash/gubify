@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
-class HubfyBackground extends StatelessWidget {
+class GubifyBackground extends StatelessWidget {
   final Widget child;
 
-  const HubfyBackground({super.key, required this.child});
+  const GubifyBackground({super.key, required this.child});
 
   @override
   Widget build(BuildContext context) {
