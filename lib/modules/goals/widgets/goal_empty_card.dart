@@ -4,9 +4,9 @@ import '../screens/create_goal_screen.dart';
 
 class GoalEmptyCard extends StatelessWidget {
   final bool isOwner;
-  final String hubId;
+  final String gubId;
 
-  const GoalEmptyCard({super.key, required this.isOwner, required this.hubId});
+  const GoalEmptyCard({super.key, required this.isOwner, required this.gubId});
 
   @override
   Widget build(BuildContext context) {
@@ -45,7 +45,7 @@ class GoalEmptyCard extends StatelessWidget {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => CreateGoalScreen(hubId: hubId),
+                    builder: (_) => CreateGoalScreen(gubId: gubId),
                   ),
                 );
               },

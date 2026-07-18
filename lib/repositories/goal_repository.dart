@@ -10,18 +10,18 @@ class GoalRepository {
 
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  CollectionReference<Map<String, dynamic>> goalsCollection(String hubId) {
-    return _firestore.collection("gubs").doc(hubId).collection("goals");
+  CollectionReference<Map<String, dynamic>> goalsCollection(String gubId) {
+    return _firestore.collection("gubs").doc(gubId).collection("goals");
   }
 
   /// Crea un nuovo obiettivo
-  Future<void> createGoal(String hubId, GoalModel goal) async {
-    await goalsCollection(hubId).doc(goal.goalId).set(goal.toFirestore());
+  Future<void> createGoal(String gubId, GoalModel goal) async {
+    await goalsCollection(gubId).doc(goal.goalId).set(goal.toFirestore());
   }
 
   /// Crea automaticamente tutti i membri dello Shared Budget
   Future<void> createGoalMembers({
-    required String hubId,
+    required String gubId,
     required String goalId,
     required List<GoalMemberModel> members,
   }) async {
@@ -29,7 +29,7 @@ class GoalRepository {
 
     for (final member in members) {
       final doc = goalsCollection(
-        hubId,
+        gubId,
       ).doc(goalId).collection("members").doc(member.uid);
 
       batch.set(doc, member.toFirestore());
@@ -40,16 +40,16 @@ class GoalRepository {
 
   /// Rimuove un membro da tutti gli Shared Budget
   Future<void> removeMemberFromAllGoals({
-    required String hubId,
+    required String gubId,
     required String uid,
   }) async {
-    final goals = await goalsCollection(hubId).get();
+    final goals = await goalsCollection(gubId).get();
 
     for (final goal in goals.docs) {
       final goalId = goal.id;
 
       final memberRef = goalsCollection(
-        hubId,
+        gubId,
       ).doc(goalId).collection("members").doc(uid);
 
       final memberDoc = await memberRef.get();
@@ -57,18 +57,18 @@ class GoalRepository {
       if (memberDoc.exists) {
         await memberRef.delete();
 
-        await recalculateGoalProgress(hubId: hubId, goalId: goalId);
+        await recalculateGoalProgress(gubId: gubId, goalId: goalId);
       }
     }
   }
 
   /// Ricalcola il progresso dello Shared Budget
   Future<void> recalculateGoalProgress({
-    required String hubId,
+    required String gubId,
     required String goalId,
   }) async {
     final membersSnapshot = await goalsCollection(
-      hubId,
+      gubId,
     ).doc(goalId).collection("members").get();
 
     double currentAmount = 0;
@@ -87,7 +87,7 @@ class GoalRepository {
       currentAmount += (data["amount"] ?? 0).toDouble();
     }
 
-    await goalsCollection(hubId).doc(goalId).update({
+    await goalsCollection(gubId).doc(goalId).update({
       "currentAmount": currentAmount,
       "completedMembers": completedMembers,
       "totalMembers": totalMembers,
@@ -95,9 +95,9 @@ class GoalRepository {
   }
 
   /// Restituisce tutti gli obiettivi
-  Future<List<GoalModel>> getGoals(String hubId) async {
+  Future<List<GoalModel>> getGoals(String gubId) async {
     final snapshot = await goalsCollection(
-      hubId,
+      gubId,
     ).orderBy("createdAt", descending: true).get();
 
     return snapshot.docs
@@ -106,8 +106,8 @@ class GoalRepository {
   }
 
   /// Stream degli obiettivi
-  Stream<List<GoalModel>> goalsStream(String hubId) {
-    return goalsCollection(hubId)
+  Stream<List<GoalModel>> goalsStream(String gubId) {
+    return goalsCollection(gubId)
         .orderBy("createdAt", descending: true)
         .snapshots()
         .map(
@@ -118,9 +118,9 @@ class GoalRepository {
   }
 
   /// Restituisce il Goal attivo (Future)
-  Future<GoalModel?> getActiveGoal(String hubId) async {
+  Future<GoalModel?> getActiveGoal(String gubId) async {
     final snapshot = await goalsCollection(
-      hubId,
+      gubId,
     ).where("status", isEqualTo: "active").limit(1).get();
 
     if (snapshot.docs.isEmpty) {
@@ -131,9 +131,9 @@ class GoalRepository {
   }
 
   /// Stream del Goal attivo
-  Stream<GoalModel?> activeGoalStream(String hubId) {
+  Stream<GoalModel?> activeGoalStream(String gubId) {
     return goalsCollection(
-      hubId,
+      gubId,
     ).where("status", isEqualTo: "active").limit(1).snapshots().map((snapshot) {
       if (snapshot.docs.isEmpty) {
         return null;
@@ -144,8 +144,8 @@ class GoalRepository {
   }
 
   /// Restituisce un singolo obiettivo
-  Future<GoalModel?> getGoal(String hubId, String goalId) async {
-    final doc = await goalsCollection(hubId).doc(goalId).get();
+  Future<GoalModel?> getGoal(String gubId, String goalId) async {
+    final doc = await goalsCollection(gubId).doc(goalId).get();
 
     if (!doc.exists) {
       return null;
@@ -155,12 +155,12 @@ class GoalRepository {
   }
 
   /// Aggiorna un obiettivo
-  Future<void> updateGoal(String hubId, GoalModel goal) async {
-    await goalsCollection(hubId).doc(goal.goalId).update(goal.toFirestore());
+  Future<void> updateGoal(String gubId, GoalModel goal) async {
+    await goalsCollection(gubId).doc(goal.goalId).update(goal.toFirestore());
   }
 
   /// Elimina un obiettivo
-  Future<void> deleteGoal(String hubId, String goalId) async {
-    await goalsCollection(hubId).doc(goalId).delete();
+  Future<void> deleteGoal(String gubId, String goalId) async {
+    await goalsCollection(gubId).doc(goalId).delete();
   }
 }

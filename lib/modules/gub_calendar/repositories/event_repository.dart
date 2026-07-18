@@ -9,34 +9,34 @@ class EventRepository {
 
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  CollectionReference<Map<String, dynamic>> eventsCollection(String hubId) {
-    return _firestore.collection("gubs").doc(hubId).collection("events");
+  CollectionReference<Map<String, dynamic>> eventsCollection(String gubId) {
+    return _firestore.collection("gubs").doc(gubId).collection("events");
   }
 
   Future<void> createEvent(EventModel event) async {
     await eventsCollection(
-      event.hubId,
+      event.gubId,
     ).doc(event.eventId).set(event.toFirestore());
   }
 
   Future<void> updateEvent(EventModel event) async {
     await eventsCollection(
-      event.hubId,
+      event.gubId,
     ).doc(event.eventId).update(event.toFirestore());
   }
 
   Future<void> deleteEvent({
-    required String hubId,
+    required String gubId,
     required String eventId,
   }) async {
-    await eventsCollection(hubId).doc(eventId).delete();
+    await eventsCollection(gubId).doc(eventId).delete();
   }
 
   Future<EventModel?> getEvent({
-    required String hubId,
+    required String gubId,
     required String eventId,
   }) async {
-    final doc = await eventsCollection(hubId).doc(eventId).get();
+    final doc = await eventsCollection(gubId).doc(eventId).get();
 
     if (!doc.exists) return null;
 
@@ -44,18 +44,18 @@ class EventRepository {
   }
 
   Stream<EventModel?> eventStream({
-    required String hubId,
+    required String gubId,
     required String eventId,
   }) {
-    return eventsCollection(hubId).doc(eventId).snapshots().map((doc) {
+    return eventsCollection(gubId).doc(eventId).snapshots().map((doc) {
       if (!doc.exists) return null;
 
       return EventModel.fromFirestore(doc.data()!);
     });
   }
 
-  Stream<List<EventModel>> eventsStream(String hubId) {
-    return eventsCollection(hubId)
+  Stream<List<EventModel>> eventsStream(String gubId) {
+    return eventsCollection(gubId)
         .orderBy("eventDate")
         .snapshots()
         .map(

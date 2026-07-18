@@ -7,12 +7,12 @@ import '../widgets/calendar_day_header.dart';
 import '../widgets/calendar_event_card.dart';
 
 class GubCalendarScreen extends StatelessWidget {
-  final String hubId;
+  final String gubId;
   final String ownerId;
 
   const GubCalendarScreen({
     super.key,
-    required this.hubId,
+    required this.gubId,
     required this.ownerId,
   });
 
@@ -23,7 +23,7 @@ class GubCalendarScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(title: const Text("Hub Calendar")),
       body: StreamBuilder<List<EventModel>>(
-        stream: EventService.instance.eventsStream(hubId),
+        stream: EventService.instance.eventsStream(gubId),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
@@ -102,7 +102,7 @@ class GubCalendarScreen extends StatelessWidget {
                                 );
                                 if (confirm != true) return;
                                 await EventService.instance.deleteEvent(
-                                  hubId: hubId,
+                                  gubId: gubId,
                                   eventId: event.eventId,
                                 );
                                 if (!context.mounted) return;

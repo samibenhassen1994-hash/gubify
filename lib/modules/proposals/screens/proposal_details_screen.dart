@@ -15,7 +15,7 @@ class ProposalDetailsScreen extends StatelessWidget {
 
     return StreamBuilder<ProposalModel?>(
       stream: ProposalService.instance.proposalStream(
-        hubId: proposal.hubId,
+        gubId: proposal.gubId,
         proposalId: proposal.proposalId,
       ),
       builder: (context, proposalSnapshot) {
@@ -50,7 +50,7 @@ class ProposalDetailsScreen extends StatelessWidget {
 
         return StreamBuilder<String?>(
           stream: ProposalService.instance.userVoteStream(
-            hubId: p.hubId,
+            gubId: p.gubId,
             proposalId: p.proposalId,
             uid: user.uid,
           ),
@@ -77,7 +77,7 @@ class ProposalDetailsScreen extends StatelessWidget {
                 : DateFormat("HH:mm").format(eventDate);
             Future<void> submitVote(String vote) async {
               await ProposalService.instance.vote(
-                hubId: p.hubId,
+                gubId: p.gubId,
                 proposalId: p.proposalId,
                 uid: user.uid,
                 vote: vote,

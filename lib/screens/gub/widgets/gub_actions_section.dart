@@ -4,19 +4,19 @@ import 'invite_members_button.dart';
 import 'manage_gub_button.dart';
 
 class GubActionsSection extends StatelessWidget {
-  final String hubId;
+  final String gubId;
 
-  const GubActionsSection({super.key, required this.hubId});
+  const GubActionsSection({super.key, required this.gubId});
 
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
-        InviteMembersButton(hubId: hubId),
+        InviteMembersButton(gubId: gubId),
 
         const SizedBox(height: 15),
 
-        ManageGubButton(hubId: hubId),
+        ManageGubButton(gubId: gubId),
       ],
     );
   }

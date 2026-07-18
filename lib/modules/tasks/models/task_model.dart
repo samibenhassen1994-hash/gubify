@@ -1,7 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class TaskModel {
-  final String hubId;
+  final String gubId;
   final String taskId;
 
   final String title;
@@ -45,7 +45,7 @@ class TaskModel {
   final bool archived;
 
   const TaskModel({
-    required this.hubId,
+    required this.gubId,
     required this.taskId,
 
     required this.title,
@@ -77,7 +77,7 @@ class TaskModel {
 
   factory TaskModel.fromFirestore(Map<String, dynamic> json) {
     return TaskModel(
-      hubId: json["hubId"] ?? "",
+      gubId: json["gubId"] ?? "",
       taskId: json["taskId"] ?? "",
 
       title: json["title"] ?? "",
@@ -111,7 +111,7 @@ class TaskModel {
 
   Map<String, dynamic> toFirestore() {
     return {
-      "hubId": hubId,
+      "gubId": gubId,
       "taskId": taskId,
 
       "title": title,
@@ -144,7 +144,7 @@ class TaskModel {
   }
 
   TaskModel copyWith({
-    String? hubId,
+    String? gubId,
     String? title,
     String? description,
 
@@ -163,7 +163,7 @@ class TaskModel {
     bool? archived,
   }) {
     return TaskModel(
-      hubId: hubId ?? this.hubId,
+      gubId: gubId ?? this.gubId,
       taskId: taskId,
 
       title: title ?? this.title,

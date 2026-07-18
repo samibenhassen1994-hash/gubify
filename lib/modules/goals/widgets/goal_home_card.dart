@@ -8,10 +8,10 @@ import 'goal_empty_card.dart';
 import 'goal_progress_card.dart';
 
 class GoalHomeCard extends StatelessWidget {
-  final String hubId;
+  final String gubId;
   final String ownerId;
 
-  const GoalHomeCard({super.key, required this.hubId, required this.ownerId});
+  const GoalHomeCard({super.key, required this.gubId, required this.ownerId});
 
   @override
   Widget build(BuildContext context) {
@@ -19,7 +19,7 @@ class GoalHomeCard extends StatelessWidget {
     final isOwner = currentUser != null && currentUser.uid == ownerId;
 
     return StreamBuilder<GoalModel?>(
-      stream: GoalService.instance.activeGoalStream(hubId),
+      stream: GoalService.instance.activeGoalStream(gubId),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Card(
@@ -41,7 +41,7 @@ class GoalHomeCard extends StatelessWidget {
                     context,
                     MaterialPageRoute(
                       builder: (_) => GoalMembersScreen(
-                        hubId: hubId,
+                        gubId: gubId,
                         goalId: goal.goalId,
                         ownerId: ownerId,
                       ),
@@ -73,7 +73,7 @@ class GoalHomeCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 25),
                   if (goal == null)
-                    GoalEmptyCard(isOwner: isOwner, hubId: hubId)
+                    GoalEmptyCard(isOwner: isOwner, gubId: gubId)
                   else
                     GoalProgressCard(goal: goal),
                 ],

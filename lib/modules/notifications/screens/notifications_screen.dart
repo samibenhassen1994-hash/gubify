@@ -6,11 +6,11 @@ import '../repositories/notification_repository.dart';
 import '../../../core/navigation/notification_router.dart';
 
 class NotificationsScreen extends StatefulWidget {
-  final String hubId;
+  final String gubId;
 
   const NotificationsScreen({
     super.key,
-    required this.hubId,
+    required this.gubId,
   });
 
   @override
@@ -29,7 +29,7 @@ class _NotificationsScreenState
 
       if (user != null) {
         NotificationRepository.instance.markAllAsRead(
-          hubId: widget.hubId,
+          gubId: widget.gubId,
           uid: user.uid,
         );
       }
@@ -48,7 +48,7 @@ class _NotificationsScreenState
       body: StreamBuilder<
           QuerySnapshot<Map<String, dynamic>>>(
         stream: NotificationRepository.instance
-            .notificationsStream(widget.hubId),
+            .notificationsStream(widget.gubId),
         builder: (context, snapshot) {
           if (snapshot.connectionState ==
               ConnectionState.waiting) {
@@ -106,7 +106,7 @@ final notificationData =
   onTap: () async {
   await NotificationRouter.navigate(
     context: context,
-    hubId: widget.hubId,
+    gubId: widget.gubId,
     data: notificationData,
   );
 },

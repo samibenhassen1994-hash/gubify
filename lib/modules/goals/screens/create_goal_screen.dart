@@ -3,9 +3,9 @@ import 'package:flutter/material.dart';
 import '../services/goal_service.dart';
 
 class CreateGoalScreen extends StatefulWidget {
-  final String hubId;
+  final String gubId;
 
-  const CreateGoalScreen({super.key, required this.hubId});
+  const CreateGoalScreen({super.key, required this.gubId});
 
   @override
   State<CreateGoalScreen> createState() => _CreateGoalScreenState();
@@ -61,7 +61,7 @@ class _CreateGoalScreenState extends State<CreateGoalScreen> {
 
     try {
       await GoalService.instance.createGoal(
-        hubId: widget.hubId,
+        gubId: widget.gubId,
         title: title,
         description: description,
         targetAmount: amount,

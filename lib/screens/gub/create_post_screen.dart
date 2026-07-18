@@ -7,9 +7,9 @@ import '../../repositories/user_repository.dart';
 import '../../modules/notifications/services/notification_service.dart';
 
 class CreatePostScreen extends StatefulWidget {
-  final String hubId;
+  final String gubId;
 
-  const CreatePostScreen({super.key, required this.hubId});
+  const CreatePostScreen({super.key, required this.gubId});
 
   @override
   State<CreatePostScreen> createState() => _CreatePostScreenState();
@@ -58,7 +58,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
 
       await FirebaseFirestore.instance
           .collection("gubs")
-          .doc(widget.hubId)
+          .doc(widget.gubId)
           .collection("posts")
           .add({
             "authorId": user.uid,
@@ -71,7 +71,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
             "comments": 0,
           });
       await NotificationService.instance.send(
-        hubId: widget.hubId,
+        gubId: widget.gubId,
         title: "New Board Post",
         body: "$displayName published a new post.",
         type: "board_post",

@@ -15,11 +15,11 @@ import 'widgets/members_card.dart';
 import 'widgets/modules_card.dart';
 
 class GubScreen extends StatelessWidget {
-  final String hubId;
+  final String gubId;
 
   const GubScreen({
     super.key,
-    required this.hubId,
+    required this.gubId,
   });
 
   @override
@@ -28,9 +28,9 @@ class GubScreen extends StatelessWidget {
       child: Scaffold(
         backgroundColor: Colors.transparent,
         body: GubAccessGuard(
-          hubId: hubId,
+          gubId: gubId,
           child: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-            stream: GubRepository.instance.hubStream(hubId),
+            stream: GubRepository.instance.hubStream(gubId),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const Center(
@@ -67,7 +67,7 @@ class GubScreen extends StatelessWidget {
                   children: [
                     GubPageHeader(
                       title: gubName,
-                      hubId: hubId,
+                      gubId: gubId,
                     ),
 
                     GubMembersBadge(
@@ -77,7 +77,7 @@ class GubScreen extends StatelessWidget {
                     const SizedBox(height: 22),
 
                     GubModulesSection(
-                      hubId: hubId,
+                      gubId: gubId,
                       memberCount: memberCount,
                       ownerId: ownerId,
                       activeModules: activeModules,
@@ -86,20 +86,20 @@ class GubScreen extends StatelessWidget {
                     const SizedBox(height: 12),
 
                     TaskHomeCard(
-                      hubId: hubId,
+                      gubId: gubId,
                     ),
 
                     const SizedBox(height: 12),
 
                     MembersCard(
-                      hubId: hubId,
+                      gubId: gubId,
                       memberCount: memberCount,
                     ),
 
                     const SizedBox(height: 12),
 
                     ModulesCard(
-                      hubId: hubId,
+                      gubId: gubId,
                       activeModules: activeModules,
                     ),
 
@@ -112,7 +112,7 @@ class GubScreen extends StatelessWidget {
                     const SizedBox(height: 30),
 
                     GubActionsSection(
-                      hubId: hubId,
+                      gubId: gubId,
                     ),
                   ],
                 ),

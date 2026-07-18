@@ -3,9 +3,9 @@ import 'package:flutter/material.dart';
 import 'create_goal_screen.dart';
 
 class GoalsScreen extends StatelessWidget {
-  final String hubId;
+  final String gubId;
 
-  const GoalsScreen({super.key, required this.hubId});
+  const GoalsScreen({super.key, required this.gubId});
 
   @override
   Widget build(BuildContext context) {
@@ -17,7 +17,7 @@ class GoalsScreen extends StatelessWidget {
         onPressed: () {
           Navigator.push(
             context,
-            MaterialPageRoute(builder: (_) => CreateGoalScreen(hubId: hubId)),
+            MaterialPageRoute(builder: (_) => CreateGoalScreen(gubId: gubId)),
           );
         },
       ),

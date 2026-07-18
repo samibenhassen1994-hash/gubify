@@ -4,12 +4,12 @@ import 'package:flutter/material.dart';
 import '../services/goal_member_service.dart';
 
 class MyContributionScreen extends StatefulWidget {
-  final String hubId;
+  final String gubId;
   final String goalId;
 
   const MyContributionScreen({
     super.key,
-    required this.hubId,
+    required this.gubId,
     required this.goalId,
   });
 
@@ -46,7 +46,7 @@ class _MyContributionScreenState extends State<MyContributionScreen> {
 
     try {
       await GoalMemberService.instance.submitContribution(
-        hubId: widget.hubId,
+        gubId: widget.gubId,
         goalId: widget.goalId,
         uid: user.uid,
         amount: amount,

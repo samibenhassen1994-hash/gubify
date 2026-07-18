@@ -38,7 +38,7 @@ class _ModuleSelectionScreenState
     setState(() => _loading = true);
 
     try {
-      final hubId = await GubService().createHub(
+      final gubId = await GubService().createHub(
         name: widget.gubName,
         modules: _modules,
       );
@@ -49,7 +49,7 @@ class _ModuleSelectionScreenState
         context,
         MaterialPageRoute(
           builder: (_) => GubScreen(
-            hubId: hubId,
+            gubId: gubId,
           ),
         ),
         (_) => false,

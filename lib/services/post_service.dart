@@ -6,7 +6,7 @@ class PostService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
   Future<void> createPost({
-    required String hubId,
+    required String gubId,
     required String message,
   }) async {
     final user = _auth.currentUser;
@@ -19,7 +19,7 @@ class PostService {
 
     final displayName = userDoc.data()?["displayName"] ?? "Utente";
 
-    await _firestore.collection("gubs").doc(hubId).collection("posts").add({
+    await _firestore.collection("gubs").doc(gubId).collection("posts").add({
       "authorId": user.uid,
       "authorName": displayName,
       "message": message.trim(),

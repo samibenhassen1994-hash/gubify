@@ -7,16 +7,16 @@ import '../../repositories/gub_repository.dart';
 import '../../widgets/user_header.dart';
 
 class InviteMembersScreen extends StatelessWidget {
-  final String hubId;
+  final String gubId;
 
-  const InviteMembersScreen({super.key, required this.hubId});
+  const InviteMembersScreen({super.key, required this.gubId});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text("Invite Members")),
       body: FutureBuilder<Map<String, dynamic>?>(
-        future: GubRepository.instance.getHub(hubId),
+        future: GubRepository.instance.getHub(gubId),
         builder: (context, hubSnapshot) {
           if (hubSnapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
@@ -137,7 +137,7 @@ class InviteMembersScreen extends StatelessWidget {
                   child: StreamBuilder<QuerySnapshot>(
                     stream: FirebaseFirestore.instance
                         .collection("gubs")
-                        .doc(hubId)
+                        .doc(gubId)
                         .collection("members")
                         .snapshots(),
                     builder: (context, snapshot) {

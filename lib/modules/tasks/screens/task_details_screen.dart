@@ -6,12 +6,12 @@ import '../services/task_service.dart';
 import '../widgets/task_status_chip.dart';
 
 class TaskDetailsScreen extends StatefulWidget {
-  final String hubId;
+  final String gubId;
   final String taskId;
 
   const TaskDetailsScreen({
     super.key,
-    required this.hubId,
+    required this.gubId,
     required this.taskId,
   });
 
@@ -100,7 +100,7 @@ class _TaskDetailsScreenState
 
       body: StreamBuilder<TaskModel?>(
         stream: TaskService.instance.taskStream(
-          hubId: widget.hubId,
+          gubId: widget.gubId,
           taskId: widget.taskId,
         ),
 

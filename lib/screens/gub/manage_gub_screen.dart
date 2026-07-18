@@ -4,13 +4,13 @@ import '../../services/gub_service.dart';
 import '../welcome_screen.dart';
 
 class ManageGubScreen extends StatelessWidget {
-  final String hubId;
+  final String gubId;
 
-  const ManageGubScreen({super.key, required this.hubId});
+  const ManageGubScreen({super.key, required this.gubId});
 
   Future<void> _deleteHub(BuildContext context) async {
     try {
-      await GubService().deleteHub(hubId: hubId);
+      await GubService().deleteHub(gubId: gubId);
 
       if (!context.mounted) return;
 

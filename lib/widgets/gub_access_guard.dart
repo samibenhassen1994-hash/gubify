@@ -7,10 +7,10 @@ import 'package:flutter/material.dart';
 import '../screens/gub/my_gubs_screen.dart';
 
 class GubAccessGuard extends StatefulWidget {
-  final String hubId;
+  final String gubId;
   final Widget child;
 
-  const GubAccessGuard({super.key, required this.hubId, required this.child});
+  const GubAccessGuard({super.key, required this.gubId, required this.child});
 
   @override
   State<GubAccessGuard> createState() => _GubAccessGuardState();
@@ -29,7 +29,7 @@ class _GubAccessGuardState extends State<GubAccessGuard> {
 
     _subscription = FirebaseFirestore.instance
         .collection("gubs")
-        .doc(widget.hubId)
+        .doc(widget.gubId)
         .collection("members")
         .doc(uid)
         .snapshots()
@@ -52,7 +52,7 @@ class _GubAccessGuardState extends State<GubAccessGuard> {
         .collection("users")
         .doc(uid)
         .collection("gubs")
-        .doc(widget.hubId)
+        .doc(widget.gubId)
         .delete();
 
     if (!mounted) return;

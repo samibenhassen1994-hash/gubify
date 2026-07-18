@@ -6,19 +6,19 @@ import '../screens/proposal_details_screen.dart';
 import '../services/proposal_service.dart';
 
 class ProposalHomeCard extends StatelessWidget {
-  final String hubId;
+  final String gubId;
   final int memberCount;
 
   const ProposalHomeCard({
     super.key,
-    required this.hubId,
+    required this.gubId,
     required this.memberCount,
   });
 
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<List<ProposalModel>>(
-      stream: ProposalService.instance.proposalsStream(hubId),
+      stream: ProposalService.instance.proposalsStream(gubId),
       builder: (context, snapshot) {
         if (!snapshot.hasData) {
           return const Card(
@@ -48,7 +48,7 @@ class ProposalHomeCard extends StatelessWidget {
                 context,
                 MaterialPageRoute(
                   builder: (_) => CreateProposalScreen(
-                    hubId: hubId,
+                    gubId: gubId,
                     memberCount: memberCount,
                   ),
                 ),

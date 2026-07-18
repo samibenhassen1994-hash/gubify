@@ -3,9 +3,9 @@ import 'package:flutter/material.dart';
 import '../board_screen.dart';
 
 class BoardCard extends StatelessWidget {
-  final String hubId;
+  final String gubId;
 
-  const BoardCard({super.key, required this.hubId});
+  const BoardCard({super.key, required this.gubId});
 
   @override
   Widget build(BuildContext context) {
@@ -18,7 +18,7 @@ class BoardCard extends StatelessWidget {
         onTap: () {
           Navigator.push(
             context,
-            MaterialPageRoute(builder: (_) => BoardScreen(hubId: hubId)),
+            MaterialPageRoute(builder: (_) => BoardScreen(gubId: gubId)),
           );
         },
       ),

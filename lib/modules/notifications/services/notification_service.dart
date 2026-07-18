@@ -11,7 +11,7 @@ class NotificationService {
   static final NotificationService instance = NotificationService._();
 
   Future<void> send({
-    required String hubId,
+    required String gubId,
     required String title,
     required String body,
     required String type,
@@ -33,7 +33,7 @@ class NotificationService {
     );
 
     await NotificationRepository.instance.createNotification(
-      hubId: hubId,
+      gubId: gubId,
       notification: notification,
     );
   }

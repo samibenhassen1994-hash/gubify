@@ -18,11 +18,11 @@ import '../widgets/member_selector.dart';
 import '../widgets/task_text_field.dart';
 
 class CreateTaskScreen extends StatefulWidget {
-  final String hubId;
+  final String gubId;
 
   const CreateTaskScreen({
     super.key,
-    required this.hubId,
+    required this.gubId,
   });
 
   @override
@@ -104,7 +104,7 @@ class _CreateTaskScreenState
       final taskId =
           TaskRepository.instance.generateTaskId();
                 final task = TaskModel(
-        hubId: widget.hubId,
+        gubId: widget.gubId,
         taskId: taskId,
 
         title: _textController.text.trim(),
@@ -171,7 +171,7 @@ class _CreateTaskScreenState
         title: const Text("Create Task"),
       ),
       body: FutureBuilder<List<MemberOption>>(
-        future: GubService().getMembers(widget.hubId),
+        future: GubService().getMembers(widget.gubId),
         builder: (context, snapshot) {
 
           if (snapshot.connectionState ==

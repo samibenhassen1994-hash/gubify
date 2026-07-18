@@ -1,7 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class EventModel {
-  final String hubId;
+  final String gubId;
   final String eventId;
 
   /// Proposal da cui nasce l'evento
@@ -29,7 +29,7 @@ class EventModel {
   final String status;
 
   const EventModel({
-    required this.hubId,
+    required this.gubId,
     required this.eventId,
     required this.proposalId,
     required this.title,
@@ -44,7 +44,7 @@ class EventModel {
 
   factory EventModel.fromFirestore(Map<String, dynamic> json) {
     return EventModel(
-      hubId: json["hubId"] ?? "",
+      gubId: json["gubId"] ?? "",
       eventId: json["eventId"] ?? "",
       proposalId: json["proposalId"] ?? "",
       title: json["title"] ?? "",
@@ -60,7 +60,7 @@ class EventModel {
 
   Map<String, dynamic> toFirestore() {
     return {
-      "hubId": hubId,
+      "gubId": gubId,
       "eventId": eventId,
       "proposalId": proposalId,
       "title": title,
@@ -76,7 +76,7 @@ class EventModel {
 
   EventModel copyWith({String? status, Timestamp? eventDate}) {
     return EventModel(
-      hubId: hubId,
+      gubId: gubId,
       eventId: eventId,
       proposalId: proposalId,
       title: title,

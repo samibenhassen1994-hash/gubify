@@ -5,10 +5,10 @@ import 'package:flutter/material.dart';
 import '../../services/member_service.dart';
 
 class MembersScreen extends StatelessWidget {
-  final String hubId;
+  final String gubId;
   final String ownerId;
 
-  const MembersScreen({super.key, required this.hubId, required this.ownerId});
+  const MembersScreen({super.key, required this.gubId, required this.ownerId});
 
   @override
   Widget build(BuildContext context) {
@@ -21,7 +21,7 @@ class MembersScreen extends StatelessWidget {
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
             .collection("gubs")
-            .doc(hubId)
+            .doc(gubId)
             .collection("members")
             .orderBy("joinedAt")
             .snapshots(),
@@ -96,7 +96,7 @@ class MembersScreen extends StatelessWidget {
                             if (!confirm) return;
 
                             await MemberService.instance.removeMember(
-                              hubId: hubId,
+                              gubId: gubId,
                               uid: uid,
                               ownerId: ownerId,
                               currentUserId: currentUser.uid,

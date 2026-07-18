@@ -10,33 +10,33 @@ class NotificationRepository {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   CollectionReference<Map<String, dynamic>> notificationsCollection(
-    String hubId,
+    String gubId,
   ) {
-    return _firestore.collection("gubs").doc(hubId).collection("notifications");
+    return _firestore.collection("gubs").doc(gubId).collection("notifications");
   }
 
   Future<void> createNotification({
-    required String hubId,
+    required String gubId,
     required NotificationModel notification,
   }) async {
     await notificationsCollection(
-      hubId,
+      gubId,
     ).doc(notification.notificationId).set(notification.toFirestore());
   }
 
   Stream<QuerySnapshot<Map<String, dynamic>>> notificationsStream(
-    String hubId,
+    String gubId,
   ) {
     return notificationsCollection(
-      hubId,
+      gubId,
     ).orderBy("createdAt", descending: true).snapshots();
   }
 
   Future<void> markAllAsRead({
-    required String hubId,
+    required String gubId,
     required String uid,
   }) async {
-    final snapshot = await notificationsCollection(hubId).get();
+    final snapshot = await notificationsCollection(gubId).get();
 
     final batch = _firestore.batch();
 

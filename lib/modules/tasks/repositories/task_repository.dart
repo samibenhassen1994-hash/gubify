@@ -9,10 +9,10 @@ class TaskRepository {
 
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  CollectionReference<Map<String, dynamic>> tasksCollection(String hubId) {
+  CollectionReference<Map<String, dynamic>> tasksCollection(String gubId) {
     return _firestore
         .collection("gubs")
-        .doc(hubId)
+        .doc(gubId)
         .collection("tasks");
   }
 
@@ -22,29 +22,29 @@ class TaskRepository {
   }
 
   Future<void> createTask(TaskModel task) async {
-    await tasksCollection(task.hubId)
+    await tasksCollection(task.gubId)
         .doc(task.taskId)
         .set(task.toFirestore());
   }
 
   Future<void> updateTask(TaskModel task) async {
-    await tasksCollection(task.hubId)
+    await tasksCollection(task.gubId)
         .doc(task.taskId)
         .update(task.toFirestore());
   }
 
   Future<void> deleteTask({
-    required String hubId,
+    required String gubId,
     required String taskId,
   }) async {
-    await tasksCollection(hubId).doc(taskId).delete();
+    await tasksCollection(gubId).doc(taskId).delete();
   }
 
   Future<TaskModel?> getTask({
-    required String hubId,
+    required String gubId,
     required String taskId,
   }) async {
-    final doc = await tasksCollection(hubId)
+    final doc = await tasksCollection(gubId)
         .doc(taskId)
         .get();
 
@@ -54,10 +54,10 @@ class TaskRepository {
   }
 
   Stream<TaskModel?> taskStream({
-    required String hubId,
+    required String gubId,
     required String taskId,
   }) {
-    return tasksCollection(hubId)
+    return tasksCollection(gubId)
         .doc(taskId)
         .snapshots()
         .map((doc) {
@@ -67,8 +67,8 @@ class TaskRepository {
     });
   }
 
-  Stream<List<TaskModel>> tasksStream(String hubId) {
-    return tasksCollection(hubId)
+  Stream<List<TaskModel>> tasksStream(String gubId) {
+    return tasksCollection(gubId)
         .orderBy("createdAt", descending: true)
         .snapshots()
         .map(

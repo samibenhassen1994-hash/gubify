@@ -3,9 +3,9 @@ import 'package:flutter/material.dart';
 import '../manage_gub_screen.dart';
 
 class ManageGubButton extends StatelessWidget {
-  final String hubId;
+  final String gubId;
 
-  const ManageGubButton({super.key, required this.hubId});
+  const ManageGubButton({super.key, required this.gubId});
 
   @override
   Widget build(BuildContext context) {
@@ -18,7 +18,7 @@ class ManageGubButton extends StatelessWidget {
         onPressed: () {
           Navigator.push(
             context,
-            MaterialPageRoute(builder: (_) => ManageGubScreen(hubId: hubId)),
+            MaterialPageRoute(builder: (_) => ManageGubScreen(gubId: gubId)),
           );
         },
       ),

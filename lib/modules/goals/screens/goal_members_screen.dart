@@ -6,13 +6,13 @@ import '../services/goal_member_service.dart';
 import 'my_contribution_screen.dart';
 
 class GoalMembersScreen extends StatelessWidget {
-  final String hubId;
+  final String gubId;
   final String goalId;
   final String ownerId;
 
   const GoalMembersScreen({
     super.key,
-    required this.hubId,
+    required this.gubId,
     required this.goalId,
     required this.ownerId,
   });
@@ -27,7 +27,7 @@ class GoalMembersScreen extends StatelessWidget {
       appBar: AppBar(title: const Text("Participants")),
       body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
         stream: GoalMemberService.instance.membersStream(
-          hubId: hubId,
+          gubId: gubId,
           goalId: goalId,
         ),
         builder: (context, snapshot) {
@@ -78,7 +78,7 @@ class GoalMembersScreen extends StatelessWidget {
                             context,
                             MaterialPageRoute(
                               builder: (_) => MyContributionScreen(
-                                hubId: hubId,
+                                gubId: gubId,
                                 goalId: goalId,
                               ),
                             ),
@@ -113,7 +113,7 @@ class GoalMembersScreen extends StatelessWidget {
                           onPressed: () async {
                             await GoalMemberService.instance
                                 .confirmContribution(
-                                  hubId: hubId,
+                                  gubId: gubId,
                                   goalId: goalId,
                                   uid: uid,
                                   confirmedById: currentUser.uid,

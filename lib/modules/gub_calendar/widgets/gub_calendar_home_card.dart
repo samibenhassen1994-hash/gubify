@@ -1,23 +1,23 @@
 import 'package:flutter/material.dart';
 
 import '../models/event_model.dart';
-import '../screens/hub_calendar_screen.dart';
+import '../screens/gub_calendar_screen.dart';
 import '../services/event_service.dart';
 
-class HubCalendarHomeCard extends StatelessWidget {
-  final String hubId;
+class GubCalendarHomeCard extends StatelessWidget {
+  final String gubId;
   final String ownerId;
 
-  const HubCalendarHomeCard({
+  const GubCalendarHomeCard({
     super.key,
-    required this.hubId,
+    required this.gubId,
     required this.ownerId,
   });
 
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<List<EventModel>>(
-      stream: EventService.instance.eventsStream(hubId),
+      stream: EventService.instance.eventsStream(gubId),
       builder: (context, snapshot) {
         final events = snapshot.data ?? [];
         final EventModel? nextEvent = events.isNotEmpty ? events.first : null;
@@ -29,7 +29,7 @@ class HubCalendarHomeCard extends StatelessWidget {
               context,
               MaterialPageRoute(
                 builder: (_) =>
-                    GubCalendarScreen(hubId: hubId, ownerId: ownerId),
+                    GubCalendarScreen(gubId: gubId, ownerId: ownerId),
               ),
             );
           },

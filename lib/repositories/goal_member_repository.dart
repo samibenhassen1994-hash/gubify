@@ -8,12 +8,12 @@ class GoalMemberRepository {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   Stream<QuerySnapshot<Map<String, dynamic>>> membersStream({
-    required String hubId,
+    required String gubId,
     required String goalId,
   }) {
     return _firestore
         .collection("gubs")
-        .doc(hubId)
+        .doc(gubId)
         .collection("goals")
         .doc(goalId)
         .collection("members")
@@ -21,14 +21,14 @@ class GoalMemberRepository {
   }
 
   Future<void> updateContribution({
-    required String hubId,
+    required String gubId,
     required String goalId,
     required String uid,
     required double amount,
   }) async {
     await _firestore
         .collection("gubs")
-        .doc(hubId)
+        .doc(gubId)
         .collection("goals")
         .doc(goalId)
         .collection("members")
@@ -42,13 +42,13 @@ class GoalMemberRepository {
   }
 
   Future<void> confirmContribution({
-    required String hubId,
+    required String gubId,
     required String goalId,
     required String uid,
   }) async {
     await _firestore
         .collection("gubs")
-        .doc(hubId)
+        .doc(gubId)
         .collection("goals")
         .doc(goalId)
         .collection("members")

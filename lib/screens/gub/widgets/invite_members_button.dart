@@ -3,9 +3,9 @@ import 'package:flutter/material.dart';
 import '../invite_members_screen.dart';
 
 class InviteMembersButton extends StatelessWidget {
-  final String hubId;
+  final String gubId;
 
-  const InviteMembersButton({super.key, required this.hubId});
+  const InviteMembersButton({super.key, required this.gubId});
 
   @override
   Widget build(BuildContext context) {
@@ -19,7 +19,7 @@ class InviteMembersButton extends StatelessWidget {
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (_) => InviteMembersScreen(hubId: hubId),
+              builder: (_) => InviteMembersScreen(gubId: gubId),
             ),
           );
         },

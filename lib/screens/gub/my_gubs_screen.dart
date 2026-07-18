@@ -55,7 +55,7 @@ class MyGubsScreen extends StatelessWidget {
                     itemBuilder: (context, index) {
                       final hub = hubs[index].data() as Map<String, dynamic>;
 
-                      final hubId = hub["hubId"];
+                      final gubId = hub["gubId"];
 
                       return Card(
                         elevation: 0,
@@ -100,7 +100,7 @@ class MyGubsScreen extends StatelessWidget {
                           onTap: () async {
                             final memberDoc = await FirebaseFirestore.instance
                                 .collection("gubs")
-                                .doc(hubId)
+                                .doc(gubId)
                                 .collection("members")
                                 .doc(uid)
                                 .get();
@@ -110,7 +110,7 @@ class MyGubsScreen extends StatelessWidget {
                                   .collection("users")
                                   .doc(uid)
                                   .collection("gubs")
-                                  .doc(hubId)
+                                  .doc(gubId)
                                   .delete();
 
                               if (!context.mounted) return;
@@ -139,8 +139,8 @@ class MyGubsScreen extends StatelessWidget {
                               context,
                               MaterialPageRoute(
                                 builder: (_) => GubAccessGuard(
-                                  hubId: hubId,
-                                  child: GubScreen(hubId: hubId),
+                                  gubId: gubId,
+                                  child: GubScreen(gubId: gubId),
                                 ),
                               ),
                             );

@@ -1,13 +1,13 @@
 {
   "project_info": {
-    "project_number": "57532357766",
-    "project_id": "hubfy-34c2e",
-    "storage_bucket": "hubfy-34c2e.firebasestorage.app"
+    "project_number": "741423330029",
+    "project_id": "gubify-a3e2c",
+    "storage_bucket": "gubify-a3e2c.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:57532357766:android:f06d03a7a687f209afc507",
+        "mobilesdk_app_id": "1:741423330029:android:6e76f8c6b8daf1156f52e4",
         "android_client_info": {
           "package_name": "com.gubify.app"
         }
@@ -15,26 +15,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyCG0No3BY78nR-UB_3Td5oR8RyUipp6aeo"
-        }
-      ],
-      "services": {
-        "appinvite_service": {
-          "other_platform_oauth_client": []
-        }
-      }
-    },
-    {
-      "client_info": {
-        "mobilesdk_app_id": "1:57532357766:android:2d21d801f66b8fd2afc507",
-        "android_client_info": {
-          "package_name": "com.hubfy.app"
-        }
-      },
-      "oauth_client": [],
-      "api_key": [
-        {
-          "current_key": "AIzaSyCG0No3BY78nR-UB_3Td5oR8RyUipp6aeo"
+          "current_key": "AIzaSyDaruxeV3NfiWO7nU2VcD7rBbhdeZy1GsI"
         }
       ],
       "services": {

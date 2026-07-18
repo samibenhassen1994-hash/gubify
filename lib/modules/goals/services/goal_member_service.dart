@@ -11,17 +11,17 @@ class GoalMemberService {
   static final GoalMemberService instance = GoalMemberService._();
 
   Stream<QuerySnapshot<Map<String, dynamic>>> membersStream({
-    required String hubId,
+    required String gubId,
     required String goalId,
   }) {
     return GoalMemberRepository.instance.membersStream(
-      hubId: hubId,
+      gubId: gubId,
       goalId: goalId,
     );
   }
 
   Future<void> submitContribution({
-    required String hubId,
+    required String gubId,
     required String goalId,
     required String uid,
     required double amount,
@@ -31,14 +31,14 @@ class GoalMemberService {
     }
 
     await GoalMemberRepository.instance.updateContribution(
-      hubId: hubId,
+      gubId: gubId,
       goalId: goalId,
       uid: uid,
       amount: amount,
     );
 
     await NotificationService.instance.send(
-      hubId: hubId,
+      gubId: gubId,
       title: "Contribution submitted",
       body: "A member submitted a contribution.",
       type: "goal_submitted",
@@ -49,7 +49,7 @@ class GoalMemberService {
   }
 
   Future<void> confirmContribution({
-    required String hubId,
+    required String gubId,
     required String goalId,
     required String uid,
     required String confirmedById,
@@ -59,7 +59,7 @@ class GoalMemberService {
     // Recupera il membro
     final memberDoc = await firestore
         .collection("gubs")
-        .doc(hubId)
+        .doc(gubId)
         .collection("goals")
         .doc(goalId)
         .collection("members")
@@ -83,20 +83,20 @@ class GoalMemberService {
 
     // Conferma il contributo
     await GoalMemberRepository.instance.confirmContribution(
-      hubId: hubId,
+      gubId: gubId,
       goalId: goalId,
       uid: uid,
     );
 
     // Aggiorna il budget
     await GoalRepository.instance.recalculateGoalProgress(
-      hubId: hubId,
+      gubId: gubId,
       goalId: goalId,
     );
 
     // Notifica
     await NotificationService.instance.send(
-      hubId: hubId,
+      gubId: gubId,
       title: "Shared Budget",
       body:
           "$ownerName confirmed $memberName's contribution (€${amount.toStringAsFixed(2)}).",

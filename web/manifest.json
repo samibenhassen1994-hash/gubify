@@ -1,11 +1,11 @@
 {
-    "name": "Hubfy",
-    "short_name": "Hubfy",
+    "name": "Gubify",
+    "short_name": "Gubify",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "description": "Organize your groups, tasks and shared activities.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

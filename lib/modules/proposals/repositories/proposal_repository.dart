@@ -9,50 +9,50 @@ class ProposalRepository {
 
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  CollectionReference<Map<String, dynamic>> proposalsCollection(String hubId) {
-    return _firestore.collection("gubs").doc(hubId).collection("proposals");
+  CollectionReference<Map<String, dynamic>> proposalsCollection(String gubId) {
+    return _firestore.collection("gubs").doc(gubId).collection("proposals");
   }
 
   Future<void> createProposal(ProposalModel proposal) async {
     await proposalsCollection(
-      proposal.hubId,
+      proposal.gubId,
     ).doc(proposal.proposalId).set(proposal.toFirestore());
   }
 
   Future<void> updateProposal(ProposalModel proposal) async {
     await proposalsCollection(
-      proposal.hubId,
+      proposal.gubId,
     ).doc(proposal.proposalId).update(proposal.toFirestore());
   }
 
   Future<void> deleteProposal({
-    required String hubId,
+    required String gubId,
     required String proposalId,
   }) async {
-    await proposalsCollection(hubId).doc(proposalId).delete();
+    await proposalsCollection(gubId).doc(proposalId).delete();
   }
 
   Future<ProposalModel?> getProposal({
-    required String hubId,
+    required String gubId,
     required String proposalId,
   }) async {
-    final doc = await proposalsCollection(hubId).doc(proposalId).get();
+    final doc = await proposalsCollection(gubId).doc(proposalId).get();
     if (!doc.exists) return null;
     return ProposalModel.fromFirestore(doc.data()!);
   }
 
   Stream<ProposalModel?> proposalStream({
-    required String hubId,
+    required String gubId,
     required String proposalId,
   }) {
-    return proposalsCollection(hubId).doc(proposalId).snapshots().map((doc) {
+    return proposalsCollection(gubId).doc(proposalId).snapshots().map((doc) {
       if (!doc.exists) return null;
       return ProposalModel.fromFirestore(doc.data()!);
     });
   }
 
-  Stream<List<ProposalModel>> proposalsStream(String hubId) {
-    return proposalsCollection(hubId)
+  Stream<List<ProposalModel>> proposalsStream(String gubId) {
+    return proposalsCollection(gubId)
         .orderBy("createdAt", descending: true)
         .snapshots()
         .map(
@@ -63,12 +63,12 @@ class ProposalRepository {
   }
 
   Future<void> vote({
-    required String hubId,
+    required String gubId,
     required String proposalId,
     required String uid,
     required String vote,
   }) async {
-    await proposalsCollection(hubId)
+    await proposalsCollection(gubId)
         .doc(proposalId)
         .collection("votes")
         .doc(uid)
@@ -76,28 +76,28 @@ class ProposalRepository {
   }
 
   Future<QuerySnapshot<Map<String, dynamic>>> getVotes({
-    required String hubId,
+    required String gubId,
     required String proposalId,
   }) {
-    return proposalsCollection(hubId).doc(proposalId).collection("votes").get();
+    return proposalsCollection(gubId).doc(proposalId).collection("votes").get();
   }
 
   Stream<QuerySnapshot<Map<String, dynamic>>> votesStream({
-    required String hubId,
+    required String gubId,
     required String proposalId,
   }) {
     return proposalsCollection(
-      hubId,
+      gubId,
     ).doc(proposalId).collection("votes").snapshots();
   }
 
   Stream<String?> userVoteStream({
-    required String hubId,
+    required String gubId,
     required String proposalId,
     required String uid,
   }) {
     return proposalsCollection(
-      hubId,
+      gubId,
     ).doc(proposalId).collection("votes").doc(uid).snapshots().map((doc) {
       if (!doc.exists) return null;
       return doc.data()?["vote"] as String?;

@@ -11,7 +11,7 @@ class TaskNotificationService {
     if (!task.notificationsEnabled) return;
 
     await NotificationService.instance.send(
-      hubId: task.hubId,
+      gubId: task.gubId,
       title: "New task",
       body:
           "${task.creatorName} assigned a new task: ${task.title}",
@@ -21,7 +21,7 @@ class TaskNotificationService {
       markSenderAsRead: true,
       data: {
         "module": "tasks",
-        "hubId": task.hubId,
+        "gubId": task.gubId,
         "taskId": task.taskId,
       },
     );
@@ -31,7 +31,7 @@ class TaskNotificationService {
     if (!task.notificationsEnabled) return;
 
     await NotificationService.instance.send(
-      hubId: task.hubId,
+      gubId: task.gubId,
       title: "Task completed",
       body: "${task.title} has been completed.",
       type: "task_completed",
@@ -39,7 +39,7 @@ class TaskNotificationService {
       senderName: task.creatorName,
       data: {
         "module": "tasks",
-        "hubId": task.hubId,
+        "gubId": task.gubId,
         "taskId": task.taskId,
       },
     );

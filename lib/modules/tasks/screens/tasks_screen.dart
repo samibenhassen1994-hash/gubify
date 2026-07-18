@@ -9,11 +9,11 @@ import '../widgets/task_card.dart';
 import 'create_task_screen.dart';
 
 class TasksScreen extends StatelessWidget {
-  final String hubId;
+  final String gubId;
 
   const TasksScreen({
     super.key,
-    required this.hubId,
+    required this.gubId,
   });
 
   @override
@@ -37,7 +37,7 @@ class TasksScreen extends StatelessWidget {
               context,
               MaterialPageRoute(
                 builder: (_) => CreateTaskScreen(
-                  hubId: hubId,
+                  gubId: gubId,
                 ),
               ),
             );
@@ -46,7 +46,7 @@ class TasksScreen extends StatelessWidget {
         ),
 
         body: StreamBuilder<List<TaskModel>>(
-          stream: TaskService.instance.tasksStream(hubId),
+          stream: TaskService.instance.tasksStream(gubId),
 
           builder: (context, snapshot) {
             if (snapshot.connectionState ==

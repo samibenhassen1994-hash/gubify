@@ -6,12 +6,12 @@ import '../modules/notifications/screens/notifications_screen.dart';
 import '../repositories/user_repository.dart';
 
 class UserHeader extends StatelessWidget {
-  final String? hubId;
+  final String? gubId;
   final bool darkMode;
 
   const UserHeader({
     super.key,
-    this.hubId,
+    this.gubId,
     this.darkMode = false,
   });
 
@@ -62,11 +62,11 @@ class UserHeader extends StatelessWidget {
                 ),
               ),
 
-              if (hubId != null)
+              if (gubId != null)
                 StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
                   stream: FirebaseFirestore.instance
                       .collection("gubs")
-                      .doc(hubId)
+                      .doc(gubId)
                       .collection("notifications")
                       .snapshots(),
                   builder: (context, snapshot) {
@@ -105,7 +105,7 @@ class UserHeader extends StatelessWidget {
                               context,
                               MaterialPageRoute(
                                 builder: (_) => NotificationsScreen(
-                                  hubId: hubId!,
+                                  gubId: gubId!,
                                 ),
                               ),
                             );

@@ -5,12 +5,12 @@ import '../screens/welcome_screen.dart';
 
 class GubPageHeader extends StatelessWidget {
   final String title;
-  final String? hubId;
+  final String? gubId;
 
   const GubPageHeader({
     super.key,
     required this.title,
-    this.hubId,
+    this.gubId,
   });
 
   @override
@@ -65,7 +65,7 @@ class GubPageHeader extends StatelessWidget {
 
             const SizedBox(height: 14),
 
-            UserHeader(hubId: hubId),
+            UserHeader(gubId: gubId),
           ],
         ),
       ),

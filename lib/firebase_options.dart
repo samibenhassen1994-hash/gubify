@@ -41,47 +41,46 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyCxHneU5B5UTSp9Uhnejjnr8iQefpVFypA',
-    appId: '1:57532357766:web:fda5769c80a6be8eafc507',
-    messagingSenderId: '57532357766',
-    projectId: 'hubfy-34c2e',
-    authDomain: 'hubfy-34c2e.firebaseapp.com',
-    storageBucket: 'hubfy-34c2e.firebasestorage.app',
-    measurementId: 'G-WMZ9CLY2K0',
+    apiKey: 'AIzaSyBB7vG8ALu0ZAS6ctxLxZJVXxnZqVDPZnE',
+    appId: '1:741423330029:web:26524a3736858bb06f52e4',
+    messagingSenderId: '741423330029',
+    projectId: 'gubify-a3e2c',
+    authDomain: 'gubify-a3e2c.firebaseapp.com',
+    storageBucket: 'gubify-a3e2c.firebasestorage.app',
+    measurementId: 'G-D1MKEE8BYJ',
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyCG0No3BY78nR-UB_3Td5oR8RyUipp6aeo',
-    appId: '1:57532357766:android:f06d03a7a687f209afc507',
-    messagingSenderId: '57532357766',
-    projectId: 'hubfy-34c2e',
-    storageBucket: 'hubfy-34c2e.firebasestorage.app',
+    apiKey: 'AIzaSyDaruxeV3NfiWO7nU2VcD7rBbhdeZy1GsI',
+    appId: '1:741423330029:android:6e76f8c6b8daf1156f52e4',
+    messagingSenderId: '741423330029',
+    projectId: 'gubify-a3e2c',
+    storageBucket: 'gubify-a3e2c.firebasestorage.app',
   );
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'AIzaSyA9yMNaUDQpjNSMcoO7PiAo1Yo6C9Kn7Mg',
-    appId: '1:57532357766:ios:3ff904482452a571afc507',
-    messagingSenderId: '57532357766',
-    projectId: 'hubfy-34c2e',
-    storageBucket: 'hubfy-34c2e.firebasestorage.app',
-    iosBundleId: 'com.example.Hubfy',
+    apiKey: 'AIzaSyCMBNVJCU9ZGcd0h5vCzJmqJI9FgujTdns',
+    appId: '1:741423330029:ios:555bd16f1a786e2a6f52e4',
+    messagingSenderId: '741423330029',
+    projectId: 'gubify-a3e2c',
+    storageBucket: 'gubify-a3e2c.firebasestorage.app',
+    iosBundleId: 'com.gubify.app',
   );
-
   static const FirebaseOptions macos = FirebaseOptions(
-    apiKey: 'AIzaSyA9yMNaUDQpjNSMcoO7PiAo1Yo6C9Kn7Mg',
-    appId: '1:57532357766:ios:3ff904482452a571afc507',
-    messagingSenderId: '57532357766',
-    projectId: 'hubfy-34c2e',
-    storageBucket: 'hubfy-34c2e.firebasestorage.app',
-    iosBundleId: 'com.example.Hubfy',
+    apiKey: 'AIzaSyCMBNVJCU9ZGcd0h5vCzJmqJI9FgujTdns',
+    appId: '1:741423330029:ios:555bd16f1a786e2a6f52e4',
+    messagingSenderId: '741423330029',
+    projectId: 'gubify-a3e2c',
+    storageBucket: 'gubify-a3e2c.firebasestorage.app',
+    iosBundleId: 'com.gubify.app',
   );
 
   static const FirebaseOptions windows = FirebaseOptions(
-    apiKey: 'AIzaSyCxHneU5B5UTSp9Uhnejjnr8iQefpVFypA',
-    appId: '1:57532357766:web:be2f8611b38cc3f0afc507',
-    messagingSenderId: '57532357766',
-    projectId: 'hubfy-34c2e',
-    authDomain: 'hubfy-34c2e.firebaseapp.com',
-    storageBucket: 'hubfy-34c2e.firebasestorage.app',
-    measurementId: 'G-VDJ3LW4D9Y',
+    apiKey: 'AIzaSyBB7vG8ALu0ZAS6ctxLxZJVXxnZqVDPZnE',
+    appId: '1:741423330029:web:42337b15823a61256f52e4',
+    messagingSenderId: '741423330029',
+    projectId: 'gubify-a3e2c',
+    authDomain: 'gubify-a3e2c.firebaseapp.com',
+    storageBucket: 'gubify-a3e2c.firebasestorage.app',
+    measurementId: 'G-9G8PZQHXEJ',
   );
 }

@@ -50,7 +50,7 @@ class GubService {
     final batch = _firestore.batch();
 
     batch.set(hubRef, {
-      "hubId": hubRef.id,
+      "gubId": hubRef.id,
       "name": name.trim(),
       "ownerId": user.uid,
       "inviteCode": inviteCode,
@@ -74,7 +74,7 @@ class GubService {
           .collection("gubs")
           .doc(hubRef.id),
       {
-        "hubId": hubRef.id,
+        "gubId": hubRef.id,
         "name": name.trim(),
         "inviteCode": inviteCode,
         "memberCount": 1,
@@ -116,7 +116,7 @@ class GubService {
           );
 
         case "permission-denied":
-          throw Exception("You don't have permission to access Hubfy.");
+          throw Exception("You don't have permission to access Gubify.");
 
         case "deadline-exceeded":
           throw Exception("The connection timed out. Please try again.");
@@ -131,16 +131,16 @@ class GubService {
     }
 
     final hubDoc = query.docs.first;
-    final hubId = hubDoc.id;
+    final gubId = hubDoc.id;
 
     final memberRef = _firestore
         .collection("gubs")
-        .doc(hubId)
+        .doc(gubId)
         .collection("members")
         .doc(user.uid);
 
     if ((await memberRef.get()).exists) {
-      return hubId;
+      return gubId;
     }
 
     final batch = _firestore.batch();
@@ -153,7 +153,7 @@ class GubService {
       "joinedAt": FieldValue.serverTimestamp(),
     });
 
-    batch.update(_firestore.collection("gubs").doc(hubId), {
+    batch.update(_firestore.collection("gubs").doc(gubId), {
       "memberCount": FieldValue.increment(1),
     });
 
@@ -162,9 +162,9 @@ class GubService {
           .collection("users")
           .doc(user.uid)
           .collection("gubs")
-          .doc(hubId),
+          .doc(gubId),
       {
-        "hubId": hubId,
+        "gubId": gubId,
         "name": hubDoc["name"],
         "inviteCode": hubDoc["inviteCode"],
         "memberCount": (hubDoc["memberCount"] ?? 1) + 1,
@@ -176,7 +176,7 @@ class GubService {
 
     await batch.commit();
 
-    return hubId;
+    return gubId;
   }
 
   /// Deletes a Hub.
@@ -192,14 +192,14 @@ class GubService {
   /// - tasks
   /// - shopping
   /// - expenses
-  Future<void> deleteHub({required String hubId}) async {
+  Future<void> deleteHub({required String gubId}) async {
     final user = _auth.currentUser;
 
     if (user == null) {
       throw Exception("User not authenticated.");
     }
 
-    final hubDoc = await _firestore.collection("gubs").doc(hubId).get();
+    final hubDoc = await _firestore.collection("gubs").doc(gubId).get();
 
     if (!hubDoc.exists) {
       throw Exception("Hub not found.");
@@ -213,22 +213,22 @@ class GubService {
 
     final batch = _firestore.batch();
 
-    batch.delete(_firestore.collection("gubs").doc(hubId));
+    batch.delete(_firestore.collection("gubs").doc(gubId));
 
     batch.delete(
       _firestore
           .collection("users")
           .doc(user.uid)
           .collection("gubs")
-          .doc(hubId),
+          .doc(gubId),
     );
 
     await batch.commit();
   }
-  Stream<List<MemberOption>> membersStream(String hubId) {
+  Stream<List<MemberOption>> membersStream(String gubId) {
     return _firestore
         .collection("gubs")
-        .doc(hubId)
+        .doc(gubId)
         .collection("members")
         .snapshots()
         .map(
@@ -243,10 +243,10 @@ class GubService {
         );
   }
 
-  Future<List<MemberOption>> getMembers(String hubId) async {
+  Future<List<MemberOption>> getMembers(String gubId) async {
     final snapshot = await _firestore
         .collection("gubs")
-        .doc(hubId)
+        .doc(gubId)
         .collection("members")
         .get();
 

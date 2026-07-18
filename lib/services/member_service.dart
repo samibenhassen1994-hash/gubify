@@ -7,7 +7,7 @@ class MemberService {
   static final MemberService instance = MemberService._();
 
   Future<void> removeMember({
-    required String hubId,
+    required String gubId,
     required String uid,
     required String ownerId,
     required String currentUserId,
@@ -23,16 +23,16 @@ class MemberService {
     }
 
     // Rimuove il membro
-    await MemberRepository.instance.removeMember(hubId: hubId, uid: uid);
+    await MemberRepository.instance.removeMember(gubId: gubId, uid: uid);
     await GoalRepository.instance.removeMemberFromAllGoals(
-      hubId: hubId,
+      gubId: gubId,
       uid: uid,
     );
     // Aggiorna il numero di membri
-    final memberCount = await MemberRepository.instance.getMemberCount(hubId);
+    final memberCount = await MemberRepository.instance.getMemberCount(gubId);
 
     await MemberRepository.instance.updateMemberCount(
-      hubId: hubId,
+      gubId: gubId,
       memberCount: memberCount,
     );
   }

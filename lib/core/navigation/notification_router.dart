@@ -1,7 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
-import '../../modules/gub_calendar/screens/hub_calendar_screen.dart';
+import '../../modules/gub_calendar/screens/gub_calendar_screen.dart';
 
 import '../../modules/proposals/repositories/proposal_repository.dart';
 import '../../modules/proposals/screens/proposal_details_screen.dart';
@@ -13,7 +13,7 @@ class NotificationRouter {
 
   static Future<void> navigate({
     required BuildContext context,
-    required String hubId,
+    required String gubId,
     required Map<String, dynamic> data,
   }) async {
     final destination = data["module"] ?? data["screen"];
@@ -26,7 +26,7 @@ class NotificationRouter {
 
         final proposal =
             await ProposalRepository.instance.getProposal(
-          hubId: hubId,
+          gubId: gubId,
           proposalId: proposalId,
         );
 
@@ -47,7 +47,7 @@ class NotificationRouter {
       case "calendar":
         final hubDoc = await FirebaseFirestore.instance
             .collection("gubs")
-            .doc(hubId)
+            .doc(gubId)
             .get();
 
         if (!hubDoc.exists || !context.mounted) return;
@@ -59,7 +59,7 @@ class NotificationRouter {
           context,
           MaterialPageRoute(
             builder: (_) => GubCalendarScreen(
-              hubId: hubId,
+              gubId: gubId,
               ownerId: ownerId,
             ),
           ),
@@ -79,7 +79,7 @@ class NotificationRouter {
           context,
           MaterialPageRoute(
             builder: (_) => TaskDetailsScreen(
-              hubId: hubId,
+              gubId: gubId,
               taskId: taskId,
             ),
           ),

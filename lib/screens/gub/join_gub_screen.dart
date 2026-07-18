@@ -34,14 +34,14 @@ class _JoinGubScreenState extends State<JoinGubScreen> {
     setState(() => _loading = true);
 
     try {
-      final hubId = await GubService().joinHub(inviteCode: inviteCode);
+      final gubId = await GubService().joinHub(inviteCode: inviteCode);
 
       if (!mounted) return;
 
       Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(
-          builder: (_) => GubScreen(hubId: hubId),
+          builder: (_) => GubScreen(gubId: gubId),
         ),
         (_) => false,
       );

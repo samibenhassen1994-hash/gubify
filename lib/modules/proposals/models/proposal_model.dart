@@ -1,7 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class ProposalModel {
-  final String hubId;
+  final String gubId;
   final String proposalId;
 
   final String title;
@@ -42,7 +42,7 @@ class ProposalModel {
   final bool tasksCreated;
 
   const ProposalModel({
-    required this.hubId,
+    required this.gubId,
     required this.proposalId,
 
     required this.title,
@@ -72,7 +72,7 @@ class ProposalModel {
 
   factory ProposalModel.fromFirestore(Map<String, dynamic> json) {
     return ProposalModel(
-      hubId: json["hubId"] ?? "",
+      gubId: json["gubId"] ?? "",
       proposalId: json["proposalId"] ?? "",
 
       title: json["title"] ?? "",
@@ -104,7 +104,7 @@ class ProposalModel {
 
   Map<String, dynamic> toFirestore() {
     return {
-      "hubId": hubId,
+      "gubId": gubId,
       "proposalId": proposalId,
 
       "title": title,
@@ -134,7 +134,7 @@ class ProposalModel {
   }
 
   ProposalModel copyWith({
-    String? hubId,
+    String? gubId,
     String? status,
     int? yesVotes,
     int? noVotes,
@@ -143,7 +143,7 @@ class ProposalModel {
     bool? tasksCreated,
   }) {
     return ProposalModel(
-      hubId: hubId ?? this.hubId,
+      gubId: gubId ?? this.gubId,
       proposalId: proposalId,
 
       title: title,

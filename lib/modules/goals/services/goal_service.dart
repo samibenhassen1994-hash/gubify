@@ -16,7 +16,7 @@ class GoalService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   Future<void> createGoal({
-    required String hubId,
+    required String gubId,
     required String title,
     required String description,
     required double targetAmount,
@@ -24,7 +24,7 @@ class GoalService {
   }) async {
     _validate(title, targetAmount);
 
-    final members = await _loadHubMembers(hubId);
+    final members = await _loadHubMembers(gubId);
 
     final goal = _buildGoal(
       title: title,
@@ -34,7 +34,7 @@ class GoalService {
       deadline: deadline,
     );
 
-    await GoalRepository.instance.createGoal(hubId, goal);
+    await GoalRepository.instance.createGoal(gubId, goal);
 
     final goalMembers = members
         .map(
@@ -51,20 +51,20 @@ class GoalService {
         .toList();
 
     await GoalRepository.instance.createGoalMembers(
-      hubId: hubId,
+      gubId: gubId,
       goalId: goal.goalId,
       members: goalMembers,
     );
   }
 
   /// Future (lo lasciamo per compatibilità)
-  Future<GoalModel?> getActiveGoal(String hubId) {
-    return GoalRepository.instance.getActiveGoal(hubId);
+  Future<GoalModel?> getActiveGoal(String gubId) {
+    return GoalRepository.instance.getActiveGoal(gubId);
   }
 
   /// Stream in tempo reale
-  Stream<GoalModel?> activeGoalStream(String hubId) {
-    return GoalRepository.instance.activeGoalStream(hubId);
+  Stream<GoalModel?> activeGoalStream(String gubId) {
+    return GoalRepository.instance.activeGoalStream(gubId);
   }
 
   void _validate(String title, double targetAmount) {
@@ -78,11 +78,11 @@ class GoalService {
   }
 
   Future<List<QueryDocumentSnapshot<Map<String, dynamic>>>> _loadHubMembers(
-    String hubId,
+    String gubId,
   ) async {
     final snapshot = await _firestore
         .collection("gubs")
-        .doc(hubId)
+        .doc(gubId)
         .collection("members")
         .get();
 

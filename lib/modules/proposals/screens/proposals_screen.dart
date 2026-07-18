@@ -6,12 +6,12 @@ import '../widgets/proposal_card.dart';
 import 'create_proposal_screen.dart';
 
 class ProposalsScreen extends StatelessWidget {
-  final String hubId;
+  final String gubId;
   final int memberCount;
 
   const ProposalsScreen({
     super.key,
-    required this.hubId,
+    required this.gubId,
     required this.memberCount,
   });
 
@@ -27,13 +27,13 @@ class ProposalsScreen extends StatelessWidget {
             context,
             MaterialPageRoute(
               builder: (_) =>
-                  CreateProposalScreen(hubId: hubId, memberCount: memberCount),
+                  CreateProposalScreen(gubId: gubId, memberCount: memberCount),
             ),
           );
         },
       ),
       body: StreamBuilder<List<ProposalModel>>(
-        stream: ProposalService.instance.proposalsStream(hubId),
+        stream: ProposalService.instance.proposalsStream(gubId),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());

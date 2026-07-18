@@ -5,17 +5,17 @@ import '../screens/tasks_screen.dart';
 import '../services/task_service.dart';
 
 class TaskHomeCard extends StatelessWidget {
-  final String hubId;
+  final String gubId;
 
   const TaskHomeCard({
     super.key,
-    required this.hubId,
+    required this.gubId,
   });
 
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<List<TaskModel>>(
-      stream: TaskService.instance.tasksStream(hubId),
+      stream: TaskService.instance.tasksStream(gubId),
       builder: (context, snapshot) {
         if (!snapshot.hasData) {
           return const SizedBox.shrink();
@@ -59,7 +59,7 @@ class TaskHomeCard extends StatelessWidget {
                         context,
                         MaterialPageRoute(
                           builder: (_) => TasksScreen(
-                            hubId: hubId,
+                            gubId: gubId,
                           ),
                         ),
                       );

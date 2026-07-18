@@ -9,16 +9,16 @@ class TaskService {
 
   static final TaskService instance = TaskService._();
 
-  Stream<List<TaskModel>> tasksStream(String hubId) {
-    return TaskRepository.instance.tasksStream(hubId);
+  Stream<List<TaskModel>> tasksStream(String gubId) {
+    return TaskRepository.instance.tasksStream(gubId);
   }
 
   Stream<TaskModel?> taskStream({
-    required String hubId,
+    required String gubId,
     required String taskId,
   }) {
     return TaskRepository.instance.taskStream(
-      hubId: hubId,
+      gubId: gubId,
       taskId: taskId,
     );
   }
@@ -53,11 +53,11 @@ class TaskService {
   }
 
   Future<void> deleteTask({
-    required String hubId,
+    required String gubId,
     required String taskId,
   }) async {
     await TaskRepository.instance.deleteTask(
-      hubId: hubId,
+      gubId: gubId,
       taskId: taskId,
     );
   }

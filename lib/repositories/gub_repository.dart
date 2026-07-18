@@ -31,18 +31,18 @@ class GubRepository {
     return data;
   }
 
-  Stream<DocumentSnapshot<Map<String, dynamic>>> hubStream(String hubId) {
-    return _firestore.collection("gubs").doc(hubId).snapshots();
+  Stream<DocumentSnapshot<Map<String, dynamic>>> hubStream(String gubId) {
+    return _firestore.collection("gubs").doc(gubId).snapshots();
   }
 
   /// Aggiorna la cache dopo una modifica
-  void updateHub(String hubId, Map<String, dynamic> data) {
-    _hubCache[hubId] = data;
+  void updateHub(String gubId, Map<String, dynamic> data) {
+    _hubCache[gubId] = data;
   }
 
   /// Elimina un Hub dalla cache
-  void removeHub(String hubId) {
-    _hubCache.remove(hubId);
+  void removeHub(String gubId) {
+    _hubCache.remove(gubId);
   }
 
   /// Svuota completamente la cache

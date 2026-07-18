@@ -5,12 +5,12 @@ import '../../../repositories/gub_repository.dart';
 import '../members_screen.dart';
 
 class MembersCard extends StatelessWidget {
-  final String hubId;
+  final String gubId;
   final int memberCount;
 
   const MembersCard({
     super.key,
-    required this.hubId,
+    required this.gubId,
     required this.memberCount,
   });
 
@@ -18,7 +18,7 @@ class MembersCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Card(
       child: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-        stream: GubRepository.instance.hubStream(hubId),
+        stream: GubRepository.instance.hubStream(gubId),
         builder: (context, snapshot) {
           final liveData = snapshot.data?.data();
 
@@ -44,7 +44,7 @@ class MembersCard extends StatelessWidget {
                 context,
                 MaterialPageRoute(
                   builder: (_) => MembersScreen(
-                    hubId: hubId,
+                    gubId: gubId,
                     ownerId: liveData?["ownerId"] ?? "",
                   ),
                 ),

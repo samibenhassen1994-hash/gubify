@@ -3,12 +3,12 @@ import 'package:flutter/material.dart';
 import '../modules_screen.dart';
 
 class ModulesCard extends StatelessWidget {
-  final String hubId;
+  final String gubId;
   final List<String> activeModules;
 
   const ModulesCard({
     super.key,
-    required this.hubId,
+    required this.gubId,
     required this.activeModules,
   });
 
@@ -27,7 +27,7 @@ class ModulesCard extends StatelessWidget {
         onTap: () {
           Navigator.push(
             context,
-            MaterialPageRoute(builder: (_) => ModulesScreen(hubId: hubId)),
+            MaterialPageRoute(builder: (_) => ModulesScreen(gubId: gubId)),
           );
         },
       ),

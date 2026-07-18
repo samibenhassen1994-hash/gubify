@@ -4,9 +4,9 @@ import 'package:flutter/material.dart';
 import 'create_post_screen.dart';
 
 class BoardScreen extends StatelessWidget {
-  final String hubId;
+  final String gubId;
 
-  const BoardScreen({super.key, required this.hubId});
+  const BoardScreen({super.key, required this.gubId});
 
   @override
   Widget build(BuildContext context) {
@@ -16,7 +16,7 @@ class BoardScreen extends StatelessWidget {
         onPressed: () {
           Navigator.push(
             context,
-            MaterialPageRoute(builder: (_) => CreatePostScreen(hubId: hubId)),
+            MaterialPageRoute(builder: (_) => CreatePostScreen(gubId: gubId)),
           );
         },
         icon: const Icon(Icons.add),
@@ -50,7 +50,7 @@ class BoardScreen extends StatelessWidget {
               child: StreamBuilder<QuerySnapshot>(
                 stream: FirebaseFirestore.instance
                     .collection("gubs")
-                    .doc(hubId)
+                    .doc(gubId)
                     .collection("posts")
                     .orderBy("createdAt", descending: true)
                     .limit(25)

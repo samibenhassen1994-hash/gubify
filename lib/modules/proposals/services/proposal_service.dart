@@ -9,27 +9,27 @@ class ProposalService {
 
   static final ProposalService instance = ProposalService._();
 
-  Stream<List<ProposalModel>> proposalsStream(String hubId) {
-    return ProposalRepository.instance.proposalsStream(hubId);
+  Stream<List<ProposalModel>> proposalsStream(String gubId) {
+    return ProposalRepository.instance.proposalsStream(gubId);
   }
 
   Stream<ProposalModel?> proposalStream({
-    required String hubId,
+    required String gubId,
     required String proposalId,
   }) {
     return ProposalRepository.instance.proposalStream(
-      hubId: hubId,
+      gubId: gubId,
       proposalId: proposalId,
     );
   }
 
   Stream<String?> userVoteStream({
-    required String hubId,
+    required String gubId,
     required String proposalId,
     required String uid,
   }) {
     return ProposalRepository.instance.userVoteStream(
-      hubId: hubId,
+      gubId: gubId,
       proposalId: proposalId,
       uid: uid,
     );
@@ -39,7 +39,7 @@ class ProposalService {
     await ProposalRepository.instance.createProposal(proposal);
 
     await NotificationService.instance.send(
-      hubId: proposal.hubId,
+      gubId: proposal.gubId,
       title: "New proposal",
       body: "${proposal.creatorName} created a new proposal.",
       type: "proposal_created",
@@ -51,26 +51,26 @@ class ProposalService {
   }
 
   Future<void> vote({
-    required String hubId,
+    required String gubId,
     required String proposalId,
     required String uid,
     required String vote,
   }) async {
     final existingVote = await ProposalRepository.instance
-        .userVoteStream(hubId: hubId, proposalId: proposalId, uid: uid)
+        .userVoteStream(gubId: gubId, proposalId: proposalId, uid: uid)
         .first;
 
     if (existingVote != null) return;
 
     await ProposalRepository.instance.vote(
-      hubId: hubId,
+      gubId: gubId,
       proposalId: proposalId,
       uid: uid,
       vote: vote,
     );
 
     final proposal = await ProposalRepository.instance.getProposal(
-      hubId: hubId,
+      gubId: gubId,
       proposalId: proposalId,
     );
 
@@ -80,7 +80,7 @@ class ProposalService {
       return;
     }
     final votes = await ProposalRepository.instance.getVotes(
-      hubId: hubId,
+      gubId: gubId,
       proposalId: proposalId,
     );
 
@@ -115,7 +115,7 @@ class ProposalService {
       await ProposalRepository.instance.updateProposal(updatedProposal);
 
       await NotificationService.instance.send(
-        hubId: updatedProposal.hubId,
+        gubId: updatedProposal.gubId,
         title: "Proposal approved",
         body: "\"${updatedProposal.title}\" has been approved.",
         type: "proposal_approved",
@@ -139,7 +139,7 @@ class ProposalService {
       await ProposalRepository.instance.updateProposal(updatedProposal);
 
       await NotificationService.instance.send(
-        hubId: updatedProposal.hubId,
+        gubId: updatedProposal.gubId,
         title: "Proposal rejected",
         body: "\"${updatedProposal.title}\" has been rejected.",
         type: "proposal_rejected",

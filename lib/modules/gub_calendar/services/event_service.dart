@@ -10,15 +10,15 @@ class EventService {
 
   static final EventService instance = EventService._();
 
-  Stream<List<EventModel>> eventsStream(String hubId) {
-    return EventRepository.instance.eventsStream(hubId);
+  Stream<List<EventModel>> eventsStream(String gubId) {
+    return EventRepository.instance.eventsStream(gubId);
   }
 
   Stream<EventModel?> eventStream({
-    required String hubId,
+    required String gubId,
     required String eventId,
   }) {
-    return EventRepository.instance.eventStream(hubId: hubId, eventId: eventId);
+    return EventRepository.instance.eventStream(gubId: gubId, eventId: eventId);
   }
 
   Future<void> createEvent(EventModel event) async {
@@ -35,7 +35,7 @@ class EventService {
     final eventId = FirebaseFirestore.instance.collection("temp").doc().id;
 
     final event = EventModel(
-      hubId: proposal.hubId,
+      gubId: proposal.gubId,
       eventId: eventId,
       proposalId: proposal.proposalId,
       title: proposal.title,
@@ -60,9 +60,9 @@ class EventService {
   }
 
   Future<void> deleteEvent({
-    required String hubId,
+    required String gubId,
     required String eventId,
   }) async {
-    await EventRepository.instance.deleteEvent(hubId: hubId, eventId: eventId);
+    await EventRepository.instance.deleteEvent(gubId: gubId, eventId: eventId);
   }
 }

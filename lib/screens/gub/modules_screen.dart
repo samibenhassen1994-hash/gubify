@@ -3,19 +3,19 @@ import 'package:flutter/material.dart';
 
 import '../../modules/goals/screens/goals_screen.dart';
 import '../../modules/proposals/screens/proposals_screen.dart';
-import '../../modules/gub_calendar/screens/hub_calendar_screen.dart';
+import '../../modules/gub_calendar/screens/gub_calendar_screen.dart';
 
 class ModulesScreen extends StatelessWidget {
-  final String hubId;
+  final String gubId;
 
-  const ModulesScreen({super.key, required this.hubId});
+  const ModulesScreen({super.key, required this.gubId});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text("Active Modules")),
       body: FutureBuilder<DocumentSnapshot>(
-        future: FirebaseFirestore.instance.collection("gubs").doc(hubId).get(),
+        future: FirebaseFirestore.instance.collection("gubs").doc(gubId).get(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
@@ -83,7 +83,7 @@ class ModulesScreen extends StatelessWidget {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (_) => GoalsScreen(hubId: hubId),
+                            builder: (_) => GoalsScreen(gubId: gubId),
                           ),
                         );
                         break;
@@ -93,7 +93,7 @@ class ModulesScreen extends StatelessWidget {
                           context,
                           MaterialPageRoute(
                             builder: (_) => ProposalsScreen(
-                              hubId: hubId,
+                              gubId: gubId,
                               memberCount: memberCount,
                             ),
                           ),
@@ -104,7 +104,7 @@ class ModulesScreen extends StatelessWidget {
                           context,
                           MaterialPageRoute(
                             builder: (_) => GubCalendarScreen(
-                              hubId: hubId,
+                              gubId: gubId,
                               ownerId: ownerId,
                             ),
                           ),

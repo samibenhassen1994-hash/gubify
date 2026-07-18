@@ -7,12 +7,12 @@ import '../services/proposal_service.dart';
 import '../../../services/user_service.dart';
 
 class CreateProposalScreen extends StatefulWidget {
-  final String hubId;
+  final String gubId;
   final int memberCount;
 
   const CreateProposalScreen({
     super.key,
-    required this.hubId,
+    required this.gubId,
     required this.memberCount,
   });
 
@@ -201,7 +201,7 @@ class _CreateProposalScreenState extends State<CreateProposalScreen> {
                 debugPrint("CreatorName: $creatorName");
 
                 final proposal = ProposalModel(
-                  hubId: widget.hubId,
+                  gubId: widget.gubId,
                   proposalId: FirebaseFirestore.instance
                       .collection("temp")
                       .doc()
