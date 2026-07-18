@@ -28,7 +28,7 @@ class _GubAccessGuardState extends State<GubAccessGuard> {
     final uid = FirebaseAuth.instance.currentUser!.uid;
 
     _subscription = FirebaseFirestore.instance
-        .collection("hubs")
+        .collection("gubs")
         .doc(widget.hubId)
         .collection("members")
         .doc(uid)
@@ -51,7 +51,7 @@ class _GubAccessGuardState extends State<GubAccessGuard> {
     await FirebaseFirestore.instance
         .collection("users")
         .doc(uid)
-        .collection("hubs")
+        .collection("gubs")
         .doc(widget.hubId)
         .delete();
 

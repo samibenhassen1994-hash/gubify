@@ -25,7 +25,7 @@ class MyGubsScreen extends StatelessWidget {
                 future: FirebaseFirestore.instance
                     .collection("users")
                     .doc(uid)
-                    .collection("hubs")
+                    .collection("gubs")
                     .orderBy("joinedAt", descending: true)
                     .get(),
                 builder: (context, snapshot) {
@@ -99,7 +99,7 @@ class MyGubsScreen extends StatelessWidget {
                           ),
                           onTap: () async {
                             final memberDoc = await FirebaseFirestore.instance
-                                .collection("hubs")
+                                .collection("gubs")
                                 .doc(hubId)
                                 .collection("members")
                                 .doc(uid)
@@ -109,7 +109,7 @@ class MyGubsScreen extends StatelessWidget {
                               await FirebaseFirestore.instance
                                   .collection("users")
                                   .doc(uid)
-                                  .collection("hubs")
+                                  .collection("gubs")
                                   .doc(hubId)
                                   .delete();
 

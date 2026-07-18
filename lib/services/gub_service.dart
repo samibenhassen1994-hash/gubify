@@ -21,7 +21,7 @@ class GubService {
     }
 
     final ownedHubs = await _firestore
-        .collection("hubs")
+        .collection("gubs")
         .where("ownerId", isEqualTo: user.uid)
         .count()
         .get();
@@ -36,7 +36,7 @@ class GubService {
 
     final displayName = userData?["displayName"] ?? "User";
 
-    final hubRef = _firestore.collection("hubs").doc();
+    final hubRef = _firestore.collection("gubs").doc();
 
     final random = Random();
 
@@ -71,7 +71,7 @@ class GubService {
       _firestore
           .collection("users")
           .doc(user.uid)
-          .collection("hubs")
+          .collection("gubs")
           .doc(hubRef.id),
       {
         "hubId": hubRef.id,
@@ -104,7 +104,7 @@ class GubService {
 
     try {
       query = await _firestore
-          .collection("hubs")
+          .collection("gubs")
           .where("inviteCode", isEqualTo: inviteCode.trim().toUpperCase())
           .limit(1)
           .get();
@@ -134,7 +134,7 @@ class GubService {
     final hubId = hubDoc.id;
 
     final memberRef = _firestore
-        .collection("hubs")
+        .collection("gubs")
         .doc(hubId)
         .collection("members")
         .doc(user.uid);
@@ -153,7 +153,7 @@ class GubService {
       "joinedAt": FieldValue.serverTimestamp(),
     });
 
-    batch.update(_firestore.collection("hubs").doc(hubId), {
+    batch.update(_firestore.collection("gubs").doc(hubId), {
       "memberCount": FieldValue.increment(1),
     });
 
@@ -161,7 +161,7 @@ class GubService {
       _firestore
           .collection("users")
           .doc(user.uid)
-          .collection("hubs")
+          .collection("gubs")
           .doc(hubId),
       {
         "hubId": hubId,
@@ -199,7 +199,7 @@ class GubService {
       throw Exception("User not authenticated.");
     }
 
-    final hubDoc = await _firestore.collection("hubs").doc(hubId).get();
+    final hubDoc = await _firestore.collection("gubs").doc(hubId).get();
 
     if (!hubDoc.exists) {
       throw Exception("Hub not found.");
@@ -213,13 +213,13 @@ class GubService {
 
     final batch = _firestore.batch();
 
-    batch.delete(_firestore.collection("hubs").doc(hubId));
+    batch.delete(_firestore.collection("gubs").doc(hubId));
 
     batch.delete(
       _firestore
           .collection("users")
           .doc(user.uid)
-          .collection("hubs")
+          .collection("gubs")
           .doc(hubId),
     );
 
@@ -227,7 +227,7 @@ class GubService {
   }
   Stream<List<MemberOption>> membersStream(String hubId) {
     return _firestore
-        .collection("hubs")
+        .collection("gubs")
         .doc(hubId)
         .collection("members")
         .snapshots()
@@ -245,7 +245,7 @@ class GubService {
 
   Future<List<MemberOption>> getMembers(String hubId) async {
     final snapshot = await _firestore
-        .collection("hubs")
+        .collection("gubs")
         .doc(hubId)
         .collection("members")
         .get();

@@ -81,7 +81,7 @@ class GoalService {
     String hubId,
   ) async {
     final snapshot = await _firestore
-        .collection("hubs")
+        .collection("gubs")
         .doc(hubId)
         .collection("members")
         .get();

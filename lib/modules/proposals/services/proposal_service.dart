@@ -1,7 +1,7 @@
 import '../models/proposal_model.dart';
 import '../repositories/proposal_repository.dart';
 import 'proposal_engine.dart';
-import '../../hub_calendar/services/event_service.dart';
+import '../../gub_calendar/services/event_service.dart';
 import '../../notifications/services/notification_service.dart';
 
 class ProposalService {

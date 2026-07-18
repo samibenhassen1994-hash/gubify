@@ -1,7 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
-import '../../modules/hub_calendar/screens/hub_calendar_screen.dart';
+import '../../modules/gub_calendar/screens/hub_calendar_screen.dart';
 
 import '../../modules/proposals/repositories/proposal_repository.dart';
 import '../../modules/proposals/screens/proposal_details_screen.dart';
@@ -46,7 +46,7 @@ class NotificationRouter {
 
       case "calendar":
         final hubDoc = await FirebaseFirestore.instance
-            .collection("hubs")
+            .collection("gubs")
             .doc(hubId)
             .get();
 
@@ -58,7 +58,7 @@ class NotificationRouter {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (_) => HubCalendarScreen(
+            builder: (_) => GubCalendarScreen(
               hubId: hubId,
               ownerId: ownerId,
             ),

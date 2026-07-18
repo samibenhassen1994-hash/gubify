@@ -6,11 +6,11 @@ import '../../widgets/user_header.dart';
 import 'gub_screen.dart';
 
 class ModuleSelectionScreen extends StatefulWidget {
-  final String hubName;
+  final String gubName;
 
   const ModuleSelectionScreen({
     super.key,
-    required this.hubName,
+    required this.gubName,
   });
 
   @override
@@ -39,7 +39,7 @@ class _ModuleSelectionScreenState
 
     try {
       final hubId = await GubService().createHub(
-        name: widget.hubName,
+        name: widget.gubName,
         modules: _modules,
       );
 
@@ -185,7 +185,7 @@ const Text(
 const SizedBox(height: 4),
 
 Text(
-  widget.hubName,
+  widget.gubName,
   style: const TextStyle(
     fontSize: 16,
     color: Colors.black54,

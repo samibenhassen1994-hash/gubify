@@ -57,7 +57,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
       final displayName = userData?["displayName"] ?? "User";
 
       await FirebaseFirestore.instance
-          .collection("hubs")
+          .collection("gubs")
           .doc(widget.hubId)
           .collection("posts")
           .add({

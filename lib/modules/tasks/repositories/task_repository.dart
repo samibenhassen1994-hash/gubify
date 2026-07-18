@@ -11,7 +11,7 @@ class TaskRepository {
 
   CollectionReference<Map<String, dynamic>> tasksCollection(String hubId) {
     return _firestore
-        .collection("hubs")
+        .collection("gubs")
         .doc(hubId)
         .collection("tasks");
   }

@@ -58,7 +58,7 @@ class GoalMemberService {
 
     // Recupera il membro
     final memberDoc = await firestore
-        .collection("hubs")
+        .collection("gubs")
         .doc(hubId)
         .collection("goals")
         .doc(goalId)

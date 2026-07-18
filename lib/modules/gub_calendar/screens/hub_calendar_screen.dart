@@ -6,11 +6,11 @@ import '../services/event_service.dart';
 import '../widgets/calendar_day_header.dart';
 import '../widgets/calendar_event_card.dart';
 
-class HubCalendarScreen extends StatelessWidget {
+class GubCalendarScreen extends StatelessWidget {
   final String hubId;
   final String ownerId;
 
-  const HubCalendarScreen({
+  const GubCalendarScreen({
     super.key,
     required this.hubId,
     required this.ownerId,

@@ -10,7 +10,7 @@ class EventRepository {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   CollectionReference<Map<String, dynamic>> eventsCollection(String hubId) {
-    return _firestore.collection("hubs").doc(hubId).collection("events");
+    return _firestore.collection("gubs").doc(hubId).collection("events");
   }
 
   Future<void> createEvent(EventModel event) async {

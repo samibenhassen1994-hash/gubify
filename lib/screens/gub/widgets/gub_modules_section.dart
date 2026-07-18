@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../modules/goals/widgets/goal_home_card.dart';
-import '../../../modules/hub_calendar/widgets/hub_calendar_home_card.dart';
+import '../../../modules/gub_calendar/widgets/gub_calendar_home_card.dart';
 import '../../../modules/proposals/widgets/proposal_home_card.dart';
 import 'board_card.dart';
 

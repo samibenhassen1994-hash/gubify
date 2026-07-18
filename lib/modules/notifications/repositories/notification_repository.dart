@@ -12,7 +12,7 @@ class NotificationRepository {
   CollectionReference<Map<String, dynamic>> notificationsCollection(
     String hubId,
   ) {
-    return _firestore.collection("hubs").doc(hubId).collection("notifications");
+    return _firestore.collection("gubs").doc(hubId).collection("notifications");
   }
 
   Future<void> createNotification({

@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../../modules/goals/screens/goals_screen.dart';
 import '../../modules/proposals/screens/proposals_screen.dart';
-import '../../modules/hub_calendar/screens/hub_calendar_screen.dart';
+import '../../modules/gub_calendar/screens/hub_calendar_screen.dart';
 
 class ModulesScreen extends StatelessWidget {
   final String hubId;
@@ -15,7 +15,7 @@ class ModulesScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(title: const Text("Active Modules")),
       body: FutureBuilder<DocumentSnapshot>(
-        future: FirebaseFirestore.instance.collection("hubs").doc(hubId).get(),
+        future: FirebaseFirestore.instance.collection("gubs").doc(hubId).get(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
@@ -103,7 +103,7 @@ class ModulesScreen extends StatelessWidget {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (_) => HubCalendarScreen(
+                            builder: (_) => GubCalendarScreen(
                               hubId: hubId,
                               ownerId: ownerId,
                             ),

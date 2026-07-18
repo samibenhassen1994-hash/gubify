@@ -28,7 +28,7 @@ class InviteMembersScreen extends StatelessWidget {
 
           final hub = hubSnapshot.data!;
 
-          final String hubName = hub["name"] ?? "Hub";
+          final String gubName = hub["name"] ?? "Hub";
           final String inviteCode = hub["inviteCode"] ?? "";
 
           return Padding(
@@ -39,7 +39,7 @@ class InviteMembersScreen extends StatelessWidget {
                 const UserHeader(),
 
                 Text(
-                  hubName,
+                  gubName,
                   style: const TextStyle(
                     fontSize: 32,
                     fontWeight: FontWeight.bold,
@@ -115,7 +115,7 @@ class InviteMembersScreen extends StatelessWidget {
                       await SharePlus.instance.share(
                         ShareParams(
                           text:
-                              '🏠 Join my Hub "$hubName" on Gubify!\n\n'
+                              '🏠 Join my Hub "$gubName" on Gubify!\n\n'
                               'Download Gubify and enter this invite code:\n\n'
                               '$inviteCode',
                         ),
@@ -136,7 +136,7 @@ class InviteMembersScreen extends StatelessWidget {
                 Expanded(
                   child: StreamBuilder<QuerySnapshot>(
                     stream: FirebaseFirestore.instance
-                        .collection("hubs")
+                        .collection("gubs")
                         .doc(hubId)
                         .collection("members")
                         .snapshots(),

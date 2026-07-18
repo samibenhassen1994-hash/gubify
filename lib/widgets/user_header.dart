@@ -65,7 +65,7 @@ class UserHeader extends StatelessWidget {
               if (hubId != null)
                 StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
                   stream: FirebaseFirestore.instance
-                      .collection("hubs")
+                      .collection("gubs")
                       .doc(hubId)
                       .collection("notifications")
                       .snapshots(),

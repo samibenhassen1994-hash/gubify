@@ -12,7 +12,7 @@ class GoalMemberRepository {
     required String goalId,
   }) {
     return _firestore
-        .collection("hubs")
+        .collection("gubs")
         .doc(hubId)
         .collection("goals")
         .doc(goalId)
@@ -27,7 +27,7 @@ class GoalMemberRepository {
     required double amount,
   }) async {
     await _firestore
-        .collection("hubs")
+        .collection("gubs")
         .doc(hubId)
         .collection("goals")
         .doc(goalId)
@@ -47,7 +47,7 @@ class GoalMemberRepository {
     required String uid,
   }) async {
     await _firestore
-        .collection("hubs")
+        .collection("gubs")
         .doc(hubId)
         .collection("goals")
         .doc(goalId)

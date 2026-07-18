@@ -23,24 +23,24 @@ class _CreateGubScreenState extends State<CreateGubScreen> {
   }
 
   void _continue() {
-    final hubName = _nameController.text.trim();
+    final gubName = _nameController.text.trim();
 
-    if (hubName.length < AppLimits.hubNameMinLength) {
+    if (gubName.length < AppLimits.gubNameMinLength) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            "Gub name must be at least ${AppLimits.hubNameMinLength} characters.",
+            "Gub name must be at least ${AppLimits.gubNameMinLength} characters.",
           ),
         ),
       );
       return;
     }
 
-    if (hubName.length > AppLimits.hubNameMaxLength) {
+    if (gubName.length > AppLimits.gubNameMaxLength) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            "Gub name cannot exceed ${AppLimits.hubNameMaxLength} characters.",
+            "Gub name cannot exceed ${AppLimits.gubNameMaxLength} characters.",
           ),
         ),
       );
@@ -50,7 +50,7 @@ class _CreateGubScreenState extends State<CreateGubScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => ModuleSelectionScreen(hubName: hubName),
+        builder: (_) => ModuleSelectionScreen(gubName: gubName),
       ),
     );
   }
@@ -108,7 +108,7 @@ class _CreateGubScreenState extends State<CreateGubScreen> {
 
                 TextField(
                   controller: _nameController,
-                  maxLength: AppLimits.hubNameMaxLength,
+                  maxLength: AppLimits.gubNameMaxLength,
                   textInputAction: TextInputAction.done,
                   onSubmitted: (_) => _continue(),
                   inputFormatters: [

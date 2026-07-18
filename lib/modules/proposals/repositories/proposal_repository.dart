@@ -10,7 +10,7 @@ class ProposalRepository {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   CollectionReference<Map<String, dynamic>> proposalsCollection(String hubId) {
-    return _firestore.collection("hubs").doc(hubId).collection("proposals");
+    return _firestore.collection("gubs").doc(hubId).collection("proposals");
   }
 
   Future<void> createProposal(ProposalModel proposal) async {

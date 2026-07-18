@@ -3,8 +3,8 @@ class AppLimits {
 
   // Hub
   static const int freeMaxHubs = 3;
-  static const int hubNameMinLength = 3;
-  static const int hubNameMaxLength = 30;
+  static const int gubNameMinLength = 3;
+  static const int gubNameMaxLength = 30;
 
   // Posts
   static const int postMaxLength = 1000;

@@ -49,7 +49,7 @@ class BoardScreen extends StatelessWidget {
             Expanded(
               child: StreamBuilder<QuerySnapshot>(
                 stream: FirebaseFirestore.instance
-                    .collection("hubs")
+                    .collection("gubs")
                     .doc(hubId)
                     .collection("posts")
                     .orderBy("createdAt", descending: true)

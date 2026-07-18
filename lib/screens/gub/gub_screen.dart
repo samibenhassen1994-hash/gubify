@@ -46,7 +46,7 @@ class GubScreen extends StatelessWidget {
 
               final data = snapshot.data!.data()!;
 
-              final String hubName = data["name"] ?? "Hub";
+              final String gubName = data["name"] ?? "Hub";
               final String inviteCode = data["inviteCode"] ?? "";
               final String ownerId = data["ownerId"] ?? "";
               final int memberCount = data["memberCount"] ?? 1;
@@ -66,7 +66,7 @@ class GubScreen extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     GubPageHeader(
-                      title: hubName,
+                      title: gubName,
                       hubId: hubId,
                     ),
 

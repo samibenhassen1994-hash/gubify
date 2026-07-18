@@ -20,7 +20,7 @@ class MembersScreen extends StatelessWidget {
       appBar: AppBar(title: const Text("Members")),
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
-            .collection("hubs")
+            .collection("gubs")
             .doc(hubId)
             .collection("members")
             .orderBy("joinedAt")

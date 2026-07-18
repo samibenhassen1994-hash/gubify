@@ -29,7 +29,7 @@ class HubCalendarHomeCard extends StatelessWidget {
               context,
               MaterialPageRoute(
                 builder: (_) =>
-                    HubCalendarScreen(hubId: hubId, ownerId: ownerId),
+                    GubCalendarScreen(hubId: hubId, ownerId: ownerId),
               ),
             );
           },

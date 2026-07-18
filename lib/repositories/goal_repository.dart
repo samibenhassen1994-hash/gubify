@@ -11,7 +11,7 @@ class GoalRepository {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   CollectionReference<Map<String, dynamic>> goalsCollection(String hubId) {
-    return _firestore.collection("hubs").doc(hubId).collection("goals");
+    return _firestore.collection("gubs").doc(hubId).collection("goals");
   }
 
   /// Crea un nuovo obiettivo

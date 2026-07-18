@@ -19,7 +19,7 @@ class PostService {
 
     final displayName = userDoc.data()?["displayName"] ?? "Utente";
 
-    await _firestore.collection("hubs").doc(hubId).collection("posts").add({
+    await _firestore.collection("gubs").doc(hubId).collection("posts").add({
       "authorId": user.uid,
       "authorName": displayName,
       "message": message.trim(),

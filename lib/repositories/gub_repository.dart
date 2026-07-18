@@ -12,27 +12,27 @@ class GubRepository {
 
   /// Restituisce i dati dell'Hub.
   /// Se sono già in memoria, non interroga Firestore.
-  Future<Map<String, dynamic>?> getHub(String hubId) async {
+  Future<Map<String, dynamic>?> getHub(String gubId) async {
     // Cache
-    if (_hubCache.containsKey(hubId)) {
-      return _hubCache[hubId];
+    if (_hubCache.containsKey(gubId)) {
+      return _hubCache[gubId];
     }
 
-    final doc = await _firestore.collection("hubs").doc(hubId).get();
+    final doc = await _firestore.collection("gubs").doc(gubId).get();
 
     if (!doc.exists) return null;
 
     final data = doc.data();
 
     if (data != null) {
-      _hubCache[hubId] = data;
+      _hubCache[gubId] = data;
     }
 
     return data;
   }
 
   Stream<DocumentSnapshot<Map<String, dynamic>>> hubStream(String hubId) {
-    return _firestore.collection("hubs").doc(hubId).snapshots();
+    return _firestore.collection("gubs").doc(hubId).snapshots();
   }
 
   /// Aggiorna la cache dopo una modifica
