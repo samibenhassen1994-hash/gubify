@@ -37,6 +37,7 @@ flutter:
     - assets/illustrations/plant.png
     - assets/illustrations/sofa.png
     - assets/backgrounds/
+    - assets/images/
 
   fonts:
     - family: PlusJakartaSans

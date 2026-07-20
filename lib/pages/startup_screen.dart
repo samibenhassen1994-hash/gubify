@@ -23,14 +23,11 @@ class _StartupScreenState extends State<StartupScreen> {
   }
 
   Future<void> _start() async {
-    // Se non è autenticato, entra in modo anonimo
     if (_auth.currentUser == null) {
       await _auth.signInAnonymously();
     }
-    print("AUTH UID: ${_auth.currentUser?.uid}");
 
     final uid = _auth.currentUser!.uid;
-
     final exists = await _userService.userExists(uid);
 
     if (!mounted) return;
@@ -52,7 +49,12 @@ class _StartupScreenState extends State<StartupScreen> {
   Widget build(BuildContext context) {
     return const Scaffold(
       backgroundColor: Color(0xFF04091A),
-      body: Center(child: CircularProgressIndicator(color: Colors.white)),
+      body: Center(
+        child: CircularProgressIndicator(
+          color: Colors.white,
+          strokeWidth: 2.5,
+        ),
+      ),
     );
   }
 }

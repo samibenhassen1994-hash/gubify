@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 
-class GubifyBackground extends StatelessWidget {
+class StartupArtworkBackground extends StatelessWidget {
   final Widget child;
 
-  const GubifyBackground({super.key, required this.child});
+  const StartupArtworkBackground({
+    super.key,
+    required this.child,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -12,12 +15,15 @@ class GubifyBackground extends StatelessWidget {
         children: [
           Positioned.fill(
             child: Image.asset(
-              'assets/backgrounds/welcome_background.png',
+              'assets/images/startup_background.png',
               fit: BoxFit.cover,
+              filterQuality: FilterQuality.high,
             ),
           ),
 
-          child,
+          SafeArea(
+            child: child,
+          ),
         ],
       ),
     );

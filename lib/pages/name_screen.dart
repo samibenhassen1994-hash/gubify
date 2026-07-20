@@ -4,8 +4,7 @@ import 'package:flutter/material.dart';
 import '../modules/legal/privacy_policy_screen.dart';
 import '../modules/legal/terms_screen.dart';
 import '../services/auth_service.dart';
-import '../widgets/gubify_background.dart';
-import '../widgets/gubify_logo.dart';
+import '../widgets/startup_artwork_background.dart';
 import '../screens/welcome_screen.dart';
 import 'package:flutter/services.dart';
 
@@ -30,37 +29,44 @@ class _NameScreenState extends State<NameScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return GubifyBackground(
+    return StartupArtworkBackground(
       child: SafeArea(
         child: Center(
           child: SingleChildScrollView(
             padding: const EdgeInsets.symmetric(horizontal: 30),
             child: Column(
               children: [
-                GubifyLogo(width: MediaQuery.of(context).size.width * 0.7),
-                const SizedBox(height: 35),
-                const Text(
-                  'Welcome!',
-                  style: TextStyle(
-                    fontSize: 38,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: .4,
-                    color: Colors.white,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  "Before creating or joining a Gub,\nlet's get to know you.",
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: .75),
-                    fontSize: 16,
-                  ),
-                ),
-                const SizedBox(height: 45),
+                
+                SizedBox(
+  height: MediaQuery.of(context).size.height * 0.52,
+),
+                Container(
+  padding: const EdgeInsets.fromLTRB(
+  18,
+  16,
+  18,
+  16,
+),
+  decoration: BoxDecoration(
+    color: Colors.white,
+    borderRadius: BorderRadius.circular(22),
+    boxShadow: [
+      BoxShadow(
+        color: Colors.black.withValues(alpha: .08),
+        blurRadius: 20,
+        offset: const Offset(0, 8),
+      ),
+    ],
+  ),
+  child: Column(
+    mainAxisSize: MainAxisSize.min,
+    children: [
                 TextField(
                   controller: _controller,
-                  style: const TextStyle(color: Colors.white),
+                  style: const TextStyle(
+  color: Colors.black87,
+  fontSize: 17,
+),
                   textCapitalization: TextCapitalization.words,
                   maxLength: 22,
 
@@ -70,21 +76,28 @@ class _NameScreenState extends State<NameScreen> {
                    RegExp(r"[a-zA-ZÀ-ÖØ-öø-ÿ0-9 ]"),
                        ),
                      ],
+                     
                   decoration: InputDecoration(
+                    prefixIcon: const Icon(
+  Icons.person_outline_rounded,
+  color: Color(0xFF6B7280),
+),
                     counterText: '',
                     hintText: 'Your name',
-                    hintStyle: TextStyle(
-                      color: Colors.white.withValues(alpha: .45),
-                    ),
+                    hintStyle: const TextStyle(
+  color: Colors.black45,
+),
                     filled: true,
-                    fillColor: Colors.white.withValues(alpha: .05),
+                    fillColor: Colors.white,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(16),
                       borderSide: BorderSide.none,
                     ),
                   ),
+                  
                 ),
-                const SizedBox(height: 28),
+                const SizedBox(height: 1),
 
 Row(
   crossAxisAlignment: CrossAxisAlignment.start,
@@ -113,7 +126,7 @@ Row(
         child: RichText(
           text: TextSpan(
             style: TextStyle(
-              color: Colors.white.withValues(alpha: .75),
+              color: Colors.black87,
               fontSize: 13,
               height: 1.45,
             ),
@@ -173,7 +186,7 @@ Row(
   ],
 ),
 
-const SizedBox(height: 30),
+const SizedBox(height: 14),
                SizedBox(
   width: double.infinity,
   height: 56,
@@ -181,9 +194,9 @@ const SizedBox(height: 30),
     style: ElevatedButton.styleFrom(
       elevation: 0,
       backgroundColor: const Color(0xFF3B82F6),
-      disabledBackgroundColor: Colors.white.withValues(alpha: .15),
+      disabledBackgroundColor: const Color(0xFFE5E7EB),
       foregroundColor: Colors.white,
-      disabledForegroundColor: Colors.white.withValues(alpha: .45),
+      disabledForegroundColor: const Color(0xFF9CA3AF),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
       ),
@@ -287,11 +300,16 @@ if (name.contains(RegExp(r'\s{2,}'))) {
     ),
   ),
 ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
+                     ], // children della Column interna
+                  ),   // Column interna
+                ),     // Container
+
+              ],       // children della Column esterna
+            ),         // Column esterna
+          ),           // SingleChildScrollView
+        ),             // Center
+      ),               // SafeArea
+    );                 // StartupArtworkBackground
   }
 }
+
