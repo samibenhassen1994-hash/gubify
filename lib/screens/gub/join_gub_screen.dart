@@ -69,96 +69,103 @@ class _JoinGubScreenState extends State<JoinGubScreen> {
     return Scaffold(
       body: GubHomeBackground(
         child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              children: [
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: IconButton(
-                    icon: const Icon(Icons.arrow_back),
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                ),
+          child: CustomScrollView(
+            slivers: [
+              SliverFillRemaining(
+                hasScrollBody: false,
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    children: [
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: IconButton(
+                          icon: const Icon(Icons.arrow_back),
+                          onPressed: () => Navigator.pop(context),
+                        ),
+                      ),
 
-                const UserHeader(),
+                      const UserHeader(),
 
-                const SizedBox(height: 30),
+                      const SizedBox(height: 30),
 
-                const Icon(
-                  Icons.hub_outlined,
-                  size: 82,
-                  color: Color(0xFF2563EB),
-                ),
+                      const Icon(
+                        Icons.hub_outlined,
+                        size: 82,
+                        color: Color(0xFF2563EB),
+                      ),
 
-                const SizedBox(height: 30),
+                      const SizedBox(height: 30),
 
-                const Text(
-                  "Join a Gub",
-                  style: TextStyle(
-                    fontSize: 32,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
+                      const Text(
+                        "Join a Gub",
+                        style: TextStyle(
+                          fontSize: 32,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
 
-                const SizedBox(height: 10),
+                      const SizedBox(height: 10),
 
-                const Text(
-                  "Enter the invitation code shared with you.",
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: Colors.grey,
-                    height: 1.5,
-                  ),
-                ),
+                      const Text(
+                        "Enter the invitation code shared with you.",
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: Colors.grey,
+                          height: 1.5,
+                        ),
+                      ),
 
-                const SizedBox(height: 30),
+                      const SizedBox(height: 30),
 
-                TextField(
-                  controller: _controller,
-                  maxLength: AppLimits.inviteCodeLength,
-                  textCapitalization: TextCapitalization.characters,
-                  textInputAction: TextInputAction.done,
-                  onSubmitted: (_) => _joinHub(),
-                  inputFormatters: [
-                    FilteringTextInputFormatter.allow(
-                      RegExp(r'[A-Za-z0-9-]'),
-                    ),
-                  ],
-                  decoration: const InputDecoration(
-                    labelText: "Invitation Code",
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.vpn_key),
-                  ),
-                ),
-
-                const Spacer(),
-
-                SizedBox(
-                  width: double.infinity,
-                  height: 55,
-                  child: FilledButton(
-                    onPressed: _loading ? null : _joinHub,
-                    child: _loading
-                        ? const SizedBox(
-                            width: 24,
-                            height: 24,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 3,
-                              color: Colors.white,
-                            ),
-                          )
-                        : const Text(
-                            "Join Gub",
-                            style: TextStyle(fontSize: 17),
+                      TextField(
+                        controller: _controller,
+                        maxLength: AppLimits.inviteCodeLength,
+                        textCapitalization: TextCapitalization.characters,
+                        textInputAction: TextInputAction.done,
+                        onSubmitted: (_) => _joinHub(),
+                        inputFormatters: [
+                          FilteringTextInputFormatter.allow(
+                            RegExp(r'[A-Za-z0-9-]'),
                           ),
+                        ],
+                        decoration: const InputDecoration(
+                          labelText: "Invitation Code",
+                          border: OutlineInputBorder(),
+                          prefixIcon: Icon(Icons.vpn_key),
+                        ),
+                      ),
+
+                      const Spacer(),
+
+                      SizedBox(
+                        width: double.infinity,
+                        height: 55,
+                        child: FilledButton(
+                          onPressed: _loading ? null : _joinHub,
+                          child: _loading
+                              ? const SizedBox(
+                                  width: 24,
+                                  height: 24,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 3,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : const Text(
+                                  "Join Gub",
+                                  style: TextStyle(fontSize: 17),
+                                ),
+                        ),
+                      ),
+
+                      const SizedBox(height: 20),
+                    ],
                   ),
                 ),
-
-                const SizedBox(height: 20),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),

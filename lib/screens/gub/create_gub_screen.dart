@@ -60,82 +60,89 @@ class _CreateGubScreenState extends State<CreateGubScreen> {
     return Scaffold(
       body: GubHomeBackground(
         child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              children: [
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: IconButton(
-                    icon: const Icon(Icons.arrow_back),
-                    onPressed: () => Navigator.pop(context),
+          child: CustomScrollView(
+            slivers: [
+              SliverFillRemaining(
+                hasScrollBody: false,
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    children: [
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: IconButton(
+                          icon: const Icon(Icons.arrow_back),
+                          onPressed: () => Navigator.pop(context),
+                        ),
+                      ),
+
+                      const UserHeader(),
+
+                      const SizedBox(height: 30),
+
+                      const Icon(
+                        Icons.hub_outlined,
+                        size: 82,
+                        color: Color(0xFF2563EB),
+                      ),
+
+                      const SizedBox(height: 30),
+
+                      const Text(
+                        "Create your Gub",
+                        style: TextStyle(
+                          fontSize: 32,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+
+                      const SizedBox(height: 10),
+
+                      const Text(
+                        "Start by choosing a name for your Gub.",
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: Colors.grey,
+                          height: 1.5,
+                        ),
+                      ),
+
+                      const SizedBox(height: 30),
+
+                      TextField(
+                        controller: _nameController,
+                        maxLength: AppLimits.gubNameMaxLength,
+                        textInputAction: TextInputAction.done,
+                        onSubmitted: (_) => _continue(),
+                        inputFormatters: [
+                          FilteringTextInputFormatter.allow(
+                            RegExp(r"[a-zA-Z0-9À-ÿ '\-_]"),
+                          ),
+                        ],
+                        decoration: const InputDecoration(
+                          labelText: "Choose a name",
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+
+                      const Spacer(),
+
+                      SizedBox(
+                        width: double.infinity,
+                        height: 55,
+                        child: FilledButton(
+                          onPressed: _continue,
+                          child: const Text("Continue"),
+                        ),
+                      ),
+
+                      const SizedBox(height: 20),
+                    ],
                   ),
                 ),
-
-                const UserHeader(),
-
-                const SizedBox(height: 30),
-
-                const Icon(
-                  Icons.hub_outlined,
-                  size: 82,
-                  color: Color(0xFF2563EB),
-                ),
-
-                const SizedBox(height: 30),
-
-                const Text(
-                  "Create your Gub",
-                  style: TextStyle(
-                    fontSize: 32,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-
-                const SizedBox(height: 10),
-
-                const Text(
-                  "Start by choosing a name for your Gub.",
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: Colors.grey,
-                    height: 1.5,
-                  ),
-                ),
-
-                const SizedBox(height: 30),
-
-                TextField(
-                  controller: _nameController,
-                  maxLength: AppLimits.gubNameMaxLength,
-                  textInputAction: TextInputAction.done,
-                  onSubmitted: (_) => _continue(),
-                  inputFormatters: [
-                    FilteringTextInputFormatter.allow(
-                      RegExp(r"[a-zA-Z0-9À-ÿ '\-_]"),
-                    ),
-                  ],
-                  decoration: const InputDecoration(
-                    labelText: "Choose a name",
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-
-                const Spacer(),
-
-                SizedBox(
-                  width: double.infinity,
-                  height: 55,
-                  child: FilledButton(
-                    onPressed: _continue,
-                    child: const Text("Continue"),
-                  ),
-                ),
-
-                const SizedBox(height: 20),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
