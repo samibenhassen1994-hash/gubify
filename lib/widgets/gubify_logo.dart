@@ -5,7 +5,7 @@ class GubifyLogo extends StatelessWidget {
 
   const GubifyLogo({
     super.key,
-    this.width = 220,
+    required this.width,
   });
 
   @override
@@ -15,8 +15,6 @@ class GubifyLogo extends StatelessWidget {
       width: width,
       fit: BoxFit.contain,
       filterQuality: FilterQuality.high,
-      isAntiAlias: true,
-      gaplessPlayback: true,
     );
   }
 }

@@ -2,7 +2,7 @@ import 'dart:math';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import '../../../core/models/member_option.dart';
+import '../core/models/member_option.dart';
 import '../config/app_limits.dart';
 import '../repositories/user_repository.dart';
 
