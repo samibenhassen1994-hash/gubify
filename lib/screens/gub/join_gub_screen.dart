@@ -16,17 +16,63 @@ class JoinGubScreen extends StatefulWidget {
 
 class _JoinGubScreenState extends State<JoinGubScreen> {
   final TextEditingController _controller = TextEditingController();
+  final FocusNode _inviteCodeFocusNode = FocusNode();
+  final ScrollController _scrollController = ScrollController();
+  final GlobalKey _inviteCodeFieldKey = GlobalKey();
+
+  double _largestViewportHeight = 0;
+  bool _scrollScheduled = false;
 
   bool _loading = false;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _inviteCodeFocusNode.addListener(() {
+      if (_inviteCodeFocusNode.hasFocus) {
+        _scheduleBringFieldIntoView();
+      }
+    });
+  }
+
+  void _scheduleBringFieldIntoView() {
+    if (_scrollScheduled) return;
+
+    _scrollScheduled = true;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await Future<void>.delayed(const Duration(milliseconds: 250));
+
+      if (!mounted || !_inviteCodeFocusNode.hasFocus) {
+        _scrollScheduled = false;
+        return;
+      }
+
+      final fieldContext = _inviteCodeFieldKey.currentContext;
+
+      if (fieldContext == null || !fieldContext.mounted) {
+        _scrollScheduled = false;
+        return;
+      }
+
+      await Scrollable.ensureVisible(
+        fieldContext,
+        alignment: 0.65,
+        duration: const Duration(milliseconds: 280),
+        curve: Curves.easeOutCubic,
+      );
+
+      _scrollScheduled = false;
+    });
+  }
 
   Future<void> _joinHub() async {
     final inviteCode = _controller.text.trim();
 
     if (inviteCode.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Please enter a Gub invite code."),
-        ),
+        const SnackBar(content: Text("Please enter a Gub invite code.")),
       );
       return;
     }
@@ -38,19 +84,19 @@ class _JoinGubScreenState extends State<JoinGubScreen> {
 
       if (!mounted) return;
 
+      FocusManager.instance.primaryFocus?.unfocus();
+
       Navigator.pushAndRemoveUntil(
         context,
-        MaterialPageRoute(
-          builder: (_) => GubScreen(gubId: gubId),
-        ),
+        MaterialPageRoute(builder: (_) => GubScreen(gubId: gubId)),
         (_) => false,
       );
     } catch (e) {
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString())),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(e.toString())));
     } finally {
       if (mounted) {
         setState(() => _loading = false);
@@ -61,111 +107,155 @@ class _JoinGubScreenState extends State<JoinGubScreen> {
   @override
   void dispose() {
     _controller.dispose();
+    _inviteCodeFocusNode.dispose();
+    _scrollController.dispose();
     super.dispose();
+  }
+
+  void _goBack() {
+    FocusManager.instance.primaryFocus?.unfocus();
+    Navigator.pop(context);
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      resizeToAvoidBottomInset: true,
       body: GubHomeBackground(
         child: SafeArea(
-          child: CustomScrollView(
-            slivers: [
-              SliverFillRemaining(
-                hasScrollBody: false,
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    children: [
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: IconButton(
-                          icon: const Icon(Icons.arrow_back),
-                          onPressed: () => Navigator.pop(context),
-                        ),
-                      ),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              if (constraints.maxHeight > _largestViewportHeight) {
+                _largestViewportHeight = constraints.maxHeight;
+              }
 
-                      const UserHeader(),
+              final keyboardOccupiedHeight =
+                  (_largestViewportHeight - constraints.maxHeight)
+                      .clamp(0.0, double.infinity)
+                      .toDouble();
 
-                      const SizedBox(height: 30),
+              final keyboardIsOpen = keyboardOccupiedHeight > 40;
 
-                      const Icon(
-                        Icons.hub_outlined,
-                        size: 82,
-                        color: Color(0xFF2563EB),
-                      ),
+              final minimumContentHeight = (constraints.maxHeight - 48)
+                  .clamp(0.0, double.infinity)
+                  .toDouble();
 
-                      const SizedBox(height: 30),
+              if (_inviteCodeFocusNode.hasFocus && keyboardIsOpen) {
+                _scheduleBringFieldIntoView();
+              }
 
-                      const Text(
-                        "Join a Gub",
-                        style: TextStyle(
-                          fontSize: 32,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-
-                      const SizedBox(height: 10),
-
-                      const Text(
-                        "Enter the invitation code shared with you.",
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 16,
-                          color: Colors.grey,
-                          height: 1.5,
-                        ),
-                      ),
-
-                      const SizedBox(height: 30),
-
-                      TextField(
-                        controller: _controller,
-                        maxLength: AppLimits.inviteCodeLength,
-                        textCapitalization: TextCapitalization.characters,
-                        textInputAction: TextInputAction.done,
-                        onSubmitted: (_) => _joinHub(),
-                        inputFormatters: [
-                          FilteringTextInputFormatter.allow(
-                            RegExp(r'[A-Za-z0-9-]'),
+              return SingleChildScrollView(
+                controller: _scrollController,
+                keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior.manual,
+                padding: EdgeInsets.fromLTRB(
+                  24,
+                  24,
+                  24,
+                  24 + keyboardOccupiedHeight,
+                ),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minHeight: minimumContentHeight),
+                  child: IntrinsicHeight(
+                    child: Column(
+                      children: [
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: IconButton(
+                            icon: const Icon(Icons.arrow_back),
+                            onPressed: _goBack,
                           ),
-                        ],
-                        decoration: const InputDecoration(
-                          labelText: "Invitation Code",
-                          border: OutlineInputBorder(),
-                          prefixIcon: Icon(Icons.vpn_key),
                         ),
-                      ),
 
-                      const Spacer(),
+                        const UserHeader(),
 
-                      SizedBox(
-                        width: double.infinity,
-                        height: 55,
-                        child: FilledButton(
-                          onPressed: _loading ? null : _joinHub,
-                          child: _loading
-                              ? const SizedBox(
-                                  width: 24,
-                                  height: 24,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 3,
-                                    color: Colors.white,
+                        const SizedBox(height: 30),
+
+                        const Icon(
+                          Icons.hub_outlined,
+                          size: 82,
+                          color: Color(0xFF2563EB),
+                        ),
+
+                        const SizedBox(height: 30),
+
+                        const Text(
+                          "Join a Gub",
+                          style: TextStyle(
+                            fontSize: 32,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+
+                        const SizedBox(height: 10),
+
+                        const Text(
+                          "Enter the invitation code shared with you.",
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: Colors.grey,
+                            height: 1.5,
+                          ),
+                        ),
+
+                        const SizedBox(height: 30),
+
+                        Container(
+                          key: _inviteCodeFieldKey,
+                          child: TextField(
+                            controller: _controller,
+                            focusNode: _inviteCodeFocusNode,
+                            maxLength: AppLimits.inviteCodeLength,
+                            textCapitalization: TextCapitalization.characters,
+                            textInputAction: TextInputAction.done,
+                            onSubmitted: (_) => _joinHub(),
+                            inputFormatters: [
+                              FilteringTextInputFormatter.allow(
+                                RegExp(r'[A-Za-z0-9-]'),
+                              ),
+                            ],
+                            decoration: const InputDecoration(
+                              labelText: "Invitation Code",
+                              border: OutlineInputBorder(),
+                              prefixIcon: Icon(Icons.vpn_key),
+                            ),
+                          ),
+                        ),
+
+                        if (keyboardIsOpen)
+                          const SizedBox(height: 16)
+                        else
+                          const Spacer(),
+
+                        SizedBox(
+                          width: double.infinity,
+                          height: 55,
+                          child: FilledButton(
+                            onPressed: _loading ? null : _joinHub,
+                            child: _loading
+                                ? const SizedBox(
+                                    width: 24,
+                                    height: 24,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 3,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                : const Text(
+                                    "Join Gub",
+                                    style: TextStyle(fontSize: 17),
                                   ),
-                                )
-                              : const Text(
-                                  "Join Gub",
-                                  style: TextStyle(fontSize: 17),
-                                ),
+                          ),
                         ),
-                      ),
 
-                      const SizedBox(height: 20),
-                    ],
+                        const SizedBox(height: 20),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-            ],
+              );
+            },
           ),
         ),
       ),
