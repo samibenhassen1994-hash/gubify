@@ -1,0 +1,57 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
+import '../models/chat_message_model.dart';
+
+class ChatRepository {
+  ChatRepository._();
+
+  static final ChatRepository instance = ChatRepository._();
+
+  static const int _messageLimit = 50;
+
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+
+  CollectionReference<Map<String, dynamic>> messagesCollection(String gubId) {
+    return _firestore.collection("gubs").doc(gubId).collection("messages");
+  }
+
+  Future<void> sendMessage({
+    required String gubId,
+    required String senderId,
+    required String senderName,
+    required String text,
+  }) async {
+    final messageReference = messagesCollection(gubId).doc();
+    final message = ChatMessageModel(
+      messageId: messageReference.id,
+      gubId: gubId,
+      senderId: senderId,
+      senderName: senderName,
+      text: text,
+      createdAt: Timestamp.now(),
+    );
+    final data = message.toFirestore()
+      ..["createdAt"] = FieldValue.serverTimestamp();
+
+    await messageReference.set(data);
+  }
+
+  Stream<List<ChatMessageModel>> messagesStream(String gubId) {
+    return messagesCollection(gubId)
+        .orderBy("createdAt", descending: true)
+        .limit(_messageLimit)
+        .snapshots()
+        .map(
+          (snapshot) => snapshot.docs
+              .map((document) {
+                final data = Map<String, dynamic>.from(document.data());
+                data["messageId"] = document.id;
+
+                return ChatMessageModel.fromFirestore(data);
+              })
+              .toList(growable: false)
+              .reversed
+              .toList(growable: false),
+        );
+  }
+}
