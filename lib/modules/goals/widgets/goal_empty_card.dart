@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../screens/create_goal_screen.dart';
+import '../screens/goals_screen.dart';
 
 class GoalEmptyCard extends StatelessWidget {
   final bool isOwner;
@@ -33,25 +34,44 @@ class GoalEmptyCard extends StatelessWidget {
           style: TextStyle(color: Colors.grey),
         ),
 
-        if (isOwner) ...[
-          const SizedBox(height: 20),
+        const SizedBox(height: 20),
 
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton.icon(
-              icon: const Icon(Icons.add),
-              label: const Text("Create Budget"),
+        Wrap(
+          alignment: WrapAlignment.center,
+          spacing: 10,
+          runSpacing: 10,
+          children: [
+            if (isOwner)
+              FilledButton.icon(
+                icon: const Icon(Icons.add),
+                label: const Text("Create Budget"),
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => CreateGoalScreen(gubId: gubId),
+                    ),
+                  );
+                },
+              ),
+            OutlinedButton.icon(
+              icon: const Icon(Icons.archive_outlined),
+              label: const Text("Archive"),
               onPressed: () {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => CreateGoalScreen(gubId: gubId),
+                    builder: (_) => GoalsScreen(
+                      gubId: gubId,
+                      initialTab: SharedBudgetInitialTab.archive,
+                      canCreateBudget: isOwner,
+                    ),
                   ),
                 );
               },
             ),
-          ),
-        ],
+          ],
+        ),
       ],
     );
   }

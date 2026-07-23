@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 
+import '../../../core/formatters/monetary_amount_input_formatter.dart';
 import '../services/goal_service.dart';
 
 class CreateGoalScreen extends StatefulWidget {
@@ -411,6 +413,8 @@ class _CreateGoalScreenState extends State<CreateGoalScreen> {
                         child: TextField(
                           controller: _titleController,
                           focusNode: _titleFocusNode,
+                          maxLength: 100,
+                          maxLengthEnforcement: MaxLengthEnforcement.enforced,
                           textInputAction: TextInputAction.next,
                           onSubmitted: (_) {
                             _descriptionFocusNode.requestFocus();
@@ -433,6 +437,8 @@ class _CreateGoalScreenState extends State<CreateGoalScreen> {
                           keyboardType: TextInputType.multiline,
                           minLines: 3,
                           maxLines: 5,
+                          maxLength: 500,
+                          maxLengthEnforcement: MaxLengthEnforcement.enforced,
                           decoration: _inputDecoration(
                             label: "Description",
                             hint: "Explain what the Shared Budget is for",
@@ -451,6 +457,9 @@ class _CreateGoalScreenState extends State<CreateGoalScreen> {
                           keyboardType: const TextInputType.numberWithOptions(
                             decimal: true,
                           ),
+                          inputFormatters: const [
+                            MonetaryAmountInputFormatter(),
+                          ],
                           textInputAction: TextInputAction.done,
                           onSubmitted: (_) {
                             if (!_isLoading) {

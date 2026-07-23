@@ -2,10 +2,12 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import '../models/goal_model.dart';
 import '../services/goal_member_service.dart';
+import '../services/goal_service.dart';
 import 'my_contribution_screen.dart';
 
-class GoalMembersScreen extends StatelessWidget {
+class GoalMembersScreen extends StatefulWidget {
   final String gubId;
   final String goalId;
   final String ownerId;
@@ -18,114 +20,264 @@ class GoalMembersScreen extends StatelessWidget {
   });
 
   @override
+  State<GoalMembersScreen> createState() => _GoalMembersScreenState();
+}
+
+class _GoalMembersScreenState extends State<GoalMembersScreen> {
+  final Set<String> _confirmingMemberIds = {};
+
+  Future<void> _confirmContribution({
+    required String uid,
+    required String memberName,
+    required double amount,
+    required String confirmedById,
+  }) async {
+    if (_confirmingMemberIds.contains(uid)) return;
+
+    final shouldConfirm = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text("Confirm contribution?"),
+        content: Text(
+          "Confirm $memberName’s contribution of "
+          "€${amount.toStringAsFixed(2)}?",
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text("Cancel"),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text("Confirm"),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldConfirm != true || !mounted) return;
+
+    setState(() => _confirmingMemberIds.add(uid));
+
+    try {
+      await GoalMemberService.instance.confirmContribution(
+        gubId: widget.gubId,
+        goalId: widget.goalId,
+        uid: uid,
+        confirmedById: confirmedById,
+      );
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(_errorMessage(error))));
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _confirmingMemberIds.remove(uid));
+      }
+    }
+  }
+
+  String _errorMessage(Object error) {
+    return error
+        .toString()
+        .replaceFirst("Bad state: ", "")
+        .replaceFirst("Invalid argument(s): ", "");
+  }
+
+  @override
   Widget build(BuildContext context) {
     final currentUser = FirebaseAuth.instance.currentUser;
-
-    final isOwner = currentUser != null && currentUser.uid == ownerId;
+    final isOwner = currentUser != null && currentUser.uid == widget.ownerId;
 
     return Scaffold(
       appBar: AppBar(title: const Text("Participants")),
-      body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-        stream: GoalMemberService.instance.membersStream(
-          gubId: gubId,
-          goalId: goalId,
+      body: StreamBuilder<GoalModel?>(
+        stream: GoalService.instance.goalStream(
+          gubId: widget.gubId,
+          goalId: widget.goalId,
         ),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
+        builder: (context, goalSnapshot) {
+          if (goalSnapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
 
-          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-            return const Center(child: Text("No participants found."));
+          final goal = goalSnapshot.data;
+
+          if (goal == null) {
+            return const Center(
+              child: Text("This Shared Budget is no longer available."),
+            );
           }
 
-          final members = snapshot.data!.docs;
-
-          return ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: members.length,
-            itemBuilder: (context, index) {
-              final data = members[index].data();
-
-              final uid = data["uid"];
-
-              final amount = (data["amount"] ?? 0).toDouble();
-
-              final confirmed = data["confirmed"] ?? false;
-
-              final isMe = currentUser != null && currentUser.uid == uid;
-
-              String status;
-              Color statusColor;
-
-              if (confirmed) {
-                status = "Confirmed";
-                statusColor = Colors.green;
-              } else if (amount > 0) {
-                status = "Waiting for confirmation";
-                statusColor = Colors.orange;
-              } else {
-                status = "Not submitted";
-                statusColor = Colors.grey;
+          return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+            stream: GoalMemberService.instance.membersStream(
+              gubId: widget.gubId,
+              goalId: widget.goalId,
+            ),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
               }
 
-              return Card(
-                margin: const EdgeInsets.only(bottom: 12),
-                child: ListTile(
-                  onTap: isMe
-                      ? () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => MyContributionScreen(
-                                gubId: gubId,
-                                goalId: goalId,
-                              ),
+              if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                return const Center(child: Text("No participants found."));
+              }
+
+              final members = snapshot.data!.docs;
+
+              return ListView.builder(
+                padding: const EdgeInsets.all(16),
+                itemCount: members.length,
+                itemBuilder: (context, index) {
+                  final data = members[index].data();
+                  final uid = data["uid"] as String? ?? "";
+                  final memberName = data["displayName"] as String? ?? "User";
+                  final amount = (data["amount"] as num?)?.toDouble() ?? 0;
+                  final confirmed = data["confirmed"] as bool? ?? false;
+                  final isMe = currentUser != null && currentUser.uid == uid;
+                  final isConfirming = _confirmingMemberIds.contains(uid);
+                  final canConfirm =
+                      isOwner &&
+                      !goal.isCompleted &&
+                      !goal.archived &&
+                      !confirmed &&
+                      amount > 0;
+
+                  String status;
+                  Color statusColor;
+
+                  if (confirmed) {
+                    status = "Confirmed";
+                    statusColor = Colors.green;
+                  } else if (amount > 0) {
+                    status = "Waiting for confirmation";
+                    statusColor = Colors.orange;
+                  } else {
+                    status = "Not submitted";
+                    statusColor = Colors.grey;
+                  }
+
+                  return Card(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    clipBehavior: Clip.antiAlias,
+                    child: InkWell(
+                      onTap: isMe
+                          ? () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => MyContributionScreen(
+                                    gubId: widget.gubId,
+                                    goalId: widget.goalId,
+                                  ),
+                                ),
+                              );
+                            }
+                          : null,
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                CircleAvatar(
+                                  child: Text(
+                                    memberName.isEmpty
+                                        ? "U"
+                                        : memberName[0].toUpperCase(),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        memberName,
+                                        style: Theme.of(
+                                          context,
+                                        ).textTheme.titleMedium,
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        "Contribution: "
+                                        "€${amount.toStringAsFixed(2)}",
+                                      ),
+                                      if (!confirmed) ...[
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          status,
+                                          style: TextStyle(
+                                            color: statusColor,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                ),
+                                if (isMe && !confirmed)
+                                  const Icon(Icons.edit, color: Colors.blue),
+                              ],
                             ),
-                          );
-                        }
-                      : null,
-                  leading: CircleAvatar(
-                    child: Text((data["displayName"] ?? "U")[0].toUpperCase()),
-                  ),
-                  title: Text(data["displayName"] ?? "User"),
-                  subtitle: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const SizedBox(height: 4),
-                      Text("Contribution: €${amount.toStringAsFixed(2)}"),
-                      const SizedBox(height: 4),
-                      Text(
-                        status,
-                        style: TextStyle(
-                          color: statusColor,
-                          fontWeight: FontWeight.w600,
+                            if (confirmed) ...[
+                              const SizedBox(height: 12),
+                              const Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.check_circle_rounded,
+                                    color: Colors.green,
+                                    size: 21,
+                                  ),
+                                  SizedBox(width: 6),
+                                  Text(
+                                    "Confirmed",
+                                    style: TextStyle(
+                                      color: Colors.green,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ] else if (canConfirm) ...[
+                              const SizedBox(height: 12),
+                              Align(
+                                alignment: Alignment.centerLeft,
+                                child: FilledButton.icon(
+                                  onPressed: isConfirming
+                                      ? null
+                                      : () => _confirmContribution(
+                                          uid: uid,
+                                          memberName: memberName,
+                                          amount: amount,
+                                          confirmedById: widget.ownerId,
+                                        ),
+                                  icon: isConfirming
+                                      ? const SizedBox.square(
+                                          dimension: 18,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            color: Colors.white,
+                                          ),
+                                        )
+                                      : const Icon(
+                                          Icons.check_circle_outline_rounded,
+                                        ),
+                                  label: const Text("Confirm contribution"),
+                                ),
+                              ),
+                            ],
+                          ],
                         ),
                       ),
-                    ],
-                  ),
-                  trailing: isOwner && !confirmed && amount > 0
-                      ? IconButton(
-                          icon: const Icon(
-                            Icons.check_circle,
-                            color: Colors.green,
-                          ),
-                          onPressed: () async {
-                            await GoalMemberService.instance
-                                .confirmContribution(
-                                  gubId: gubId,
-                                  goalId: goalId,
-                                  uid: uid,
-                                  confirmedById: currentUser.uid,
-                                );
-                          },
-                        )
-                      : isMe
-                      ? const Icon(Icons.edit, color: Colors.blue)
-                      : confirmed
-                      ? const Icon(Icons.check_circle, color: Colors.green)
-                      : null,
-                ),
+                    ),
+                  );
+                },
               );
             },
           );

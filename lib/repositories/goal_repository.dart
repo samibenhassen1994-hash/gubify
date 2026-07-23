@@ -1,4 +1,7 @@
+import 'dart:developer' as developer;
+
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 import '../modules/goals/models/goal_member_model.dart';
 import '../modules/goals/models/goal_model.dart';
@@ -9,6 +12,9 @@ class GoalRepository {
   static final GoalRepository instance = GoalRepository._();
 
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+
+  static const int _deleteBatchSize = 400;
 
   CollectionReference<Map<String, dynamic>> goalsCollection(String gubId) {
     return _firestore.collection("gubs").doc(gubId).collection("goals");
@@ -201,6 +207,15 @@ class GoalRepository {
     return GoalModel.fromFirestore(doc.data()!);
   }
 
+  Stream<GoalModel?> goalStream(String gubId, String goalId) {
+    return goalsCollection(gubId).doc(goalId).snapshots().map((document) {
+      final data = document.data();
+      return document.exists && data != null
+          ? GoalModel.fromFirestore(data)
+          : null;
+    });
+  }
+
   /// Aggiorna un obiettivo
   Future<void> updateGoal(String gubId, GoalModel goal) async {
     await goalsCollection(gubId).doc(goal.goalId).update(goal.toFirestore());
@@ -208,6 +223,83 @@ class GoalRepository {
 
   /// Elimina un obiettivo
   Future<void> deleteGoal(String gubId, String goalId) async {
-    await goalsCollection(gubId).doc(goalId).delete();
+    final user = _auth.currentUser;
+
+    if (user == null) {
+      throw StateError("You must be signed in to delete a Shared Budget.");
+    }
+
+    final goalReference = goalsCollection(gubId).doc(goalId);
+    final goalSnapshot = await goalReference.get();
+
+    if (!goalSnapshot.exists) {
+      throw StateError("Shared Budget not found.");
+    }
+
+    final data = goalSnapshot.data()!;
+    final ownerId = data["ownerId"] ?? "";
+
+    if (ownerId != user.uid) {
+      throw StateError(
+        "Only the Shared Budget creator can delete this budget.",
+      );
+    }
+
+    final status = data["status"] ?? "active";
+    final archived = data["archived"] ?? false;
+    final targetAmount = (data["targetAmount"] ?? 0).toDouble();
+    final currentAmount = (data["currentAmount"] ?? 0).toDouble();
+    final isCompleted =
+        status == "completed" ||
+        (targetAmount > 0 && currentAmount >= targetAmount);
+
+    if (isCompleted || archived) {
+      throw StateError("Only active Shared Budgets can be deleted.");
+    }
+
+    await _deleteDocumentsInBatches(goalReference.collection("members"));
+
+    try {
+      final notificationsQuery = _firestore
+          .collection("gubs")
+          .doc(gubId)
+          .collection("notifications")
+          .where("data.goalId", isEqualTo: goalId);
+
+      await _deleteDocumentsInBatches(notificationsQuery);
+    } catch (error, stackTrace) {
+      developer.log(
+        "Unable to delete notifications linked to Shared Budget $goalId.",
+        name: "GoalRepository.deleteGoal",
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
+
+    await goalReference.delete();
+  }
+
+  Future<void> _deleteDocumentsInBatches(
+    Query<Map<String, dynamic>> query,
+  ) async {
+    while (true) {
+      final snapshot = await query.limit(_deleteBatchSize).get();
+
+      if (snapshot.docs.isEmpty) {
+        return;
+      }
+
+      final batch = _firestore.batch();
+
+      for (final document in snapshot.docs) {
+        batch.delete(document.reference);
+      }
+
+      await batch.commit();
+
+      if (snapshot.docs.length < _deleteBatchSize) {
+        return;
+      }
+    }
   }
 }

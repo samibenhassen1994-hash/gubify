@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../../modules/goals/screens/goals_screen.dart';
@@ -31,6 +32,9 @@ class ModulesScreen extends StatelessWidget {
 
           final int memberCount = hub["memberCount"] ?? 1;
           final String ownerId = hub["ownerId"] ?? "";
+          final currentUserId = FirebaseAuth.instance.currentUser?.uid;
+          final canCreateBudget =
+              currentUserId != null && currentUserId == ownerId;
 
           final activeModules = modules.entries
               .where((e) => e.value == true)
@@ -85,7 +89,10 @@ class ModulesScreen extends StatelessWidget {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (_) => GoalsScreen(gubId: gubId),
+                            builder: (_) => GoalsScreen(
+                              gubId: gubId,
+                              canCreateBudget: canCreateBudget,
+                            ),
                           ),
                         );
                         break;

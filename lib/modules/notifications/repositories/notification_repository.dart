@@ -54,4 +54,14 @@ class NotificationRepository {
 
     await batch.commit();
   }
+
+  Future<void> markAsRead({
+    required String gubId,
+    required String notificationId,
+    required String uid,
+  }) async {
+    await notificationsCollection(gubId).doc(notificationId).update({
+      "readBy": FieldValue.arrayUnion([uid]),
+    });
+  }
 }

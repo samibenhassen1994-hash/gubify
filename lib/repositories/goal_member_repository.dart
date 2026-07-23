@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class GoalMemberRepository {
   GoalMemberRepository._();
@@ -6,6 +7,7 @@ class GoalMemberRepository {
   static final GoalMemberRepository instance = GoalMemberRepository._();
 
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final FirebaseAuth _auth = FirebaseAuth.instance;
 
   Stream<QuerySnapshot<Map<String, dynamic>>> membersStream({
     required String gubId,
@@ -20,39 +22,220 @@ class GoalMemberRepository {
         .snapshots();
   }
 
+  Stream<DocumentSnapshot<Map<String, dynamic>>> memberStream({
+    required String gubId,
+    required String goalId,
+    required String uid,
+  }) {
+    return _firestore
+        .collection("gubs")
+        .doc(gubId)
+        .collection("goals")
+        .doc(goalId)
+        .collection("members")
+        .doc(uid)
+        .snapshots();
+  }
+
   Future<void> updateContribution({
     required String gubId,
     required String goalId,
     required String uid,
     required double amount,
   }) async {
-    await _firestore
+    final currentUserId = _auth.currentUser?.uid;
+
+    if (currentUserId == null || currentUserId != uid) {
+      throw StateError("You can only update your own contribution.");
+    }
+
+    final goalReference = _firestore
         .collection("gubs")
         .doc(gubId)
         .collection("goals")
-        .doc(goalId)
-        .collection("members")
-        .doc(uid)
-        .update({
-          "amount": amount,
-          "confirmed": false,
-          "updatedAt": Timestamp.now(),
-          "confirmedAt": null,
-        });
+        .doc(goalId);
+    final memberReference = goalReference.collection("members").doc(uid);
+
+    await _firestore.runTransaction((transaction) async {
+      final goalSnapshot = await transaction.get(goalReference);
+      final memberSnapshot = await transaction.get(memberReference);
+
+      if (!goalSnapshot.exists) {
+        throw StateError("Shared Budget not found.");
+      }
+
+      if (!memberSnapshot.exists) {
+        throw StateError("Member not found.");
+      }
+
+      final goalData = goalSnapshot.data()!;
+      final memberData = memberSnapshot.data()!;
+      final targetAmount = (goalData["targetAmount"] as num?)?.toDouble() ?? 0;
+      final currentAmount =
+          (goalData["currentAmount"] as num?)?.toDouble() ?? 0;
+      final status = goalData["status"] ?? "active";
+      final archived = goalData["archived"] ?? false;
+      final alreadyConfirmed = memberData["confirmed"] ?? false;
+      final remainingAmount = (targetAmount - currentAmount)
+          .clamp(0.0, double.infinity)
+          .toDouble();
+
+      final amountInCents = amount * 100;
+
+      if (!amount.isFinite ||
+          amount <= 0 ||
+          (amountInCents - amountInCents.round()).abs() >= 0.0000001) {
+        throw ArgumentError("Contribution must be greater than zero.");
+      }
+
+      if (!targetAmount.isFinite || targetAmount <= 0) {
+        throw StateError("This Shared Budget has an invalid target amount.");
+      }
+
+      if (!currentAmount.isFinite ||
+          currentAmount < 0 ||
+          currentAmount > targetAmount) {
+        throw StateError("This Shared Budget has an invalid current amount.");
+      }
+
+      if (status == "completed" || archived || remainingAmount <= 0) {
+        throw StateError("This Shared Budget is already completed.");
+      }
+
+      if (alreadyConfirmed) {
+        throw StateError("A confirmed contribution can no longer be changed.");
+      }
+
+      final amountCents = (amount * 100).round();
+      final remainingCents = (remainingAmount * 100).round();
+
+      if (amountCents > remainingCents) {
+        throw StateError(
+          "You can contribute up to €${remainingAmount.toStringAsFixed(2)}.",
+        );
+      }
+
+      transaction.update(memberReference, {
+        "amount": amount,
+        "confirmed": false,
+        "updatedAt": FieldValue.serverTimestamp(),
+        "confirmedAt": null,
+      });
+    });
   }
 
-  Future<void> confirmContribution({
+  Future<({String memberName, double amount})> confirmContribution({
     required String gubId,
     required String goalId,
     required String uid,
+    required String confirmedById,
   }) async {
-    await _firestore
-        .collection("gubs")
-        .doc(gubId)
-        .collection("goals")
-        .doc(goalId)
-        .collection("members")
-        .doc(uid)
-        .update({"confirmed": true, "confirmedAt": Timestamp.now()});
+    final currentUserId = _auth.currentUser?.uid;
+
+    if (currentUserId == null || currentUserId != confirmedById) {
+      throw StateError("You are not authorized to confirm this contribution.");
+    }
+
+    final gubReference = _firestore.collection("gubs").doc(gubId);
+    final goalReference = gubReference.collection("goals").doc(goalId);
+    final memberReference = goalReference.collection("members").doc(uid);
+
+    return _firestore.runTransaction((transaction) async {
+      final gubSnapshot = await transaction.get(gubReference);
+      final goalSnapshot = await transaction.get(goalReference);
+      final memberSnapshot = await transaction.get(memberReference);
+
+      if (!gubSnapshot.exists) {
+        throw StateError("Gub not found.");
+      }
+
+      if (!goalSnapshot.exists) {
+        throw StateError("Shared Budget not found.");
+      }
+
+      if (!memberSnapshot.exists) {
+        throw StateError("Member not found.");
+      }
+
+      final gubOwnerId = gubSnapshot.data()?["ownerId"] ?? "";
+
+      if (currentUserId != gubOwnerId) {
+        throw StateError("Only the Gub owner can confirm a contribution.");
+      }
+
+      final goalData = goalSnapshot.data()!;
+      final memberData = memberSnapshot.data()!;
+      final memberName = memberData["displayName"] is String
+          ? memberData["displayName"] as String
+          : "Member";
+      final confirmed = memberData["confirmed"] ?? false;
+      final memberAmount = (memberData["amount"] as num?)?.toDouble() ?? 0;
+      final targetAmount = (goalData["targetAmount"] as num?)?.toDouble() ?? 0;
+      final currentAmount =
+          (goalData["currentAmount"] as num?)?.toDouble() ?? 0;
+      final completedMembers =
+          (goalData["completedMembers"] as num?)?.toInt() ?? 0;
+      final status = goalData["status"] ?? "active";
+      final archived = goalData["archived"] ?? false;
+
+      if (confirmed) {
+        throw StateError("This contribution has already been confirmed.");
+      }
+
+      if (status == "completed" || currentAmount >= targetAmount) {
+        throw StateError("This Shared Budget is already completed.");
+      }
+
+      if (archived) {
+        throw StateError("Archived Shared Budgets cannot be updated.");
+      }
+
+      if (!memberAmount.isFinite || memberAmount <= 0) {
+        throw StateError("The contribution amount must be greater than zero.");
+      }
+
+      if (!targetAmount.isFinite || targetAmount <= 0) {
+        throw StateError("This Shared Budget has an invalid target amount.");
+      }
+
+      if (!currentAmount.isFinite ||
+          currentAmount < 0 ||
+          currentAmount > targetAmount) {
+        throw StateError("This Shared Budget has an invalid current amount.");
+      }
+
+      final targetCents = (targetAmount * 100).round();
+      final currentCents = (currentAmount * 100).round();
+      final memberCents = (memberAmount * 100).round();
+      final remainingCents = targetCents - currentCents;
+
+      if (memberCents > remainingCents) {
+        throw StateError(
+          "This contribution exceeds the remaining Shared Budget amount. "
+          "The member must update the contribution.",
+        );
+      }
+
+      final newCurrentCents = currentCents + memberCents;
+      final newCurrentAmount = newCurrentCents / 100;
+      final isCompleted = newCurrentCents == targetCents;
+      final now = FieldValue.serverTimestamp();
+
+      transaction.update(memberReference, {
+        "confirmed": true,
+        "confirmedAt": now,
+      });
+      transaction.update(goalReference, {
+        "currentAmount": newCurrentAmount,
+        "completedMembers": completedMembers + 1,
+        if (isCompleted) ...{
+          "status": "completed",
+          "archived": false,
+          "completedAt": now,
+        },
+      });
+
+      return (memberName: memberName, amount: memberAmount);
+    });
   }
 }
