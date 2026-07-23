@@ -15,10 +15,61 @@ class CreateGubScreen extends StatefulWidget {
 
 class _CreateGubScreenState extends State<CreateGubScreen> {
   final TextEditingController _nameController = TextEditingController();
+  final FocusNode _nameFocusNode = FocusNode();
+  final ScrollController _scrollController = ScrollController();
+  final GlobalKey _nameFieldKey = GlobalKey();
+
+  double _largestViewportHeight = 0;
+  bool _scrollScheduled = false;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _nameFocusNode.addListener(() {
+      if (_nameFocusNode.hasFocus) {
+        _scheduleBringFieldIntoView();
+      }
+    });
+  }
+
+  void _scheduleBringFieldIntoView() {
+    if (_scrollScheduled) return;
+
+    _scrollScheduled = true;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      // Aspetta che Android abbia ridimensionato la schermata
+      // dopo l'apertura della tastiera.
+      await Future<void>.delayed(
+        const Duration(milliseconds: 250),
+      );
+
+      if (!mounted || !_nameFocusNode.hasFocus) {
+        _scrollScheduled = false;
+        return;
+      }
+
+      final fieldContext = _nameFieldKey.currentContext;
+
+      if (fieldContext != null) {
+        await Scrollable.ensureVisible(
+          fieldContext,
+          alignment: 0.65,
+          duration: const Duration(milliseconds: 280),
+          curve: Curves.easeOutCubic,
+        );
+      }
+
+      _scrollScheduled = false;
+    });
+  }
 
   @override
   void dispose() {
     _nameController.dispose();
+    _nameFocusNode.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -29,7 +80,8 @@ class _CreateGubScreenState extends State<CreateGubScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            "Gub name must be at least ${AppLimits.gubNameMinLength} characters.",
+            "Gub name must be at least "
+            "${AppLimits.gubNameMinLength} characters.",
           ),
         ),
       );
@@ -40,109 +92,168 @@ class _CreateGubScreenState extends State<CreateGubScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            "Gub name cannot exceed ${AppLimits.gubNameMaxLength} characters.",
+            "Gub name cannot exceed "
+            "${AppLimits.gubNameMaxLength} characters.",
           ),
         ),
       );
       return;
     }
 
+    FocusManager.instance.primaryFocus?.unfocus();
+
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => ModuleSelectionScreen(gubName: gubName),
+        builder: (_) => ModuleSelectionScreen(
+          gubName: gubName,
+        ),
       ),
     );
+  }
+
+  void _goBack() {
+    FocusManager.instance.primaryFocus?.unfocus();
+    Navigator.pop(context);
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      resizeToAvoidBottomInset: true,
       body: GubHomeBackground(
         child: SafeArea(
-          child: CustomScrollView(
-            slivers: [
-              SliverFillRemaining(
-                hasScrollBody: false,
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    children: [
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: IconButton(
-                          icon: const Icon(Icons.arrow_back),
-                          onPressed: () => Navigator.pop(context),
-                        ),
-                      ),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              // Memorizza l'altezza maggiore, normalmente quella
+              // disponibile quando la tastiera è chiusa.
+              if (constraints.maxHeight > _largestViewportHeight) {
+                _largestViewportHeight = constraints.maxHeight;
+              }
 
-                      const UserHeader(),
+              // Sul Huawei viewInsets.bottom rimane 0.
+              // Calcoliamo quindi lo spazio occupato dalla tastiera
+              // confrontando l'altezza normale con quella attuale.
+              final keyboardOccupiedHeight =
+                  (_largestViewportHeight - constraints.maxHeight)
+                      .clamp(0.0, double.infinity)
+                      .toDouble();
 
-                      const SizedBox(height: 30),
+              final keyboardIsOpen = keyboardOccupiedHeight > 40;
 
-                      const Icon(
-                        Icons.hub_outlined,
-                        size: 82,
-                        color: Color(0xFF2563EB),
-                      ),
+              final minimumContentHeight =
+                  (constraints.maxHeight - 48)
+                      .clamp(0.0, double.infinity)
+                      .toDouble();
 
-                      const SizedBox(height: 30),
+              if (_nameFocusNode.hasFocus && keyboardIsOpen) {
+                _scheduleBringFieldIntoView();
+              }
 
-                      const Text(
-                        "Create your Gub",
-                        style: TextStyle(
-                          fontSize: 32,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-
-                      const SizedBox(height: 10),
-
-                      const Text(
-                        "Start by choosing a name for your Gub.",
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 16,
-                          color: Colors.grey,
-                          height: 1.5,
-                        ),
-                      ),
-
-                      const SizedBox(height: 30),
-
-                      TextField(
-                        controller: _nameController,
-                        maxLength: AppLimits.gubNameMaxLength,
-                        textInputAction: TextInputAction.done,
-                        onSubmitted: (_) => _continue(),
-                        inputFormatters: [
-                          FilteringTextInputFormatter.allow(
-                            RegExp(r"[a-zA-Z0-9À-ÿ '\-_]"),
+              return SingleChildScrollView(
+                controller: _scrollController,
+                keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior.manual,
+                padding: EdgeInsets.fromLTRB(
+                  24,
+                  24,
+                  24,
+                  24 + keyboardOccupiedHeight,
+                ),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    minHeight: minimumContentHeight,
+                  ),
+                  child: IntrinsicHeight(
+                    child: Column(
+                      children: [
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: IconButton(
+                            icon: const Icon(Icons.arrow_back),
+                            onPressed: _goBack,
                           ),
-                        ],
-                        decoration: const InputDecoration(
-                          labelText: "Choose a name",
-                          border: OutlineInputBorder(),
                         ),
-                      ),
 
-                      const Spacer(),
+                        const UserHeader(),
 
-                      SizedBox(
-                        width: double.infinity,
-                        height: 55,
-                        child: FilledButton(
-                          onPressed: _continue,
-                          child: const Text("Continue"),
+                        const SizedBox(height: 30),
+
+                        const Icon(
+                          Icons.hub_outlined,
+                          size: 82,
+                          color: Color(0xFF2563EB),
                         ),
-                      ),
 
-                      const SizedBox(height: 20),
-                    ],
+                        const SizedBox(height: 30),
+
+                        const Text(
+                          "Create your Gub",
+                          style: TextStyle(
+                            fontSize: 32,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+
+                        const SizedBox(height: 10),
+
+                        const Text(
+                          "Start by choosing a name for your Gub.",
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: Colors.grey,
+                            height: 1.5,
+                          ),
+                        ),
+
+                        const SizedBox(height: 30),
+
+                        Container(
+                          key: _nameFieldKey,
+                          child: TextField(
+                            controller: _nameController,
+                            focusNode: _nameFocusNode,
+                            maxLength: AppLimits.gubNameMaxLength,
+                            textInputAction: TextInputAction.done,
+                            onSubmitted: (_) => _continue(),
+                            inputFormatters: [
+                              FilteringTextInputFormatter.allow(
+                                RegExp(
+                                  r"[a-zA-Z0-9À-ÿ '\-_]",
+                                ),
+                              ),
+                            ],
+                            decoration: const InputDecoration(
+                              labelText: "Choose a name",
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                        ),
+
+                        // A tastiera chiusa mantiene il pulsante in basso.
+                        // A tastiera aperta lo avvicina al campo.
+                        if (keyboardIsOpen)
+                          const SizedBox(height: 16)
+                        else
+                          const Spacer(),
+
+                        SizedBox(
+                          width: double.infinity,
+                          height: 55,
+                          child: FilledButton(
+                            onPressed: _continue,
+                            child: const Text("Continue"),
+                          ),
+                        ),
+
+                        const SizedBox(height: 20),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-            ],
+              );
+            },
           ),
         ),
       ),
