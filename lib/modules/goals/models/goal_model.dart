@@ -20,6 +20,7 @@ class GoalModel {
 
   final Timestamp createdAt;
   final Timestamp? deadline;
+  final Timestamp? completedAt;
 
   const GoalModel({
     required this.goalId,
@@ -34,9 +35,14 @@ class GoalModel {
     required this.archived,
     required this.createdAt,
     this.deadline,
+    this.completedAt,
   });
 
   factory GoalModel.fromFirestore(Map<String, dynamic> json) {
+    final createdAt = json["createdAt"];
+    final deadline = json["deadline"];
+    final completedAt = json["completedAt"];
+
     return GoalModel(
       goalId: json["goalId"] ?? "",
       title: json["title"] ?? "",
@@ -48,9 +54,18 @@ class GoalModel {
       totalMembers: json["totalMembers"] ?? 0,
       status: json["status"] ?? "active",
       archived: json["archived"] ?? false,
-      createdAt: json["createdAt"] ?? Timestamp.now(),
-      deadline: json["deadline"],
+      createdAt: createdAt is Timestamp
+          ? createdAt
+          : Timestamp.fromDate(DateTime.fromMillisecondsSinceEpoch(0)),
+      deadline: deadline is Timestamp ? deadline : null,
+      completedAt: completedAt is Timestamp ? completedAt : null,
     );
+  }
+
+  bool get isCompleted {
+    if (status == "completed") return true;
+
+    return targetAmount > 0 && currentAmount >= targetAmount;
   }
 
   Map<String, dynamic> toFirestore() {
@@ -67,6 +82,7 @@ class GoalModel {
       "archived": archived,
       "createdAt": createdAt,
       "deadline": deadline,
+      "completedAt": completedAt,
     };
   }
 
@@ -83,6 +99,7 @@ class GoalModel {
     bool? archived,
     Timestamp? createdAt,
     Timestamp? deadline,
+    Timestamp? completedAt,
   }) {
     return GoalModel(
       goalId: goalId ?? this.goalId,
@@ -97,6 +114,7 @@ class GoalModel {
       archived: archived ?? this.archived,
       createdAt: createdAt ?? this.createdAt,
       deadline: deadline ?? this.deadline,
+      completedAt: completedAt ?? this.completedAt,
     );
   }
 }

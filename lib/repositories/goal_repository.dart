@@ -67,9 +67,8 @@ class GoalRepository {
     required String gubId,
     required String goalId,
   }) async {
-    final membersSnapshot = await goalsCollection(
-      gubId,
-    ).doc(goalId).collection("members").get();
+    final goalRef = goalsCollection(gubId).doc(goalId);
+    final membersSnapshot = await goalRef.collection("members").get();
 
     double currentAmount = 0;
     int completedMembers = 0;
@@ -87,60 +86,108 @@ class GoalRepository {
       currentAmount += (data["amount"] ?? 0).toDouble();
     }
 
-    await goalsCollection(gubId).doc(goalId).update({
-      "currentAmount": currentAmount,
-      "completedMembers": completedMembers,
-      "totalMembers": totalMembers,
+    await _firestore.runTransaction((transaction) async {
+      final goalSnapshot = await transaction.get(goalRef);
+
+      if (!goalSnapshot.exists) {
+        throw StateError("Shared Budget not found.");
+      }
+
+      final goalData = goalSnapshot.data()!;
+      final targetAmount = (goalData["targetAmount"] ?? 0).toDouble();
+      final status = goalData["status"] ?? "active";
+      final hasReachedTarget =
+          targetAmount > 0 && currentAmount >= targetAmount;
+
+      final updates = <String, dynamic>{
+        "currentAmount": currentAmount,
+        "completedMembers": completedMembers,
+        "totalMembers": totalMembers,
+      };
+
+      if (status == "active" && hasReachedTarget) {
+        updates.addAll({
+          "status": "completed",
+          "archived": false,
+          "completedAt": FieldValue.serverTimestamp(),
+        });
+      }
+
+      transaction.update(goalRef, updates);
     });
   }
 
   /// Restituisce tutti gli obiettivi
   Future<List<GoalModel>> getGoals(String gubId) async {
-    final snapshot = await goalsCollection(
-      gubId,
-    ).orderBy("createdAt", descending: true).get();
+    final snapshot = await goalsCollection(gubId).get();
 
-    return snapshot.docs
-        .map((doc) => GoalModel.fromFirestore(doc.data()))
-        .toList();
+    return _goalsFromDocs(snapshot.docs);
   }
 
-  /// Stream degli obiettivi
+  /// Stream degli Shared Budget non archiviati
   Stream<List<GoalModel>> goalsStream(String gubId) {
-    return goalsCollection(gubId)
-        .orderBy("createdAt", descending: true)
-        .snapshots()
-        .map(
-          (snapshot) => snapshot.docs
-              .map((doc) => GoalModel.fromFirestore(doc.data()))
-              .toList(),
-        );
+    return goalsCollection(gubId).snapshots().map(
+      (snapshot) => _goalsFromDocs(
+        snapshot.docs,
+      ).where((goal) => !goal.archived).toList(growable: false),
+    );
   }
 
   /// Restituisce il Goal attivo (Future)
   Future<GoalModel?> getActiveGoal(String gubId) async {
-    final snapshot = await goalsCollection(
-      gubId,
-    ).where("status", isEqualTo: "active").limit(1).get();
+    final snapshot = await goalsCollection(gubId).get();
+    final goals = _goalsFromDocs(
+      snapshot.docs,
+    ).where((goal) => !goal.archived && !goal.isCompleted).toList();
 
-    if (snapshot.docs.isEmpty) {
+    if (goals.isEmpty) {
       return null;
     }
 
-    return GoalModel.fromFirestore(snapshot.docs.first.data());
+    return goals[0];
   }
 
-  /// Stream del Goal attivo
-  Stream<GoalModel?> activeGoalStream(String gubId) {
-    return goalsCollection(
-      gubId,
-    ).where("status", isEqualTo: "active").limit(1).snapshots().map((snapshot) {
-      if (snapshot.docs.isEmpty) {
-        return null;
+  /// Stream degli Shared Budget attivi
+  Stream<List<GoalModel>> activeGoalsStream(String gubId) {
+    return goalsStream(gubId).map(
+      (goals) =>
+          goals.where((goal) => !goal.isCompleted).toList(growable: false),
+    );
+  }
+
+  Stream<List<GoalModel>> completedGoalsStream(String gubId) {
+    return goalsStream(gubId).map(
+      (goals) =>
+          goals.where((goal) => goal.isCompleted).toList(growable: false),
+    );
+  }
+
+  List<GoalModel> _goalsFromDocs(
+    Iterable<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
+  ) {
+    final goals = docs.map((doc) {
+      final data = doc.data();
+      final createdAt = data["createdAt"];
+
+      return (
+        goal: GoalModel.fromFirestore(data),
+        createdAt: createdAt is Timestamp ? createdAt : null,
+      );
+    }).toList();
+
+    goals.sort((a, b) {
+      final aCreatedAt = a.createdAt?.toDate().millisecondsSinceEpoch ?? 0;
+      final bCreatedAt = b.createdAt?.toDate().millisecondsSinceEpoch ?? 0;
+      final dateComparison = bCreatedAt.compareTo(aCreatedAt);
+
+      if (dateComparison != 0) {
+        return dateComparison;
       }
 
-      return GoalModel.fromFirestore(snapshot.docs.first.data());
+      return b.goal.goalId.compareTo(a.goal.goalId);
     });
+
+    return goals.map((entry) => entry.goal).toList(growable: false);
   }
 
   /// Restituisce un singolo obiettivo

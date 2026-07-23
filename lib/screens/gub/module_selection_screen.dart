@@ -8,18 +8,13 @@ import 'gub_screen.dart';
 class ModuleSelectionScreen extends StatefulWidget {
   final String gubName;
 
-  const ModuleSelectionScreen({
-    super.key,
-    required this.gubName,
-  });
+  const ModuleSelectionScreen({super.key, required this.gubName});
 
   @override
-  State<ModuleSelectionScreen> createState() =>
-      _ModuleSelectionScreenState();
+  State<ModuleSelectionScreen> createState() => _ModuleSelectionScreenState();
 }
 
-class _ModuleSelectionScreenState
-    extends State<ModuleSelectionScreen> {
+class _ModuleSelectionScreenState extends State<ModuleSelectionScreen> {
   bool _loading = false;
 
   final Map<String, bool> _modules = {
@@ -47,11 +42,7 @@ class _ModuleSelectionScreenState
 
       Navigator.pushAndRemoveUntil(
         context,
-        MaterialPageRoute(
-          builder: (_) => GubScreen(
-            gubId: gubId,
-          ),
-        ),
+        MaterialPageRoute(builder: (_) => GubScreen(gubId: gubId)),
         (_) => false,
       );
     } catch (e) {
@@ -59,11 +50,7 @@ class _ModuleSelectionScreenState
 
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(
-        SnackBar(
-          content: Text(e.toString()),
-        ),
-      );
+      ).showSnackBar(SnackBar(content: Text(e.toString())));
     } finally {
       if (mounted) {
         setState(() => _loading = false);
@@ -71,10 +58,7 @@ class _ModuleSelectionScreenState
     }
   }
 
-  void _showModuleInfo({
-    required String title,
-    required String description,
-  }) {
+  void _showModuleInfo({required String title, required String description}) {
     showDialog(
       context: context,
       builder: (_) {
@@ -105,9 +89,7 @@ class _ModuleSelectionScreenState
       elevation: 0,
       color: Colors.white.withValues(alpha: .88),
       margin: const EdgeInsets.only(bottom: 12),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(22),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
       child: SwitchListTile(
         value: _modules[keyName]!,
         onChanged: enabled
@@ -117,20 +99,14 @@ class _ModuleSelectionScreenState
                 });
               }
             : null,
-        secondary: Icon(
-          icon,
-          color: const Color(0xFF2563EB),
-        ),
+        secondary: Icon(icon, color: const Color(0xFF2563EB)),
         title: Row(
           children: [
             Text(title),
             const SizedBox(width: 8),
             GestureDetector(
               onTap: () {
-                _showModuleInfo(
-                  title: title,
-                  description: description,
-                );
+                _showModuleInfo(title: title, description: description);
               },
               child: const Icon(
                 Icons.info_outline,
@@ -166,44 +142,35 @@ class _ModuleSelectionScreenState
 
                 const SizedBox(height: 10),
 
-const Icon(
-  Icons.hub_outlined,
-  size: 54,
-  color: Color(0xFF2563EB),
-),
+                const Icon(
+                  Icons.hub_outlined,
+                  size: 54,
+                  color: Color(0xFF2563EB),
+                ),
 
-const SizedBox(height: 12),
+                const SizedBox(height: 12),
 
-const Text(
-  "Customize your Gub",
-  style: TextStyle(
-    fontSize: 28,
-    fontWeight: FontWeight.bold,
-  ),
-),
+                const Text(
+                  "Customize your Gub",
+                  style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
+                ),
 
-const SizedBox(height: 4),
+                const SizedBox(height: 4),
 
-Text(
-  widget.gubName,
-  style: const TextStyle(
-    fontSize: 16,
-    color: Colors.black54,
-  ),
-),
+                Text(
+                  widget.gubName,
+                  style: const TextStyle(fontSize: 16, color: Colors.black54),
+                ),
 
-const SizedBox(height: 6),
+                const SizedBox(height: 6),
 
-const Text(
-  "Choose which features you want to start with.",
-  textAlign: TextAlign.center,
-  style: TextStyle(
-    fontSize: 14,
-    color: Colors.black54,
-  ),
-),
+                const Text(
+                  "Choose which features you want to start with.",
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 14, color: Colors.black54),
+                ),
 
-const SizedBox(height: 18),
+                const SizedBox(height: 18),
                 Expanded(
                   child: ListView(
                     children: [
@@ -223,7 +190,7 @@ const SizedBox(height: 18),
                         title: "Shared Budget",
                         icon: Icons.account_balance_wallet_outlined,
                         description:
-                            "Create shared money goals for your Gub.\n\n"
+                            "Create Shared Budgets for your Gub.\n\n"
                             "Useful for trips, group gifts and common purchases.",
                         enabled: false,
                       ),
@@ -271,40 +238,35 @@ const SizedBox(height: 18),
                         keyName: "chat",
                         title: "Chat",
                         icon: Icons.chat_bubble_outline,
-                        description:
-                            "Communicate with all Gub members.",
+                        description: "Communicate with all Gub members.",
                       ),
 
                       buildTile(
                         keyName: "photos",
                         title: "Photos",
                         icon: Icons.photo_library_outlined,
-                        description:
-                            "Save and share photos inside your Gub.",
+                        description: "Save and share photos inside your Gub.",
                       ),
 
                       buildTile(
                         keyName: "shopping",
                         title: "Shopping",
                         icon: Icons.shopping_cart_outlined,
-                        description:
-                            "Create shared shopping lists.",
+                        description: "Create shared shopping lists.",
                       ),
 
                       buildTile(
                         keyName: "expenses",
                         title: "Expenses",
                         icon: Icons.euro,
-                        description:
-                            "Track shared expenses between members.",
+                        description: "Track shared expenses between members.",
                       ),
 
                       buildTile(
                         keyName: "notes",
                         title: "Notes",
                         icon: Icons.note_alt_outlined,
-                        description:
-                            "Create shared notes for your Gub.",
+                        description: "Create shared notes for your Gub.",
                       ),
                     ],
                   ),
@@ -314,9 +276,7 @@ const SizedBox(height: 18),
                   width: double.infinity,
                   height: 55,
                   child: FilledButton(
-                    onPressed: _loading
-                        ? null
-                        : _createHub,
+                    onPressed: _loading ? null : _createHub,
                     child: _loading
                         ? const SizedBox(
                             width: 24,

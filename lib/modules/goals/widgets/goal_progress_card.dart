@@ -9,9 +9,11 @@ class GoalProgressCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final progress = goal.targetAmount == 0
+    final calculatedProgress = goal.targetAmount <= 0
         ? 0.0
         : (goal.currentAmount / goal.targetAmount).clamp(0.0, 1.0);
+    final progress = goal.isCompleted ? 1.0 : calculatedProgress;
+    final accentColor = goal.isCompleted ? Colors.green : Colors.blue;
 
     final percentage = (progress * 100).round();
 
@@ -22,18 +24,25 @@ class GoalProgressCard extends StatelessWidget {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
             decoration: BoxDecoration(
-              color: Colors.blue.shade50,
+              color: goal.isCompleted
+                  ? Colors.green.shade50
+                  : Colors.blue.shade50,
               borderRadius: BorderRadius.circular(30),
             ),
-            child: const Row(
+            child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.account_balance_wallet_rounded, color: Colors.blue),
-                SizedBox(width: 8),
+                Icon(
+                  goal.isCompleted
+                      ? Icons.check_circle_rounded
+                      : Icons.account_balance_wallet_rounded,
+                  color: accentColor,
+                ),
+                const SizedBox(width: 8),
                 Text(
-                  "Shared Budget",
+                  goal.isCompleted ? "Completed" : "Shared Budget",
                   style: TextStyle(
-                    color: Colors.blue,
+                    color: accentColor,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
@@ -86,16 +95,19 @@ class GoalProgressCard extends StatelessWidget {
         Center(
           child: Text(
             "$percentage%",
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 42,
               fontWeight: FontWeight.bold,
-              color: Colors.blue,
+              color: accentColor,
             ),
           ),
         ),
         const SizedBox(height: 6),
-        const Center(
-          child: Text("Budget completed", style: TextStyle(color: Colors.grey)),
+        Center(
+          child: Text(
+            goal.isCompleted ? "Completed" : "In progress",
+            style: const TextStyle(color: Colors.grey),
+          ),
         ),
         const SizedBox(height: 22),
         ClipRRect(
@@ -104,7 +116,7 @@ class GoalProgressCard extends StatelessWidget {
             value: progress,
             minHeight: 14,
             backgroundColor: Colors.grey.shade200,
-            color: Colors.blue,
+            color: accentColor,
           ),
         ),
         const SizedBox(height: 24),

@@ -63,13 +63,21 @@ class GoalService {
   }
 
   /// Stream in tempo reale
-  Stream<GoalModel?> activeGoalStream(String gubId) {
-    return GoalRepository.instance.activeGoalStream(gubId);
+  Stream<List<GoalModel>> activeGoalsStream(String gubId) {
+    return GoalRepository.instance.activeGoalsStream(gubId);
+  }
+
+  Stream<List<GoalModel>> goalsStream(String gubId) {
+    return GoalRepository.instance.goalsStream(gubId);
+  }
+
+  Stream<List<GoalModel>> completedGoalsStream(String gubId) {
+    return GoalRepository.instance.completedGoalsStream(gubId);
   }
 
   void _validate(String title, double targetAmount) {
     if (title.trim().isEmpty) {
-      throw Exception("Goal title is required.");
+      throw Exception("Shared Budget title is required.");
     }
 
     if (targetAmount <= 0) {

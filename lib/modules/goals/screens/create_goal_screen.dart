@@ -6,14 +6,10 @@ import '../services/goal_service.dart';
 class CreateGoalScreen extends StatefulWidget {
   final String gubId;
 
-  const CreateGoalScreen({
-    super.key,
-    required this.gubId,
-  });
+  const CreateGoalScreen({super.key, required this.gubId});
 
   @override
-  State<CreateGoalScreen> createState() =>
-      _CreateGoalScreenState();
+  State<CreateGoalScreen> createState() => _CreateGoalScreenState();
 }
 
 class _CreateGoalScreenState extends State<CreateGoalScreen> {
@@ -24,14 +20,11 @@ class _CreateGoalScreenState extends State<CreateGoalScreen> {
   static const Color _borderColor = Color(0xFFDCE6F5);
   static const Color _softBlueColor = Color(0xFFEFF6FF);
 
-  final TextEditingController _titleController =
-      TextEditingController();
+  final TextEditingController _titleController = TextEditingController();
 
-  final TextEditingController _descriptionController =
-      TextEditingController();
+  final TextEditingController _descriptionController = TextEditingController();
 
-  final TextEditingController _amountController =
-      TextEditingController();
+  final TextEditingController _amountController = TextEditingController();
 
   final FocusNode _titleFocusNode = FocusNode();
   final FocusNode _descriptionFocusNode = FocusNode();
@@ -93,51 +86,37 @@ class _CreateGoalScreenState extends State<CreateGoalScreen> {
 
     // Aspetta che Android abbia aperto la tastiera
     // e ridimensionato la viewport.
-    await Future<void>.delayed(
-      const Duration(milliseconds: 300),
-    );
+    await Future<void>.delayed(const Duration(milliseconds: 300));
 
-    if (!mounted ||
-        requestId != _scrollRequestId ||
-        !focusNode.hasFocus) {
+    if (!mounted || requestId != _scrollRequestId || !focusNode.hasFocus) {
       return;
     }
 
     await WidgetsBinding.instance.endOfFrame;
 
-    if (!mounted ||
-        requestId != _scrollRequestId ||
-        !focusNode.hasFocus) {
+    if (!mounted || requestId != _scrollRequestId || !focusNode.hasFocus) {
       return;
     }
 
     final fieldContext = fieldKey.currentContext;
     final renderObject = fieldContext?.findRenderObject();
 
-    if (renderObject == null ||
-        !_scrollController.hasClients) {
+    if (renderObject == null || !_scrollController.hasClients) {
       return;
     }
 
-    final viewport =
-        RenderAbstractViewport.maybeOf(renderObject);
+    final viewport = RenderAbstractViewport.maybeOf(renderObject);
 
     if (viewport == null) return;
 
     final revealedOffset = viewport
-        .getOffsetToReveal(
-          renderObject,
-          alignment,
-        )
+        .getOffsetToReveal(renderObject, alignment)
         .offset;
 
     final position = _scrollController.position;
 
     final targetOffset = revealedOffset
-        .clamp(
-          position.minScrollExtent,
-          position.maxScrollExtent,
-        )
+        .clamp(position.minScrollExtent, position.maxScrollExtent)
         .toDouble();
 
     await _scrollController.animateTo(
@@ -157,9 +136,7 @@ class _CreateGoalScreenState extends State<CreateGoalScreen> {
       labelText: label,
       hintText: hint,
       prefixText: prefixText,
-      hintStyle: const TextStyle(
-        color: Color(0xFF94A3B8),
-      ),
+      hintStyle: const TextStyle(color: Color(0xFF94A3B8)),
       labelStyle: const TextStyle(
         color: _secondaryTextColor,
         fontWeight: FontWeight.w500,
@@ -168,61 +145,39 @@ class _CreateGoalScreenState extends State<CreateGoalScreen> {
         color: _primaryColor,
         fontWeight: FontWeight.w600,
       ),
-      prefixIcon: Icon(
-        icon,
-        color: _primaryColor,
-      ),
+      prefixIcon: Icon(icon, color: _primaryColor),
       filled: true,
       fillColor: Colors.white,
-      contentPadding: const EdgeInsets.symmetric(
-        horizontal: 18,
-        vertical: 18,
-      ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(16),
-        borderSide: const BorderSide(
-          color: _borderColor,
-          width: 1.2,
-        ),
+        borderSide: const BorderSide(color: _borderColor, width: 1.2),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(16),
-        borderSide: const BorderSide(
-          color: _primaryColor,
-          width: 2,
-        ),
+        borderSide: const BorderSide(color: _primaryColor, width: 2),
       ),
       errorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(16),
-        borderSide: const BorderSide(
-          color: Colors.redAccent,
-        ),
+        borderSide: const BorderSide(color: Colors.redAccent),
       ),
       focusedErrorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(16),
-        borderSide: const BorderSide(
-          color: Colors.redAccent,
-          width: 2,
-        ),
+        borderSide: const BorderSide(color: Colors.redAccent, width: 2),
       ),
     );
   }
 
-  Widget _sectionCard({
-    required Widget child,
-  }) {
+  Widget _sectionCard({required Widget child}) {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(
-          color: _borderColor,
-        ),
+        border: Border.all(color: _borderColor),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF0F172A)
-                .withValues(alpha: 0.045),
+            color: const Color(0xFF0F172A).withValues(alpha: 0.045),
             blurRadius: 22,
             offset: const Offset(0, 8),
           ),
@@ -247,11 +202,7 @@ class _CreateGoalScreenState extends State<CreateGoalScreen> {
             color: _softBlueColor,
             borderRadius: BorderRadius.circular(13),
           ),
-          child: Icon(
-            icon,
-            color: _primaryColor,
-            size: 22,
-          ),
+          child: Icon(icon, color: _primaryColor, size: 22),
         ),
         const SizedBox(width: 12),
         Expanded(
@@ -303,18 +254,13 @@ class _CreateGoalScreenState extends State<CreateGoalScreen> {
     final title = _titleController.text.trim();
     final description = _descriptionController.text.trim();
 
-    final normalizedAmount =
-        _amountController.text.trim().replaceAll(',', '.');
+    final normalizedAmount = _amountController.text.trim().replaceAll(',', '.');
 
     final amount = double.tryParse(normalizedAmount);
 
     if (title.isEmpty || amount == null || amount <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            "Please enter a valid title and amount.",
-          ),
-        ),
+        const SnackBar(content: Text("Please enter a valid title and amount.")),
       );
       return;
     }
@@ -344,11 +290,9 @@ class _CreateGoalScreenState extends State<CreateGoalScreen> {
         _isLoading = false;
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(error.toString()),
-        ),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.toString())));
     }
   }
 
@@ -379,33 +323,26 @@ class _CreateGoalScreenState extends State<CreateGoalScreen> {
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         title: const Text(
-          "New Goal",
-          style: TextStyle(
-            color: _textColor,
-            fontWeight: FontWeight.w700,
-          ),
+          "New Shared Budget",
+          style: TextStyle(color: _textColor, fontWeight: FontWeight.w700),
         ),
       ),
       body: SafeArea(
         top: false,
         child: LayoutBuilder(
           builder: (context, constraints) {
-            if (constraints.maxHeight >
-                _largestViewportHeight) {
-              _largestViewportHeight =
-                  constraints.maxHeight;
+            if (constraints.maxHeight > _largestViewportHeight) {
+              _largestViewportHeight = constraints.maxHeight;
             }
 
             final keyboardOccupiedHeight =
-                (_largestViewportHeight -
-                        constraints.maxHeight)
+                (_largestViewportHeight - constraints.maxHeight)
                     .clamp(0.0, double.infinity)
                     .toDouble();
 
             return ListView(
               controller: _scrollController,
-              keyboardDismissBehavior:
-                  ScrollViewKeyboardDismissBehavior.manual,
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.manual,
               padding: EdgeInsets.fromLTRB(
                 20,
                 12,
@@ -420,9 +357,7 @@ class _CreateGoalScreenState extends State<CreateGoalScreen> {
                     decoration: BoxDecoration(
                       color: _softBlueColor,
                       shape: BoxShape.circle,
-                      border: Border.all(
-                        color: const Color(0xFFBFDBFE),
-                      ),
+                      border: Border.all(color: const Color(0xFFBFDBFE)),
                     ),
                     child: const Icon(
                       Icons.flag_rounded,
@@ -435,7 +370,7 @@ class _CreateGoalScreenState extends State<CreateGoalScreen> {
                 const SizedBox(height: 18),
 
                 const Text(
-                  "Create a Group Goal",
+                  "Create a Shared Budget",
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: _textColor,
@@ -461,14 +396,12 @@ class _CreateGoalScreenState extends State<CreateGoalScreen> {
 
                 _sectionCard(
                   child: Column(
-                    crossAxisAlignment:
-                        CrossAxisAlignment.stretch,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       _sectionHeader(
                         icon: Icons.edit_note_rounded,
-                        title: "Goal details",
-                        subtitle:
-                            "Give your group a clear objective.",
+                        title: "Shared Budget details",
+                        subtitle: "Give your group a clear objective.",
                       ),
 
                       const SizedBox(height: 20),
@@ -478,16 +411,13 @@ class _CreateGoalScreenState extends State<CreateGoalScreen> {
                         child: TextField(
                           controller: _titleController,
                           focusNode: _titleFocusNode,
-                          textInputAction:
-                              TextInputAction.next,
+                          textInputAction: TextInputAction.next,
                           onSubmitted: (_) {
-                            _descriptionFocusNode
-                                .requestFocus();
+                            _descriptionFocusNode.requestFocus();
                           },
                           decoration: _inputDecoration(
                             label: "Title",
-                            hint:
-                                "Example: Summer holiday fund",
+                            hint: "Example: Summer holiday fund",
                             icon: Icons.title_rounded,
                           ),
                         ),
@@ -498,18 +428,14 @@ class _CreateGoalScreenState extends State<CreateGoalScreen> {
                       Container(
                         key: _descriptionFieldKey,
                         child: TextField(
-                          controller:
-                              _descriptionController,
-                          focusNode:
-                              _descriptionFocusNode,
-                          keyboardType:
-                              TextInputType.multiline,
+                          controller: _descriptionController,
+                          focusNode: _descriptionFocusNode,
+                          keyboardType: TextInputType.multiline,
                           minLines: 3,
                           maxLines: 5,
                           decoration: _inputDecoration(
                             label: "Description",
-                            hint:
-                                "Explain what the goal is for",
+                            hint: "Explain what the Shared Budget is for",
                             icon: Icons.subject_rounded,
                           ),
                         ),
@@ -522,13 +448,10 @@ class _CreateGoalScreenState extends State<CreateGoalScreen> {
                         child: TextField(
                           controller: _amountController,
                           focusNode: _amountFocusNode,
-                          keyboardType:
-                              const TextInputType
-                                  .numberWithOptions(
+                          keyboardType: const TextInputType.numberWithOptions(
                             decimal: true,
                           ),
-                          textInputAction:
-                              TextInputAction.done,
+                          textInputAction: TextInputAction.done,
                           onSubmitted: (_) {
                             if (!_isLoading) {
                               _createGoal();
@@ -537,8 +460,7 @@ class _CreateGoalScreenState extends State<CreateGoalScreen> {
                           decoration: _inputDecoration(
                             label: "Target amount",
                             hint: "0.00",
-                            icon:
-                                Icons.euro_rounded,
+                            icon: Icons.euro_rounded,
                             prefixText: "€ ",
                           ),
                         ),
@@ -551,15 +473,12 @@ class _CreateGoalScreenState extends State<CreateGoalScreen> {
 
                 _sectionCard(
                   child: Column(
-                    crossAxisAlignment:
-                        CrossAxisAlignment.stretch,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       _sectionHeader(
-                        icon:
-                            Icons.calendar_month_rounded,
-                        title: "Goal deadline",
-                        subtitle:
-                            "The deadline is optional.",
+                        icon: Icons.calendar_month_rounded,
+                        title: "Shared Budget deadline",
+                        subtitle: "The deadline is optional.",
                       ),
 
                       const SizedBox(height: 16),
@@ -568,19 +487,14 @@ class _CreateGoalScreenState extends State<CreateGoalScreen> {
                         color: Colors.transparent,
                         child: InkWell(
                           onTap: _pickDeadline,
-                          borderRadius:
-                              BorderRadius.circular(16),
+                          borderRadius: BorderRadius.circular(16),
                           child: Container(
-                            padding:
-                                const EdgeInsets.all(15),
+                            padding: const EdgeInsets.all(15),
                             decoration: BoxDecoration(
                               color: _softBlueColor,
-                              borderRadius:
-                                  BorderRadius.circular(16),
+                              borderRadius: BorderRadius.circular(16),
                               border: Border.all(
-                                color: const Color(
-                                  0xFFBFDBFE,
-                                ),
+                                color: const Color(0xFFBFDBFE),
                               ),
                             ),
                             child: Row(
@@ -588,16 +502,12 @@ class _CreateGoalScreenState extends State<CreateGoalScreen> {
                                 Container(
                                   width: 42,
                                   height: 42,
-                                  decoration:
-                                      BoxDecoration(
+                                  decoration: BoxDecoration(
                                     color: Colors.white,
-                                    borderRadius:
-                                        BorderRadius
-                                            .circular(13),
+                                    borderRadius: BorderRadius.circular(13),
                                   ),
                                   child: const Icon(
-                                    Icons
-                                        .event_available_rounded,
+                                    Icons.event_available_rounded,
                                     color: _primaryColor,
                                   ),
                                 ),
@@ -605,18 +515,14 @@ class _CreateGoalScreenState extends State<CreateGoalScreen> {
                                 Expanded(
                                   child: Column(
                                     crossAxisAlignment:
-                                        CrossAxisAlignment
-                                            .start,
+                                        CrossAxisAlignment.start,
                                     children: [
                                       const Text(
                                         "Deadline",
                                         style: TextStyle(
-                                          color:
-                                              _secondaryTextColor,
+                                          color: _secondaryTextColor,
                                           fontSize: 12,
-                                          fontWeight:
-                                              FontWeight
-                                                  .w500,
+                                          fontWeight: FontWeight.w500,
                                         ),
                                       ),
                                       const SizedBox(height: 3),
@@ -624,24 +530,20 @@ class _CreateGoalScreenState extends State<CreateGoalScreen> {
                                         _deadline == null
                                             ? "No deadline selected"
                                             : "${_deadline!.day.toString().padLeft(2, '0')}/"
-                                                "${_deadline!.month.toString().padLeft(2, '0')}/"
-                                                "${_deadline!.year}",
+                                                  "${_deadline!.month.toString().padLeft(2, '0')}/"
+                                                  "${_deadline!.year}",
                                         style: const TextStyle(
                                           color: _textColor,
                                           fontSize: 15,
-                                          fontWeight:
-                                              FontWeight
-                                                  .w600,
+                                          fontWeight: FontWeight.w600,
                                         ),
                                       ),
                                     ],
                                   ),
                                 ),
                                 const Icon(
-                                  Icons
-                                      .chevron_right_rounded,
-                                  color:
-                                      Color(0xFF94A3B8),
+                                  Icons.chevron_right_rounded,
+                                  color: Color(0xFF94A3B8),
                                 ),
                               ],
                             ),
@@ -657,13 +559,8 @@ class _CreateGoalScreenState extends State<CreateGoalScreen> {
                               _deadline = null;
                             });
                           },
-                          icon: const Icon(
-                            Icons.close_rounded,
-                            size: 18,
-                          ),
-                          label: const Text(
-                            "Remove deadline",
-                          ),
+                          icon: const Icon(Icons.close_rounded, size: 18),
+                          label: const Text("Remove deadline"),
                         ),
                       ],
                     ],
@@ -675,18 +572,15 @@ class _CreateGoalScreenState extends State<CreateGoalScreen> {
                 SizedBox(
                   height: 56,
                   child: FilledButton.icon(
-                    onPressed:
-                        _isLoading ? null : _createGoal,
+                    onPressed: _isLoading ? null : _createGoal,
                     style: FilledButton.styleFrom(
                       backgroundColor: _primaryColor,
                       foregroundColor: Colors.white,
-                      disabledBackgroundColor:
-                          _primaryColor.withValues(
+                      disabledBackgroundColor: _primaryColor.withValues(
                         alpha: 0.55,
                       ),
                       shape: RoundedRectangleBorder(
-                        borderRadius:
-                            BorderRadius.circular(16),
+                        borderRadius: BorderRadius.circular(16),
                       ),
                       elevation: 0,
                     ),
@@ -694,19 +588,14 @@ class _CreateGoalScreenState extends State<CreateGoalScreen> {
                         ? const SizedBox(
                             width: 21,
                             height: 21,
-                            child:
-                                CircularProgressIndicator(
+                            child: CircularProgressIndicator(
                               strokeWidth: 2.2,
                               color: Colors.white,
                             ),
                           )
-                        : const Icon(
-                            Icons.flag_rounded,
-                          ),
+                        : const Icon(Icons.flag_rounded),
                     label: Text(
-                      _isLoading
-                          ? "Creating..."
-                          : "Create Goal",
+                      _isLoading ? "Creating..." : "Create Shared Budget",
                       style: const TextStyle(
                         fontSize: 17,
                         fontWeight: FontWeight.w700,
