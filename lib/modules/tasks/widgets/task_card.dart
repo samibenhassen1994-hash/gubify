@@ -21,6 +21,7 @@ class TaskCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final sourceLabel = getTaskSourceLabel(task.sourceType);
     final bool canComplete =
         task.status == "active" &&
         (task.assignedUserId == null ||
@@ -69,10 +70,14 @@ class TaskCard extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   TaskStatusChip(status: task.status),
-                  Text(
-                    task.sourceType.toUpperCase(),
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
+                  if (sourceLabel != null)
+                    Text(
+                      sourceLabel,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Colors.black54,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                 ],
               ),
 
@@ -119,5 +124,26 @@ class TaskCard extends StatelessWidget {
     final date = timestamp.toDate();
 
     return "${date.day}/${date.month}/${date.year}";
+  }
+}
+
+String? getTaskSourceLabel(String sourceType) {
+  switch (sourceType.trim().toLowerCase()) {
+    case "chat":
+      return "From chat";
+    case "proposal":
+      return "From proposal";
+    case "calendar":
+    case "event":
+      return "From event";
+    case "budget":
+      return "From shared budget";
+    case "goal":
+      return "From group goal";
+    case "board":
+      return "From board";
+    case "manual":
+    default:
+      return null;
   }
 }

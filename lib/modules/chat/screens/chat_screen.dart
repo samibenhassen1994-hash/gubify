@@ -412,21 +412,60 @@ class _ChatScreenState extends State<ChatScreen> {
     if (_messageActionOpen || widget.onConvertToTask == null) return;
     _messageActionOpen = true;
 
-    final shouldConvert = await showModalBottomSheet<bool>(
+    final conversion = await showModalBottomSheet<_MessageConversion>(
       context: context,
       useRootNavigator: true,
-      showDragHandle: true,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
       builder: (sheetContext) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            child: ListTile(
-              leading: const Icon(
-                Icons.task_alt_rounded,
-                color: Color(0xFF2563EB),
+        return Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.viewInsetsOf(sheetContext).bottom,
+          ),
+          child: SafeArea(
+            top: false,
+            child: Container(
+              margin: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.circular(24),
               ),
-              title: const Text("Convert to task"),
-              onTap: () => Navigator.pop(sheetContext, true),
+              clipBehavior: Clip.antiAlias,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Padding(
+                      padding: EdgeInsets.fromLTRB(20, 20, 20, 12),
+                      child: Text(
+                        "Convert to",
+                        style: TextStyle(
+                          color: Color(0xFF0F172A),
+                          fontSize: 21,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    for (
+                      var index = 0;
+                      index < _conversionOptions.length;
+                      index++
+                    ) ...[
+                      if (index > 0)
+                        const Divider(height: 1, indent: 68, endIndent: 16),
+                      _ConversionOptionTile(
+                        option: _conversionOptions[index],
+                        onTap: () => Navigator.pop(
+                          sheetContext,
+                          _conversionOptions[index].conversion,
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 8),
+                  ],
+                ),
+              ),
             ),
           ),
         );
@@ -434,12 +473,20 @@ class _ChatScreenState extends State<ChatScreen> {
     );
 
     if (!mounted) return;
-    if (shouldConvert != true) {
+    if (conversion == null) {
       _messageActionOpen = false;
       return;
     }
 
-    widget.onConvertToTask?.call(message);
+    if (conversion == _MessageConversion.task) {
+      widget.onConvertToTask?.call(message);
+      return;
+    }
+
+    _messageActionOpen = false;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text("Coming soon")));
   }
 
   void _retryMessages() {
@@ -602,6 +649,97 @@ class _ChatScreenState extends State<ChatScreen> {
               maxLength: ChatService.maxMessageLength,
               onSend: _sendMessage,
             ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+enum _MessageConversion { task, event, proposal, sharedBudget, groupGoal }
+
+class _ConversionOption {
+  final _MessageConversion conversion;
+  final String label;
+  final IconData icon;
+  final Color color;
+
+  const _ConversionOption({
+    required this.conversion,
+    required this.label,
+    required this.icon,
+    required this.color,
+  });
+}
+
+const List<_ConversionOption> _conversionOptions = [
+  _ConversionOption(
+    conversion: _MessageConversion.task,
+    label: "Task",
+    icon: Icons.task_alt_rounded,
+    color: Color(0xFF2563EB),
+  ),
+  _ConversionOption(
+    conversion: _MessageConversion.event,
+    label: "Event",
+    icon: Icons.calendar_month_outlined,
+    color: Color(0xFF7C3AED),
+  ),
+  _ConversionOption(
+    conversion: _MessageConversion.proposal,
+    label: "Proposal",
+    icon: Icons.how_to_vote_outlined,
+    color: Color(0xFF0891B2),
+  ),
+  _ConversionOption(
+    conversion: _MessageConversion.sharedBudget,
+    label: "Shared Budget",
+    icon: Icons.euro_outlined,
+    color: Color(0xFF059669),
+  ),
+  _ConversionOption(
+    conversion: _MessageConversion.groupGoal,
+    label: "Group Goal",
+    icon: Icons.track_changes_outlined,
+    color: Color(0xFFEA580C),
+  ),
+];
+
+class _ConversionOptionTile extends StatelessWidget {
+  final _ConversionOption option;
+  final VoidCallback onTap;
+
+  const _ConversionOptionTile({required this.option, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: option.color.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(option.icon, color: option.color),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                option.label,
+                style: const TextStyle(
+                  color: Color(0xFF0F172A),
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            const Icon(Icons.chevron_right_rounded, color: Color(0xFF94A3B8)),
           ],
         ),
       ),
