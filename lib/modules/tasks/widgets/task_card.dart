@@ -23,11 +23,9 @@ class TaskCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final bool canComplete =
         task.status == "active" &&
-        (
-          task.assignedUserId == null ||
-          task.assignedUserId!.isEmpty ||
-          task.assignedUserId == currentUserId
-        );
+        (task.assignedUserId == null ||
+            task.assignedUserId!.isEmpty ||
+            task.assignedUserId == currentUserId);
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -40,10 +38,7 @@ class TaskCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               /// Title
-              Text(
-                task.title,
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
+              Text(task.title, style: Theme.of(context).textTheme.titleMedium),
 
               if (task.description.isNotEmpty) ...[
                 const SizedBox(height: 8),
@@ -55,22 +50,15 @@ class TaskCard extends StatelessWidget {
 
               const SizedBox(height: 12),
 
-              TaskAssigneeTile(
-                assignedUserName: task.assignedUserName,
-              ),
+              TaskAssigneeTile(assignedUserName: task.assignedUserName),
 
               if (task.dueDate != null) ...[
                 const SizedBox(height: 8),
                 Row(
                   children: [
-                    const Icon(
-                      Icons.schedule,
-                      size: 18,
-                    ),
+                    const Icon(Icons.schedule, size: 18),
                     const SizedBox(width: 6),
-                    Text(
-                      _formatDate(task.dueDate!),
-                    ),
+                    Text(_formatDate(task.dueDate!)),
                   ],
                 ),
               ],
@@ -78,17 +66,32 @@ class TaskCard extends StatelessWidget {
               const SizedBox(height: 12),
 
               Row(
-                mainAxisAlignment:
-                    MainAxisAlignment.spaceBetween,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  TaskStatusChip(
-                    status: task.status,
-                  ),
+                  TaskStatusChip(status: task.status),
                   Text(
                     task.sourceType.toUpperCase(),
-                    style: Theme.of(context)
-                        .textTheme
-                        .bodySmall,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 8),
+
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  Text(
+                    "Tap for more details",
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodySmall?.copyWith(color: Colors.black54),
+                  ),
+                  const SizedBox(width: 4),
+                  const Icon(
+                    Icons.chevron_right,
+                    size: 18,
+                    color: Colors.black54,
                   ),
                 ],
               ),
@@ -101,9 +104,7 @@ class TaskCard extends StatelessWidget {
                   child: FilledButton.icon(
                     onPressed: onComplete,
                     icon: const Icon(Icons.task_alt),
-                    label: const Text(
-                      "I've completed it",
-                    ),
+                    label: const Text("I've completed it"),
                   ),
                 ),
               ],

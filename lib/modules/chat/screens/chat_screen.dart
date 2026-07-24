@@ -11,8 +11,16 @@ import '../widgets/chat_message_composer.dart';
 class ChatScreen extends StatefulWidget {
   final String gubId;
   final VoidCallback? onMessagesVisible;
+  final ValueChanged<ChatMessageModel>? onConvertToTask;
+  final String? initialMessageId;
 
-  const ChatScreen({super.key, required this.gubId, this.onMessagesVisible});
+  const ChatScreen({
+    super.key,
+    required this.gubId,
+    this.onMessagesVisible,
+    this.onConvertToTask,
+    this.initialMessageId,
+  });
 
   @override
   State<ChatScreen> createState() => _ChatScreenState();
@@ -33,6 +41,16 @@ class _ChatScreenState extends State<ChatScreen> {
   int _pendingReceivedMessageCount = 0;
   bool _isScrollingToPendingMessages = false;
   int _pendingScrollGeneration = 0;
+  bool _messageActionOpen = false;
+  final GlobalKey _targetMessageKey = GlobalKey();
+  ChatMessageModel? _loadedTargetMessage;
+  bool _targetLookupStarted = false;
+  bool _targetFoundInStream = false;
+  bool _targetScrollScheduled = false;
+  bool _targetScrollCompleted = false;
+  int _targetScrollAttempts = 0;
+  bool _isTargetHighlighted = false;
+  Timer? _highlightTimer;
 
   @override
   void initState() {
@@ -41,6 +59,118 @@ class _ChatScreenState extends State<ChatScreen> {
     _messageController.addListener(_onMessageChanged);
     _messageFocusNode.addListener(_onFocusChanged);
     _scrollController.addListener(_onScroll);
+  }
+
+  void _ensureTargetMessageAvailable(List<ChatMessageModel> messages) {
+    final messageId = widget.initialMessageId;
+    if (messageId == null) return;
+
+    if (messages.any((message) => message.messageId == messageId)) {
+      _targetFoundInStream = true;
+      return;
+    }
+
+    if (_targetLookupStarted || _loadedTargetMessage != null) return;
+    _targetLookupStarted = true;
+    unawaited(_loadInitialMessage());
+  }
+
+  Future<void> _loadInitialMessage() async {
+    final messageId = widget.initialMessageId;
+    if (messageId == null) return;
+
+    try {
+      final message = await ChatService.instance.getMessage(
+        gubId: widget.gubId,
+        messageId: messageId,
+      );
+      if (!mounted || _targetFoundInStream) return;
+
+      if (message == null) {
+        _showMissingOriginalMessage();
+        _scheduleScrollToBottom(animate: false);
+        return;
+      }
+
+      _knownMessageIds.add(message.messageId);
+      setState(() => _loadedTargetMessage = message);
+    } catch (_) {
+      if (!mounted || _targetFoundInStream) return;
+      _showMissingOriginalMessage();
+      _scheduleScrollToBottom(animate: false);
+    }
+  }
+
+  void _showMissingOriginalMessage() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Unable to find the original message.")),
+      );
+    });
+  }
+
+  List<ChatMessageModel> _withLoadedTarget(List<ChatMessageModel> messages) {
+    final target = _loadedTargetMessage;
+    if (target == null ||
+        messages.any((message) => message.messageId == target.messageId)) {
+      return messages;
+    }
+
+    final combined = <ChatMessageModel>[...messages, target]
+      ..sort((first, second) => first.createdAt.compareTo(second.createdAt));
+    return combined;
+  }
+
+  void _scheduleTargetMessageScroll(List<ChatMessageModel> messages) {
+    final targetMessageId = widget.initialMessageId;
+    if (targetMessageId == null ||
+        _targetScrollCompleted ||
+        _targetScrollScheduled) {
+      return;
+    }
+
+    final containsTarget = messages.any(
+      (message) => message.messageId == targetMessageId,
+    );
+    if (!containsTarget) return;
+
+    _targetFoundInStream = true;
+    _targetScrollScheduled = true;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _targetScrollScheduled = false;
+      if (!mounted || _targetScrollCompleted) return;
+
+      final targetContext = _targetMessageKey.currentContext;
+      if (targetContext == null) {
+        if (_targetScrollAttempts++ < 2) {
+          _scheduleTargetMessageScroll(messages);
+        }
+        return;
+      }
+
+      _targetScrollCompleted = true;
+      unawaited(
+        Scrollable.ensureVisible(
+          targetContext,
+          duration: const Duration(milliseconds: 350),
+          curve: Curves.easeOut,
+          alignment: 0.35,
+        ).then((_) {
+          if (!mounted) return;
+
+          setState(() => _isTargetHighlighted = true);
+          _highlightTimer?.cancel();
+          _highlightTimer = Timer(const Duration(milliseconds: 1800), () {
+            if (mounted) {
+              setState(() => _isTargetHighlighted = false);
+            }
+          });
+        }),
+      );
+    });
   }
 
   void _onMessageChanged() {
@@ -99,10 +229,12 @@ class _ChatScreenState extends State<ChatScreen> {
       _lastMessageId = newestMessageId;
       _pendingReceivedMessageCount = 0;
       _knownMessageIds.addAll(messages.map((message) => message.messageId));
-      _scheduleScrollToBottom(
-        animate: false,
-        visibleMessageId: newestMessageId,
-      );
+      if (widget.initialMessageId == null) {
+        _scheduleScrollToBottom(
+          animate: false,
+          visibleMessageId: newestMessageId,
+        );
+      }
       return;
     }
 
@@ -276,6 +408,40 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  Future<void> _showMessageActions(ChatMessageModel message) async {
+    if (_messageActionOpen || widget.onConvertToTask == null) return;
+    _messageActionOpen = true;
+
+    final shouldConvert = await showModalBottomSheet<bool>(
+      context: context,
+      useRootNavigator: true,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            child: ListTile(
+              leading: const Icon(
+                Icons.task_alt_rounded,
+                color: Color(0xFF2563EB),
+              ),
+              title: const Text("Convert to task"),
+              onTap: () => Navigator.pop(sheetContext, true),
+            ),
+          ),
+        );
+      },
+    );
+
+    if (!mounted) return;
+    if (shouldConvert != true) {
+      _messageActionOpen = false;
+      return;
+    }
+
+    widget.onConvertToTask?.call(message);
+  }
+
   void _retryMessages() {
     setState(() {
       _hasPositionedInitialMessages = false;
@@ -300,6 +466,7 @@ class _ChatScreenState extends State<ChatScreen> {
     _scrollController
       ..removeListener(_onScroll)
       ..dispose();
+    _highlightTimer?.cancel();
     super.dispose();
   }
 
@@ -338,17 +505,20 @@ class _ChatScreenState extends State<ChatScreen> {
                     return _ChatErrorState(onRetry: _retryMessages);
                   }
 
-                  final messages = snapshot.data ?? const [];
+                  final streamedMessages = snapshot.data ?? const [];
+                  _ensureTargetMessageAvailable(streamedMessages);
+                  final messages = _withLoadedTarget(streamedMessages);
 
                   if (messages.isEmpty) {
                     return const _EmptyChatState();
                   }
 
                   _handleMessages(messages, currentUserId);
+                  _scheduleTargetMessageScroll(messages);
 
                   return Stack(
                     children: [
-                      ListView.builder(
+                      SingleChildScrollView(
                         controller: _scrollController,
                         keyboardDismissBehavior:
                             ScrollViewKeyboardDismissBehavior.onDrag,
@@ -358,17 +528,29 @@ class _ChatScreenState extends State<ChatScreen> {
                           16,
                           _pendingReceivedMessageCount > 0 ? 72 : 12,
                         ),
-                        itemCount: messages.length,
-                        itemBuilder: (context, index) {
-                          final message = messages[index];
-
-                          return ChatMessageBubble(
-                            message: message,
-                            isCurrentUser:
-                                currentUserId != null &&
-                                message.senderId == currentUserId,
-                          );
-                        },
+                        child: Column(
+                          children: [
+                            for (final message in messages)
+                              KeyedSubtree(
+                                key:
+                                    message.messageId == widget.initialMessageId
+                                    ? _targetMessageKey
+                                    : ValueKey(message.messageId),
+                                child: ChatMessageBubble(
+                                  message: message,
+                                  isCurrentUser:
+                                      currentUserId != null &&
+                                      message.senderId == currentUserId,
+                                  isHighlighted:
+                                      _isTargetHighlighted &&
+                                      message.messageId ==
+                                          widget.initialMessageId,
+                                  onLongPress: () =>
+                                      _showMessageActions(message),
+                                ),
+                              ),
+                          ],
+                        ),
                       ),
                       if (_pendingReceivedMessageCount > 0)
                         Positioned(

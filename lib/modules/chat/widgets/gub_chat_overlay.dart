@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../tasks/screens/create_task_screen.dart';
+import '../models/chat_message_model.dart';
 import '../screens/chat_screen.dart';
 import '../services/chat_read_service.dart';
 import 'chat_floating_button.dart';
@@ -45,6 +47,16 @@ class GubChatOverlay extends StatefulWidget {
 
   const GubChatOverlay({super.key, required this.gubId, required this.child});
 
+  static Future<bool> openChat({
+    required String gubId,
+    String? initialMessageId,
+  }) {
+    return _GubChatOverlayController.instance.openChat(
+      gubId: gubId,
+      initialMessageId: initialMessageId,
+    );
+  }
+
   @override
   State<GubChatOverlay> createState() => _GubChatOverlayState();
 }
@@ -55,6 +67,7 @@ class _GubChatOverlayState extends State<GubChatOverlay> {
   StreamSubscription<int>? _unreadCountSubscription;
 
   bool _isChatOpen = false;
+  bool _isTaskConversionOpen = false;
   bool _bringToFrontScheduled = false;
   int? _unreadCount;
   int _unreadStreamGeneration = 0;
@@ -114,7 +127,7 @@ class _GubChatOverlayState extends State<GubChatOverlay> {
       _rootOverlay = currentRootOverlay;
       _GubChatOverlayController.instance.attach(this);
 
-      if (_isChatOpen) {
+      if (_isOverlaySuppressed) {
         _removeOverlay();
       } else {
         _insertOverlay();
@@ -149,7 +162,7 @@ class _GubChatOverlayState extends State<GubChatOverlay> {
   }
 
   void _insertOverlay() {
-    if (!mounted || _isChatOpen) return;
+    if (!mounted || _isOverlaySuppressed) return;
 
     final currentEntry = _overlayEntry;
     if (currentEntry != null) {
@@ -168,7 +181,7 @@ class _GubChatOverlayState extends State<GubChatOverlay> {
   Widget _buildOverlay(BuildContext context) {
     final keyboardIsOpen = MediaQuery.viewInsetsOf(context).bottom > 0;
 
-    if (_isChatOpen || keyboardIsOpen) {
+    if (_isOverlaySuppressed || keyboardIsOpen) {
       return const SizedBox.shrink();
     }
 
@@ -178,7 +191,7 @@ class _GubChatOverlayState extends State<GubChatOverlay> {
         child: Align(
           alignment: Alignment.bottomRight,
           child: ChatFloatingButton(
-            onPressed: _openChat,
+            onPressed: () => _openChat(),
             unreadCount: _unreadCount,
           ),
         ),
@@ -195,14 +208,17 @@ class _GubChatOverlayState extends State<GubChatOverlay> {
   }
 
   void bringToFront() {
-    if (!mounted || _isChatOpen) return;
+    if (!mounted || _isOverlaySuppressed) return;
     _scheduleOverlaySync(bringToFront: true);
   }
 
-  Future<void> _openChat() async {
+  bool get _isOverlaySuppressed => _isChatOpen || _isTaskConversionOpen;
+
+  Future<void> _openChat({String? initialMessageId}) async {
     if (_isChatOpen || !mounted) return;
 
     final chatGubId = widget.gubId;
+    ChatMessageModel? taskSourceMessage;
     _isChatOpen = true;
     _unreadCount = 0;
     _removeOverlay();
@@ -220,7 +236,12 @@ class _GubChatOverlayState extends State<GubChatOverlay> {
             borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
             child: ChatScreen(
               gubId: chatGubId,
+              initialMessageId: initialMessageId,
               onMessagesVisible: () => _handleVisibleMessages(chatGubId),
+              onConvertToTask: (message) {
+                taskSourceMessage = message;
+                Navigator.pop(sheetContext);
+              },
             ),
           ),
         );
@@ -232,6 +253,33 @@ class _GubChatOverlayState extends State<GubChatOverlay> {
     _unreadCount = 0;
     unawaited(_markChatAsRead(chatGubId));
     _isChatOpen = false;
+
+    final sourceMessage = taskSourceMessage;
+    if (sourceMessage != null) {
+      _isTaskConversionOpen = true;
+
+      try {
+        await Navigator.of(context, rootNavigator: true).push<void>(
+          MaterialPageRoute(
+            builder: (_) => CreateTaskScreen(
+              gubId: chatGubId,
+              sourceType: "chat",
+              sourceId: sourceMessage.messageId,
+              sourcePreview: sourceMessage.text,
+              originUserId: sourceMessage.senderId,
+              sourceAuthorName: sourceMessage.senderName,
+            ),
+          ),
+        );
+      } finally {
+        if (mounted) {
+          _isTaskConversionOpen = false;
+          _insertOverlay();
+        }
+      }
+      return;
+    }
+
     _insertOverlay();
   }
 
@@ -296,5 +344,21 @@ class _GubChatOverlayController {
 
   void bringToFront() {
     _activeOverlay?.bringToFront();
+  }
+
+  Future<bool> openChat({
+    required String gubId,
+    String? initialMessageId,
+  }) async {
+    final overlay = _activeOverlay;
+    if (overlay == null ||
+        !overlay.mounted ||
+        overlay.widget.gubId != gubId ||
+        overlay._isOverlaySuppressed) {
+      return false;
+    }
+
+    await overlay._openChat(initialMessageId: initialMessageId);
+    return true;
   }
 }

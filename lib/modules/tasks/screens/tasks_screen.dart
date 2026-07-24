@@ -7,19 +7,16 @@ import '../models/task_model.dart';
 import '../services/task_service.dart';
 import '../widgets/task_card.dart';
 import 'create_task_screen.dart';
+import 'task_details_screen.dart';
 
 class TasksScreen extends StatelessWidget {
   final String gubId;
 
-  const TasksScreen({
-    super.key,
-    required this.gubId,
-  });
+  const TasksScreen({super.key, required this.gubId});
 
   @override
   Widget build(BuildContext context) {
-    final currentUserId =
-        FirebaseAuth.instance.currentUser!.uid;
+    final currentUserId = FirebaseAuth.instance.currentUser!.uid;
 
     return GubHomeBackground(
       child: Scaffold(
@@ -35,11 +32,7 @@ class TasksScreen extends StatelessWidget {
           onPressed: () {
             Navigator.push(
               context,
-              MaterialPageRoute(
-                builder: (_) => CreateTaskScreen(
-                  gubId: gubId,
-                ),
-              ),
+              MaterialPageRoute(builder: (_) => CreateTaskScreen(gubId: gubId)),
             );
           },
           child: const Icon(Icons.add),
@@ -49,47 +42,42 @@ class TasksScreen extends StatelessWidget {
           stream: TaskService.instance.tasksStream(gubId),
 
           builder: (context, snapshot) {
-            if (snapshot.connectionState ==
-                ConnectionState.waiting) {
-              return const Center(
-                child: CircularProgressIndicator(),
-              );
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
             }
 
-            if (!snapshot.hasData ||
-                snapshot.data!.isEmpty) {
-              return const Center(
-                child: Text("No tasks yet"),
-              );
+            if (!snapshot.hasData || snapshot.data!.isEmpty) {
+              return const Center(child: Text("No tasks yet"));
             }
 
             final tasks = snapshot.data!;
 
-            final myTasks = tasks.where(
-              (task) =>
-                  task.status == "active" &&
-                  !task.archived &&
-                  task.assignedUserId == currentUserId,
-            ).toList();
+            final myTasks = tasks
+                .where(
+                  (task) =>
+                      task.status == "active" &&
+                      !task.archived &&
+                      task.assignedUserId == currentUserId,
+                )
+                .toList();
 
-            final activeTasks = tasks.where(
-              (task) =>
-                  task.status == "active" &&
-                  !task.archived &&
-                  task.assignedUserId != currentUserId,
-            ).toList();
+            final activeTasks = tasks
+                .where(
+                  (task) =>
+                      task.status == "active" &&
+                      !task.archived &&
+                      task.assignedUserId != currentUserId,
+                )
+                .toList();
 
-            final completedTasks = tasks.where(
-              (task) =>
-                  task.status == "completed" &&
-                  !task.archived,
-            ).toList();
+            final completedTasks = tasks
+                .where((task) => task.status == "completed" && !task.archived)
+                .toList();
 
             return ListView(
               padding: const EdgeInsets.all(16),
 
               children: [
-
                 if (myTasks.isNotEmpty) ...[
                   _sectionHeader(
                     context,
@@ -102,6 +90,7 @@ class TasksScreen extends StatelessWidget {
                     (task) => TaskCard(
                       task: task,
                       currentUserId: currentUserId,
+                      onTap: () => _openTaskDetails(context, task),
                       onComplete: () async {
                         await TaskService.instance.completeTask(
                           task: task,
@@ -113,7 +102,6 @@ class TasksScreen extends StatelessWidget {
 
                   const SizedBox(height: 30),
                 ],
-
 
                 if (activeTasks.isNotEmpty) ...[
                   _sectionHeader(
@@ -127,6 +115,7 @@ class TasksScreen extends StatelessWidget {
                     (task) => TaskCard(
                       task: task,
                       currentUserId: currentUserId,
+                      onTap: () => _openTaskDetails(context, task),
                       onComplete: () async {
                         await TaskService.instance.completeTask(
                           task: task,
@@ -138,7 +127,6 @@ class TasksScreen extends StatelessWidget {
 
                   const SizedBox(height: 30),
                 ],
-
 
                 if (completedTasks.isNotEmpty) ...[
                   _sectionHeader(
@@ -152,6 +140,7 @@ class TasksScreen extends StatelessWidget {
                     (task) => TaskCard(
                       task: task,
                       currentUserId: currentUserId,
+                      onTap: () => _openTaskDetails(context, task),
                     ),
                   ),
                 ],
@@ -163,6 +152,14 @@ class TasksScreen extends StatelessWidget {
     );
   }
 
+  void _openTaskDetails(BuildContext context, TaskModel task) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) =>
+            TaskDetailsScreen(gubId: task.gubId, taskId: task.taskId),
+      ),
+    );
+  }
 
   Widget _sectionHeader(
     BuildContext context, {
@@ -172,25 +169,17 @@ class TasksScreen extends StatelessWidget {
   }) {
     return Column(
       children: [
-
-        Icon(
-          icon,
-          size: 34,
-          color: Colors.blue,
-        ),
+        Icon(icon, size: 34, color: Colors.blue),
 
         const SizedBox(height: 6),
 
         Text(
           title,
           textAlign: TextAlign.center,
-          style: Theme.of(context)
-              .textTheme
-              .titleLarge
-              ?.copyWith(
-                color: Colors.blue,
-                fontWeight: FontWeight.bold,
-              ),
+          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+            color: Colors.blue,
+            fontWeight: FontWeight.bold,
+          ),
         ),
 
         const SizedBox(height: 3),
@@ -198,10 +187,7 @@ class TasksScreen extends StatelessWidget {
         Text(
           subtitle,
           textAlign: TextAlign.center,
-          style: const TextStyle(
-            color: Colors.grey,
-            fontSize: 14,
-          ),
+          style: const TextStyle(color: Colors.grey, fontSize: 14),
         ),
 
         const SizedBox(height: 16),

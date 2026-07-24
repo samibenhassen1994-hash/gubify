@@ -25,6 +25,8 @@ class TaskModel {
   final String? sourceId;
   final String? sourcePreview;
   final String? originUserId;
+  final String? sourceAuthorName;
+  final String? additionalDetails;
 
   /// active
   /// completed
@@ -61,6 +63,8 @@ class TaskModel {
     this.sourceId,
     this.sourcePreview,
     this.originUserId,
+    this.sourceAuthorName,
+    this.additionalDetails,
 
     required this.status,
     required this.priority,
@@ -93,6 +97,8 @@ class TaskModel {
       sourceId: json["sourceId"],
       sourcePreview: json["sourcePreview"],
       originUserId: json["originUserId"],
+      sourceAuthorName: json["sourceAuthorName"],
+      additionalDetails: json["additionalDetails"],
 
       status: json["status"] ?? "active",
       priority: json["priority"] ?? "normal",
@@ -127,6 +133,8 @@ class TaskModel {
       "sourceId": sourceId,
       "sourcePreview": sourcePreview,
       "originUserId": originUserId,
+      "sourceAuthorName": sourceAuthorName,
+      "additionalDetails": additionalDetails,
 
       "status": status,
       "priority": priority,
@@ -180,6 +188,8 @@ class TaskModel {
       sourceId: sourceId,
       sourcePreview: sourcePreview,
       originUserId: originUserId,
+      sourceAuthorName: sourceAuthorName,
+      additionalDetails: additionalDetails,
 
       status: status ?? this.status,
       priority: priority ?? this.priority,

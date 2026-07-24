@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import '../../chat/widgets/gub_chat_overlay.dart';
 import '../models/task_model.dart';
 import '../services/task_service.dart';
 import '../widgets/task_status_chip.dart';
@@ -16,21 +17,39 @@ class TaskDetailsScreen extends StatefulWidget {
   });
 
   @override
-  State<TaskDetailsScreen> createState() =>
-      _TaskDetailsScreenState();
+  State<TaskDetailsScreen> createState() => _TaskDetailsScreenState();
 }
 
-class _TaskDetailsScreenState
-    extends State<TaskDetailsScreen> {
-
+class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
   bool _loading = false;
+  bool _openingOriginalMessage = false;
 
-  Future<void> _completeTask(
-    TaskModel task,
-  ) async {
+  Future<void> _openOriginalMessage(TaskModel task) async {
+    final messageId = task.sourceId;
+    if (_openingOriginalMessage || messageId == null || messageId.isEmpty) {
+      return;
+    }
 
-    final user =
-        FirebaseAuth.instance.currentUser;
+    setState(() => _openingOriginalMessage = true);
+
+    final opened = await GubChatOverlay.openChat(
+      gubId: task.gubId,
+      initialMessageId: messageId,
+    );
+
+    if (!mounted) return;
+
+    setState(() => _openingOriginalMessage = false);
+
+    if (!opened) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Unable to open the original message.")),
+      );
+    }
+  }
+
+  Future<void> _completeTask(TaskModel task) async {
+    final user = FirebaseAuth.instance.currentUser;
 
     if (user == null) return;
 
@@ -39,7 +58,6 @@ class _TaskDetailsScreenState
     });
 
     try {
-
       await TaskService.instance.completeTask(
         task: task,
         completedBy: user.uid,
@@ -48,22 +66,13 @@ class _TaskDetailsScreenState
       if (!mounted) return;
 
       Navigator.pop(context);
-
     } catch (e) {
-
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context)
-          .showSnackBar(
-        SnackBar(
-          content: Text(
-            e.toString(),
-          ),
-        ),
-      );
-
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(e.toString())));
     } finally {
-
       if (mounted) {
         setState(() {
           _loading = false;
@@ -73,9 +82,7 @@ class _TaskDetailsScreenState
   }
 
   bool _canComplete(TaskModel task) {
-
-    final uid =
-        FirebaseAuth.instance.currentUser?.uid;
+    final uid = FirebaseAuth.instance.currentUser?.uid;
 
     if (uid == null) return false;
 
@@ -90,13 +97,8 @@ class _TaskDetailsScreenState
 
   @override
   Widget build(BuildContext context) {
-
     return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          "Task Details",
-        ),
-      ),
+      appBar: AppBar(title: const Text("Task Details")),
 
       body: StreamBuilder<TaskModel?>(
         stream: TaskService.instance.taskStream(
@@ -105,172 +107,219 @@ class _TaskDetailsScreenState
         ),
 
         builder: (context, snapshot) {
-
-          if (snapshot.connectionState ==
-              ConnectionState.waiting) {
-            return const Center(
-              child: CircularProgressIndicator(),
-            );
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
           }
 
           final task = snapshot.data;
 
           if (task == null) {
-            return const Center(
-              child: Text(
-                "Task not found",
-              ),
-            );
+            return const Center(child: Text("Task not found"));
           }
 
-          return Padding(
+          return ListView(
             padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
-              children: [                 Text(
-                  task.title,
-                  style: Theme.of(context)
-                      .textTheme
-                      .headlineSmall,
+            children: [
+              Text(
+                task.title,
+                style: Theme.of(context).textTheme.headlineSmall,
+              ),
+
+              const SizedBox(height: 16),
+
+              if (task.description.isNotEmpty) ...[
+                Text(
+                  task.description,
+                  style: Theme.of(context).textTheme.bodyLarge,
                 ),
-
-                const SizedBox(height: 16),
-
-                if (task.description.isNotEmpty) ...[
-                  Text(
-                    task.description,
-                    style: Theme.of(context)
-                        .textTheme
-                        .bodyLarge,
-                  ),
-
-                  const SizedBox(height: 20),
-                ],
-
-
-                TaskStatusChip(
-                  status: task.status,
-                ),
-
 
                 const SizedBox(height: 20),
-
-
-                _InfoRow(
-                  title: "Created by",
-                  value: task.creatorName,
-                ),
-
-
-                const SizedBox(height: 12),
-
-
-                _InfoRow(
-                  title: "Assigned to",
-                  value:
-                      task.assignedUserName ??
-                      "Nobody",
-                ),
-
-
-                const SizedBox(height: 12),
-
-
-                _InfoRow(
-                  title: "Priority",
-                  value: task.priority,
-                ),
-
-
-                const SizedBox(height: 12),
-
-
-                if (task.dueDate != null)
-                  _InfoRow(
-                    title: "Due date",
-                    value: _formatDate(
-                      task.dueDate!,
-                    ),
-                  ),
-
-
-                const Spacer(),
-
-
-                if (_canComplete(task))
-                  SizedBox(
-                    width: double.infinity,
-                    child: FilledButton.icon(
-                      onPressed: _loading
-                          ? null
-                          : () {
-                              _completeTask(task);
-                            },
-                      icon: const Icon(
-                        Icons.task_alt,
-                      ),
-                      label: Text(
-                        _loading
-                            ? "Completing..."
-                            : "I've completed it",
-                      ),
-                    ),
-                  ),
               ],
-            ),
+
+              if (task.sourceType == "chat" &&
+                  task.sourcePreview?.isNotEmpty == true) ...[
+                _ChatSourceCard(
+                  message: task.sourcePreview!,
+                  authorName: task.sourceAuthorName,
+                  onTap: task.sourceId != null && task.sourceId!.isNotEmpty
+                      ? () => _openOriginalMessage(task)
+                      : null,
+                  opening: _openingOriginalMessage,
+                ),
+                const SizedBox(height: 20),
+              ],
+
+              if (task.additionalDetails?.isNotEmpty == true) ...[
+                Text(
+                  "Additional details",
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    color: const Color(0xFF2563EB),
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(task.additionalDetails!),
+                const SizedBox(height: 20),
+              ],
+
+              TaskStatusChip(status: task.status),
+
+              const SizedBox(height: 20),
+
+              _InfoRow(title: "Created by", value: task.creatorName),
+
+              const SizedBox(height: 12),
+
+              _InfoRow(
+                title: "Assigned to",
+                value: task.assignedUserName ?? "Nobody",
+              ),
+
+              const SizedBox(height: 12),
+
+              _InfoRow(title: "Priority", value: task.priority),
+
+              const SizedBox(height: 12),
+
+              if (task.dueDate != null)
+                _InfoRow(title: "Due date", value: _formatDate(task.dueDate!)),
+
+              const SizedBox(height: 32),
+
+              if (_canComplete(task))
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: _loading
+                        ? null
+                        : () {
+                            _completeTask(task);
+                          },
+                    icon: const Icon(Icons.task_alt),
+                    label: Text(
+                      _loading ? "Completing..." : "I've completed it",
+                    ),
+                  ),
+                ),
+            ],
           );
         },
       ),
     );
   }
 
-
-  String _formatDate(
-    dynamic timestamp,
-  ) {
-    final date =
-        timestamp.toDate();
+  String _formatDate(dynamic timestamp) {
+    final date = timestamp.toDate();
 
     return "${date.day}/${date.month}/${date.year}";
   }
 }
 
+class _ChatSourceCard extends StatelessWidget {
+  final String message;
+  final String? authorName;
+  final VoidCallback? onTap;
+  final bool opening;
+
+  const _ChatSourceCard({
+    required this.message,
+    this.authorName,
+    this.onTap,
+    required this.opening,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: const BorderSide(color: Color(0xFF2563EB)),
+      ),
+      child: InkWell(
+        onTap: opening ? null : onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Row(
+                children: [
+                  Icon(
+                    Icons.chat_bubble_outline_rounded,
+                    color: Color(0xFF2563EB),
+                  ),
+                  SizedBox(width: 8),
+                  Text(
+                    "Created from chat",
+                    style: TextStyle(
+                      color: Color(0xFF2563EB),
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+              if (authorName != null && authorName!.trim().isNotEmpty) ...[
+                const SizedBox(height: 10),
+                Text(
+                  authorName!,
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: const Color(0xFF2563EB),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 8),
+              Text(
+                "“$message”",
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(height: 1.4),
+              ),
+              if (onTap != null) ...[
+                const SizedBox(height: 12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    Text(
+                      opening ? "Opening chat..." : "View original message",
+                      style: const TextStyle(
+                        color: Color(0xFF2563EB),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    const Icon(
+                      Icons.open_in_new,
+                      size: 17,
+                      color: Color(0xFF2563EB),
+                    ),
+                  ],
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
 
 class _InfoRow extends StatelessWidget {
-
   final String title;
   final String value;
 
-
-  const _InfoRow({
-    required this.title,
-    required this.value,
-  });
-
+  const _InfoRow({required this.title, required this.value});
 
   @override
-  Widget build(
-    BuildContext context,
-  ) {
+  Widget build(BuildContext context) {
     return Row(
-      mainAxisAlignment:
-          MainAxisAlignment.spaceBetween,
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
+        Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
 
-        Text(
-          title,
-          style: const TextStyle(
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-
-        Flexible(
-          child: Text(
-            value,
-            textAlign: TextAlign.right,
-          ),
-        ),
+        Flexible(child: Text(value, textAlign: TextAlign.right)),
       ],
     );
   }

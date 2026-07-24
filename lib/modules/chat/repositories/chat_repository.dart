@@ -54,4 +54,16 @@ class ChatRepository {
               .toList(growable: false),
         );
   }
+
+  Future<ChatMessageModel?> getMessage({
+    required String gubId,
+    required String messageId,
+  }) async {
+    final document = await messagesCollection(gubId).doc(messageId).get();
+    if (!document.exists) return null;
+
+    final data = Map<String, dynamic>.from(document.data()!);
+    data["messageId"] = document.id;
+    return ChatMessageModel.fromFirestore(data);
+  }
 }

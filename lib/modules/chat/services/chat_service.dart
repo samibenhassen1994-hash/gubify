@@ -17,6 +17,16 @@ class ChatService {
     return ChatRepository.instance.messagesStream(gubId);
   }
 
+  Future<ChatMessageModel?> getMessage({
+    required String gubId,
+    required String messageId,
+  }) {
+    return ChatRepository.instance.getMessage(
+      gubId: gubId,
+      messageId: messageId,
+    );
+  }
+
   Future<void> sendMessage({
     required String gubId,
     required String text,
