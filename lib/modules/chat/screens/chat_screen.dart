@@ -31,6 +31,8 @@ class _ChatScreenState extends State<ChatScreen> {
   String? _lastVisibleMessageId;
   final Set<String> _knownMessageIds = <String>{};
   int _pendingReceivedMessageCount = 0;
+  bool _isScrollingToPendingMessages = false;
+  int _pendingScrollGeneration = 0;
 
   @override
   void initState() {
@@ -56,6 +58,8 @@ class _ChatScreenState extends State<ChatScreen> {
     final newestMessageId = _lastMessageId;
 
     if (newestMessageId != null && _isAtBottom()) {
+      if (_isScrollingToPendingMessages) return;
+
       if (_pendingReceivedMessageCount > 0 && mounted) {
         setState(() => _pendingReceivedMessageCount = 0);
       }
@@ -83,6 +87,8 @@ class _ChatScreenState extends State<ChatScreen> {
       _hasPositionedInitialMessages = false;
       _knownMessageIds.clear();
       _pendingReceivedMessageCount = 0;
+      _isScrollingToPendingMessages = false;
+      _pendingScrollGeneration++;
       return;
     }
 
@@ -112,6 +118,10 @@ class _ChatScreenState extends State<ChatScreen> {
     _lastMessageId = newestMessageId;
 
     if (!newestMessageChanged) return;
+    if (_isScrollingToPendingMessages) {
+      _pendingReceivedMessageCount += newReceivedMessageCount;
+      return;
+    }
 
     if (shouldFollowNewestMessage) {
       _scheduleScrollToBottom(animate: true, visibleMessageId: newestMessageId);
@@ -169,10 +179,70 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _scrollToPendingMessages() {
-    final newestMessageId = _lastMessageId;
-    if (newestMessageId == null) return;
+    if (_isScrollingToPendingMessages || _lastMessageId == null) return;
+    if (!_scrollController.hasClients) return;
 
-    _scheduleScrollToBottom(animate: true, visibleMessageId: newestMessageId);
+    final generation = ++_pendingScrollGeneration;
+    setState(() => _isScrollingToPendingMessages = true);
+    _schedulePendingScrollAttempt(generation);
+  }
+
+  void _schedulePendingScrollAttempt(int generation) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted ||
+          generation != _pendingScrollGeneration ||
+          !_isScrollingToPendingMessages) {
+        return;
+      }
+
+      if (!_scrollController.hasClients) {
+        setState(() => _isScrollingToPendingMessages = false);
+        return;
+      }
+
+      final target = _scrollController.position.maxScrollExtent;
+
+      unawaited(
+        _scrollController
+            .animateTo(
+              target,
+              duration: const Duration(milliseconds: 220),
+              curve: Curves.easeOut,
+            )
+            .then((_) => _verifyPendingScroll(generation))
+            .onError<Object>((_, _) => _verifyPendingScroll(generation)),
+      );
+    });
+  }
+
+  void _verifyPendingScroll(int generation) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted ||
+          generation != _pendingScrollGeneration ||
+          !_isScrollingToPendingMessages) {
+        return;
+      }
+
+      if (!_scrollController.hasClients) {
+        setState(() => _isScrollingToPendingMessages = false);
+        return;
+      }
+
+      if (!_isAtBottom()) {
+        _schedulePendingScrollAttempt(generation);
+        return;
+      }
+
+      final newestMessageId = _lastMessageId;
+      setState(() {
+        _isScrollingToPendingMessages = false;
+        _pendingReceivedMessageCount = 0;
+      });
+
+      if (newestMessageId != null) {
+        _notifyMessagesVisible(newestMessageId);
+      }
+    });
   }
 
   Future<void> _sendMessage() async {
@@ -213,6 +283,8 @@ class _ChatScreenState extends State<ChatScreen> {
       _lastVisibleMessageId = null;
       _knownMessageIds.clear();
       _pendingReceivedMessageCount = 0;
+      _isScrollingToPendingMessages = false;
+      _pendingScrollGeneration++;
       _messagesStream = ChatService.instance.messagesStream(widget.gubId);
     });
   }
@@ -312,7 +384,9 @@ class _ChatScreenState extends State<ChatScreen> {
                                   "${_pendingReceivedMessageCount == 1 ? 'message' : 'messages'}. "
                                   "Scroll to the latest messages.",
                               child: FilledButton.icon(
-                                onPressed: _scrollToPendingMessages,
+                                onPressed: _isScrollingToPendingMessages
+                                    ? null
+                                    : _scrollToPendingMessages,
                                 icon: const Icon(
                                   Icons.keyboard_arrow_down_rounded,
                                 ),
@@ -323,6 +397,10 @@ class _ChatScreenState extends State<ChatScreen> {
                                 style: FilledButton.styleFrom(
                                   backgroundColor: const Color(0xFF2563EB),
                                   foregroundColor: Colors.white,
+                                  disabledBackgroundColor: const Color(
+                                    0xFF2563EB,
+                                  ),
+                                  disabledForegroundColor: Colors.white,
                                   elevation: 4,
                                 ),
                               ),

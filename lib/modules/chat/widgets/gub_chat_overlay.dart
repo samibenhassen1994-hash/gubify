@@ -66,14 +66,13 @@ class _GubChatOverlayState extends State<GubChatOverlay> {
   void initState() {
     super.initState();
     unawaited(_subscribeToUnreadCount());
+    _scheduleOverlaySync();
+  }
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-
-      _rootOverlay = Overlay.of(context, rootOverlay: true);
-      _GubChatOverlayController.instance.attach(this);
-      _insertOverlay();
-    });
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _scheduleOverlaySync();
   }
 
   @override
@@ -82,8 +81,45 @@ class _GubChatOverlayState extends State<GubChatOverlay> {
 
     if (oldWidget.gubId != widget.gubId) {
       unawaited(_subscribeToUnreadCount());
-      _overlayEntry?.markNeedsBuild();
+      _scheduleOverlaySync(bringToFront: true);
     }
+  }
+
+  void _scheduleOverlaySync({bool bringToFront = false}) {
+    if (bringToFront && _overlayEntry?.mounted == true) {
+      _removeOverlay();
+    }
+    if (_bringToFrontScheduled) return;
+
+    _bringToFrontScheduled = true;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _bringToFrontScheduled = false;
+      if (!mounted) return;
+
+      final currentRootOverlay = Overlay.maybeOf(context, rootOverlay: true);
+      if (currentRootOverlay == null || !currentRootOverlay.mounted) return;
+
+      final entry = _overlayEntry;
+      final overlayChanged =
+          _rootOverlay != null && !identical(_rootOverlay, currentRootOverlay);
+
+      if (entry != null && (!entry.mounted || overlayChanged)) {
+        if (entry.mounted) {
+          entry.remove();
+        }
+        _overlayEntry = null;
+      }
+
+      _rootOverlay = currentRootOverlay;
+      _GubChatOverlayController.instance.attach(this);
+
+      if (_isChatOpen) {
+        _removeOverlay();
+      } else {
+        _insertOverlay();
+      }
+    });
   }
 
   Future<void> _subscribeToUnreadCount() async {
@@ -113,10 +149,16 @@ class _GubChatOverlayState extends State<GubChatOverlay> {
   }
 
   void _insertOverlay() {
-    if (!mounted || _isChatOpen || _overlayEntry != null) return;
+    if (!mounted || _isChatOpen) return;
+
+    final currentEntry = _overlayEntry;
+    if (currentEntry != null) {
+      if (currentEntry.mounted) return;
+      _overlayEntry = null;
+    }
 
     final overlay = _rootOverlay;
-    if (overlay == null) return;
+    if (overlay == null || !overlay.mounted) return;
 
     final entry = OverlayEntry(builder: _buildOverlay);
     _overlayEntry = entry;
@@ -145,23 +187,16 @@ class _GubChatOverlayState extends State<GubChatOverlay> {
   }
 
   void _removeOverlay() {
-    _overlayEntry?.remove();
+    final entry = _overlayEntry;
+    if (entry?.mounted == true) {
+      entry!.remove();
+    }
     _overlayEntry = null;
   }
 
   void bringToFront() {
-    if (!mounted || _isChatOpen || _bringToFrontScheduled) return;
-
-    _bringToFrontScheduled = true;
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _bringToFrontScheduled = false;
-
-      if (!mounted || _isChatOpen) return;
-
-      _removeOverlay();
-      _insertOverlay();
-    });
+    if (!mounted || _isChatOpen) return;
+    _scheduleOverlaySync(bringToFront: true);
   }
 
   Future<void> _openChat() async {
