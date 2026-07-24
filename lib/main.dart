@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:firebase_core/firebase_core.dart';
 
 import 'firebase_options.dart';
+import 'modules/chat/widgets/gub_chat_overlay.dart';
 import 'theme/app_theme.dart';
 import 'pages/startup_screen.dart';
 
@@ -31,6 +32,7 @@ class GubifyApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       title: 'Gubify',
       theme: AppTheme.lightTheme,
+      navigatorObservers: [GubChatNavigatorObserver.instance],
       home: const StartupScreen(),
     );
   }
