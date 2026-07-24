@@ -10,8 +10,9 @@ import '../widgets/chat_message_composer.dart';
 
 class ChatScreen extends StatefulWidget {
   final String gubId;
+  final VoidCallback? onMessagesVisible;
 
-  const ChatScreen({super.key, required this.gubId});
+  const ChatScreen({super.key, required this.gubId, this.onMessagesVisible});
 
   @override
   State<ChatScreen> createState() => _ChatScreenState();
@@ -27,6 +28,9 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _isSending = false;
   bool _hasPositionedInitialMessages = false;
   String? _lastMessageId;
+  String? _lastVisibleMessageId;
+  final Set<String> _knownMessageIds = <String>{};
+  int _pendingReceivedMessageCount = 0;
 
   @override
   void initState() {
@@ -34,6 +38,7 @@ class _ChatScreenState extends State<ChatScreen> {
     _messagesStream = ChatService.instance.messagesStream(widget.gubId);
     _messageController.addListener(_onMessageChanged);
     _messageFocusNode.addListener(_onFocusChanged);
+    _scrollController.addListener(_onScroll);
   }
 
   void _onMessageChanged() {
@@ -47,6 +52,17 @@ class _ChatScreenState extends State<ChatScreen> {
     _scheduleScrollToBottom(animate: true);
   }
 
+  void _onScroll() {
+    final newestMessageId = _lastMessageId;
+
+    if (newestMessageId != null && _isAtBottom()) {
+      if (_pendingReceivedMessageCount > 0 && mounted) {
+        setState(() => _pendingReceivedMessageCount = 0);
+      }
+      _notifyMessagesVisible(newestMessageId);
+    }
+  }
+
   bool _isNearBottom() {
     if (!_scrollController.hasClients) return true;
 
@@ -54,10 +70,19 @@ class _ChatScreenState extends State<ChatScreen> {
     return position.maxScrollExtent - position.pixels <= 96;
   }
 
-  void _handleMessages(List<ChatMessageModel> messages) {
+  bool _isAtBottom() {
+    if (!_scrollController.hasClients) return false;
+
+    final position = _scrollController.position;
+    return position.maxScrollExtent - position.pixels <= 8;
+  }
+
+  void _handleMessages(List<ChatMessageModel> messages, String? currentUserId) {
     if (messages.isEmpty) {
       _lastMessageId = null;
       _hasPositionedInitialMessages = false;
+      _knownMessageIds.clear();
+      _pendingReceivedMessageCount = 0;
       return;
     }
 
@@ -66,21 +91,50 @@ class _ChatScreenState extends State<ChatScreen> {
     if (!_hasPositionedInitialMessages) {
       _hasPositionedInitialMessages = true;
       _lastMessageId = newestMessageId;
-      _scheduleScrollToBottom(animate: false);
+      _pendingReceivedMessageCount = 0;
+      _knownMessageIds.addAll(messages.map((message) => message.messageId));
+      _scheduleScrollToBottom(
+        animate: false,
+        visibleMessageId: newestMessageId,
+      );
       return;
     }
 
-    if (_lastMessageId == newestMessageId) return;
+    final newReceivedMessageCount = messages.where((message) {
+      return !_knownMessageIds.contains(message.messageId) &&
+          currentUserId != null &&
+          message.senderId != currentUserId;
+    }).length;
+    _knownMessageIds.addAll(messages.map((message) => message.messageId));
 
     final shouldFollowNewestMessage = _isNearBottom();
+    final newestMessageChanged = _lastMessageId != newestMessageId;
     _lastMessageId = newestMessageId;
 
+    if (!newestMessageChanged) return;
+
     if (shouldFollowNewestMessage) {
-      _scheduleScrollToBottom(animate: true);
+      _scheduleScrollToBottom(animate: true, visibleMessageId: newestMessageId);
+    } else if (newReceivedMessageCount > 0) {
+      _pendingReceivedMessageCount += newReceivedMessageCount;
     }
   }
 
-  void _scheduleScrollToBottom({required bool animate}) {
+  void _notifyMessagesVisible(String newestMessageId) {
+    if (_lastVisibleMessageId == newestMessageId) return;
+    _lastVisibleMessageId = newestMessageId;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        widget.onMessagesVisible?.call();
+      }
+    });
+  }
+
+  void _scheduleScrollToBottom({
+    required bool animate,
+    String? visibleMessageId,
+  }) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !_scrollController.hasClients) return;
 
@@ -88,16 +142,37 @@ class _ChatScreenState extends State<ChatScreen> {
 
       if (animate) {
         unawaited(
-          _scrollController.animateTo(
-            target,
-            duration: const Duration(milliseconds: 220),
-            curve: Curves.easeOut,
-          ),
+          _scrollController
+              .animateTo(
+                target,
+                duration: const Duration(milliseconds: 220),
+                curve: Curves.easeOut,
+              )
+              .then((_) {
+                if (!mounted || !_isAtBottom()) return;
+
+                if (_pendingReceivedMessageCount > 0) {
+                  setState(() => _pendingReceivedMessageCount = 0);
+                }
+                if (visibleMessageId != null) {
+                  _notifyMessagesVisible(visibleMessageId);
+                }
+              }),
         );
       } else {
         _scrollController.jumpTo(target);
+        if (visibleMessageId != null && _isAtBottom()) {
+          _notifyMessagesVisible(visibleMessageId);
+        }
       }
     });
+  }
+
+  void _scrollToPendingMessages() {
+    final newestMessageId = _lastMessageId;
+    if (newestMessageId == null) return;
+
+    _scheduleScrollToBottom(animate: true, visibleMessageId: newestMessageId);
   }
 
   Future<void> _sendMessage() async {
@@ -135,6 +210,9 @@ class _ChatScreenState extends State<ChatScreen> {
     setState(() {
       _hasPositionedInitialMessages = false;
       _lastMessageId = null;
+      _lastVisibleMessageId = null;
+      _knownMessageIds.clear();
+      _pendingReceivedMessageCount = 0;
       _messagesStream = ChatService.instance.messagesStream(widget.gubId);
     });
   }
@@ -147,7 +225,9 @@ class _ChatScreenState extends State<ChatScreen> {
     _messageFocusNode
       ..removeListener(_onFocusChanged)
       ..dispose();
-    _scrollController.dispose();
+    _scrollController
+      ..removeListener(_onScroll)
+      ..dispose();
     super.dispose();
   }
 
@@ -192,24 +272,64 @@ class _ChatScreenState extends State<ChatScreen> {
                     return const _EmptyChatState();
                   }
 
-                  _handleMessages(messages);
+                  _handleMessages(messages, currentUserId);
 
-                  return ListView.builder(
-                    controller: _scrollController,
-                    keyboardDismissBehavior:
-                        ScrollViewKeyboardDismissBehavior.onDrag,
-                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-                    itemCount: messages.length,
-                    itemBuilder: (context, index) {
-                      final message = messages[index];
+                  return Stack(
+                    children: [
+                      ListView.builder(
+                        controller: _scrollController,
+                        keyboardDismissBehavior:
+                            ScrollViewKeyboardDismissBehavior.onDrag,
+                        padding: EdgeInsets.fromLTRB(
+                          16,
+                          16,
+                          16,
+                          _pendingReceivedMessageCount > 0 ? 72 : 12,
+                        ),
+                        itemCount: messages.length,
+                        itemBuilder: (context, index) {
+                          final message = messages[index];
 
-                      return ChatMessageBubble(
-                        message: message,
-                        isCurrentUser:
-                            currentUserId != null &&
-                            message.senderId == currentUserId,
-                      );
-                    },
+                          return ChatMessageBubble(
+                            message: message,
+                            isCurrentUser:
+                                currentUserId != null &&
+                                message.senderId == currentUserId,
+                          );
+                        },
+                      ),
+                      if (_pendingReceivedMessageCount > 0)
+                        Positioned(
+                          left: 0,
+                          right: 0,
+                          bottom: 12,
+                          child: Center(
+                            child: Semantics(
+                              button: true,
+                              excludeSemantics: true,
+                              label:
+                                  "$_pendingReceivedMessageCount new "
+                                  "${_pendingReceivedMessageCount == 1 ? 'message' : 'messages'}. "
+                                  "Scroll to the latest messages.",
+                              child: FilledButton.icon(
+                                onPressed: _scrollToPendingMessages,
+                                icon: const Icon(
+                                  Icons.keyboard_arrow_down_rounded,
+                                ),
+                                label: Text(
+                                  "$_pendingReceivedMessageCount new "
+                                  "${_pendingReceivedMessageCount == 1 ? 'message' : 'messages'}",
+                                ),
+                                style: FilledButton.styleFrom(
+                                  backgroundColor: const Color(0xFF2563EB),
+                                  foregroundColor: Colors.white,
+                                  elevation: 4,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
                   );
                 },
               ),

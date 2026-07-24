@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../screens/chat_screen.dart';
+import '../services/chat_read_service.dart';
 import 'chat_floating_button.dart';
 
 class GubChatNavigatorObserver extends NavigatorObserver {
@@ -49,13 +52,20 @@ class GubChatOverlay extends StatefulWidget {
 class _GubChatOverlayState extends State<GubChatOverlay> {
   OverlayState? _rootOverlay;
   OverlayEntry? _overlayEntry;
+  StreamSubscription<int>? _unreadCountSubscription;
 
   bool _isChatOpen = false;
   bool _bringToFrontScheduled = false;
+  int? _unreadCount;
+  int _unreadStreamGeneration = 0;
+
+  Future<void>? _readUpdateFuture;
+  String? _pendingReadGubId;
 
   @override
   void initState() {
     super.initState();
+    unawaited(_subscribeToUnreadCount());
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -71,8 +81,35 @@ class _GubChatOverlayState extends State<GubChatOverlay> {
     super.didUpdateWidget(oldWidget);
 
     if (oldWidget.gubId != widget.gubId) {
+      unawaited(_subscribeToUnreadCount());
       _overlayEntry?.markNeedsBuild();
     }
+  }
+
+  Future<void> _subscribeToUnreadCount() async {
+    final generation = ++_unreadStreamGeneration;
+    await _unreadCountSubscription?.cancel();
+
+    if (!mounted || generation != _unreadStreamGeneration) return;
+
+    _unreadCount = null;
+
+    _unreadCountSubscription = ChatReadService.instance
+        .unreadCountStream(widget.gubId)
+        .listen(
+          (count) {
+            if (!mounted || generation != _unreadStreamGeneration) return;
+
+            _unreadCount = count;
+            _overlayEntry?.markNeedsBuild();
+          },
+          onError: (Object _) {
+            if (!mounted || generation != _unreadStreamGeneration) return;
+
+            _unreadCount = null;
+            _overlayEntry?.markNeedsBuild();
+          },
+        );
   }
 
   void _insertOverlay() {
@@ -98,7 +135,10 @@ class _GubChatOverlayState extends State<GubChatOverlay> {
         minimum: const EdgeInsets.only(right: 20, bottom: 88),
         child: Align(
           alignment: Alignment.bottomRight,
-          child: ChatFloatingButton(onPressed: _openChat),
+          child: ChatFloatingButton(
+            onPressed: _openChat,
+            unreadCount: _unreadCount,
+          ),
         ),
       ),
     );
@@ -127,7 +167,9 @@ class _GubChatOverlayState extends State<GubChatOverlay> {
   Future<void> _openChat() async {
     if (_isChatOpen || !mounted) return;
 
+    final chatGubId = widget.gubId;
     _isChatOpen = true;
+    _unreadCount = 0;
     _removeOverlay();
 
     await showModalBottomSheet<void>(
@@ -141,7 +183,10 @@ class _GubChatOverlayState extends State<GubChatOverlay> {
           heightFactor: 0.94,
           child: ClipRRect(
             borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-            child: ChatScreen(gubId: widget.gubId),
+            child: ChatScreen(
+              gubId: chatGubId,
+              onMessagesVisible: () => _handleVisibleMessages(chatGubId),
+            ),
           ),
         );
       },
@@ -149,12 +194,42 @@ class _GubChatOverlayState extends State<GubChatOverlay> {
 
     if (!mounted) return;
 
+    _unreadCount = 0;
+    unawaited(_markChatAsRead(chatGubId));
     _isChatOpen = false;
     _insertOverlay();
   }
 
+  void _handleVisibleMessages(String gubId) {
+    if (_isChatOpen) {
+      unawaited(_markChatAsRead(gubId));
+    }
+  }
+
+  Future<void> _markChatAsRead(String gubId) {
+    _pendingReadGubId = gubId;
+    return _readUpdateFuture ??= _drainReadUpdates();
+  }
+
+  Future<void> _drainReadUpdates() async {
+    try {
+      while (_pendingReadGubId != null) {
+        final gubId = _pendingReadGubId!;
+        _pendingReadGubId = null;
+
+        try {
+          await ChatReadService.instance.markAsRead(gubId);
+        } catch (_) {}
+      }
+    } finally {
+      _readUpdateFuture = null;
+    }
+  }
+
   @override
   void dispose() {
+    _unreadStreamGeneration++;
+    unawaited(_unreadCountSubscription?.cancel());
     _GubChatOverlayController.instance.detach(this);
     _removeOverlay();
     super.dispose();
