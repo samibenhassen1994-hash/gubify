@@ -80,6 +80,8 @@ class TaskModel {
   });
 
   factory TaskModel.fromFirestore(Map<String, dynamic> json) {
+    final createdAt = json["createdAt"];
+
     return TaskModel(
       gubId: json["gubId"] ?? "",
       taskId: json["taskId"] ?? "",
@@ -103,7 +105,7 @@ class TaskModel {
       status: json["status"] ?? "active",
       priority: json["priority"] ?? "normal",
 
-      createdAt: json["createdAt"] as Timestamp,
+      createdAt: createdAt is Timestamp ? createdAt : Timestamp(0, 0),
       dueDate: json["dueDate"] as Timestamp?,
 
       completedAt: json["completedAt"] as Timestamp?,

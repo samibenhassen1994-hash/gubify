@@ -12,6 +12,7 @@ class ChatScreen extends StatefulWidget {
   final String gubId;
   final VoidCallback? onMessagesVisible;
   final ValueChanged<ChatMessageModel>? onConvertToTask;
+  final ValueChanged<String>? onOpenUserProfile;
   final String? initialMessageId;
 
   const ChatScreen({
@@ -19,6 +20,7 @@ class ChatScreen extends StatefulWidget {
     required this.gubId,
     this.onMessagesVisible,
     this.onConvertToTask,
+    this.onOpenUserProfile,
     this.initialMessageId,
   });
 
@@ -42,6 +44,7 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _isScrollingToPendingMessages = false;
   int _pendingScrollGeneration = 0;
   bool _messageActionOpen = false;
+  bool _profileOpening = false;
   final GlobalKey _targetMessageKey = GlobalKey();
   ChatMessageModel? _loadedTargetMessage;
   bool _targetLookupStarted = false;
@@ -489,6 +492,15 @@ class _ChatScreenState extends State<ChatScreen> {
     ).showSnackBar(const SnackBar(content: Text("Coming soon")));
   }
 
+  void _openUserProfile(String userId) {
+    if (_profileOpening || userId.isEmpty || widget.onOpenUserProfile == null) {
+      return;
+    }
+
+    _profileOpening = true;
+    widget.onOpenUserProfile?.call(userId);
+  }
+
   void _retryMessages() {
     setState(() {
       _hasPositionedInitialMessages = false;
@@ -592,6 +604,8 @@ class _ChatScreenState extends State<ChatScreen> {
                                       _isTargetHighlighted &&
                                       message.messageId ==
                                           widget.initialMessageId,
+                                  onAvatarTap: () =>
+                                      _openUserProfile(message.senderId),
                                   onLongPress: () =>
                                       _showMessageActions(message),
                                 ),

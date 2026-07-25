@@ -149,7 +149,7 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
                 const SizedBox(height: 20),
               ],
 
-              if (task.additionalDetails?.isNotEmpty == true) ...[
+              if (task.additionalDetails?.trim().isNotEmpty == true) ...[
                 Text(
                   "Additional details",
                   style: Theme.of(context).textTheme.titleSmall?.copyWith(
@@ -158,7 +158,7 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
                   ),
                 ),
                 const SizedBox(height: 6),
-                Text(task.additionalDetails!),
+                Text(task.additionalDetails!.trim()),
                 const SizedBox(height: 20),
               ],
 

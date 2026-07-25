@@ -7,6 +7,7 @@ class ChatMessageBubble extends StatelessWidget {
   final ChatMessageModel message;
   final bool isCurrentUser;
   final VoidCallback? onLongPress;
+  final VoidCallback? onAvatarTap;
   final bool isHighlighted;
 
   const ChatMessageBubble({
@@ -14,6 +15,7 @@ class ChatMessageBubble extends StatelessWidget {
     required this.message,
     required this.isCurrentUser,
     this.onLongPress,
+    this.onAvatarTap,
     this.isHighlighted = false,
   });
 
@@ -99,31 +101,48 @@ class ChatMessageBubble extends StatelessWidget {
       ),
     );
 
-    return GestureDetector(
+    final interactiveBubble = GestureDetector(
       onLongPress: onLongPress,
-      child: Align(
-        alignment: isCurrentUser ? Alignment.centerRight : Alignment.centerLeft,
-        child: isCurrentUser
-            ? bubble
-            : Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.only(top: 2),
-                    child: ChatUserAvatar(
-                      displayName: message.senderName,
-                      userId: message.senderId,
-                    ),
+      child: bubble,
+    );
+
+    final avatar = Padding(
+      padding: const EdgeInsets.only(top: 2),
+      child: ChatUserAvatar(
+        displayName: message.senderName,
+        userId: message.senderId,
+        onTap: onAvatarTap,
+      ),
+    );
+
+    return Align(
+      alignment: isCurrentUser ? Alignment.centerRight : Alignment.centerLeft,
+      child: Row(
+        mainAxisAlignment: isCurrentUser
+            ? MainAxisAlignment.end
+            : MainAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: isCurrentUser
+            ? [
+                Flexible(
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: interactiveBubble,
                   ),
-                  const SizedBox(width: 8),
-                  Flexible(
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: bubble,
-                    ),
+                ),
+                const SizedBox(width: 8),
+                avatar,
+              ]
+            : [
+                avatar,
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: interactiveBubble,
                   ),
-                ],
-              ),
+                ),
+              ],
       ),
     );
   }

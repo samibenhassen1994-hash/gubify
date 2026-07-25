@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../profile/screens/user_profile_screen.dart';
 import '../../tasks/screens/create_task_screen.dart';
 import '../models/chat_message_model.dart';
 import '../screens/chat_screen.dart';
@@ -68,6 +69,7 @@ class _GubChatOverlayState extends State<GubChatOverlay> {
 
   bool _isChatOpen = false;
   bool _isTaskConversionOpen = false;
+  bool _isUserProfileOpen = false;
   bool _bringToFrontScheduled = false;
   int? _unreadCount;
   int _unreadStreamGeneration = 0;
@@ -212,13 +214,15 @@ class _GubChatOverlayState extends State<GubChatOverlay> {
     _scheduleOverlaySync(bringToFront: true);
   }
 
-  bool get _isOverlaySuppressed => _isChatOpen || _isTaskConversionOpen;
+  bool get _isOverlaySuppressed =>
+      _isChatOpen || _isTaskConversionOpen || _isUserProfileOpen;
 
   Future<void> _openChat({String? initialMessageId}) async {
     if (_isChatOpen || !mounted) return;
 
     final chatGubId = widget.gubId;
     ChatMessageModel? taskSourceMessage;
+    String? profileUserId;
     _isChatOpen = true;
     _unreadCount = 0;
     _removeOverlay();
@@ -242,6 +246,10 @@ class _GubChatOverlayState extends State<GubChatOverlay> {
                 taskSourceMessage = message;
                 Navigator.pop(sheetContext);
               },
+              onOpenUserProfile: (userId) {
+                profileUserId = userId;
+                Navigator.pop(sheetContext);
+              },
             ),
           ),
         );
@@ -253,6 +261,28 @@ class _GubChatOverlayState extends State<GubChatOverlay> {
     _unreadCount = 0;
     unawaited(_markChatAsRead(chatGubId));
     _isChatOpen = false;
+
+    final selectedProfileUserId = profileUserId;
+    if (selectedProfileUserId != null) {
+      _isUserProfileOpen = true;
+
+      try {
+        await Navigator.of(context, rootNavigator: true).push<void>(
+          MaterialPageRoute(
+            builder: (_) => UserProfileScreen(
+              gubId: chatGubId,
+              userId: selectedProfileUserId,
+            ),
+          ),
+        );
+      } finally {
+        if (mounted) {
+          _isUserProfileOpen = false;
+          _insertOverlay();
+        }
+      }
+      return;
+    }
 
     final sourceMessage = taskSourceMessage;
     if (sourceMessage != null) {

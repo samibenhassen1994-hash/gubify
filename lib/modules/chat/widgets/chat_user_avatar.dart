@@ -5,6 +5,7 @@ class ChatUserAvatar extends StatelessWidget {
   final String? userId;
   final String? photoUrl;
   final double radius;
+  final VoidCallback? onTap;
 
   const ChatUserAvatar({
     super.key,
@@ -12,6 +13,7 @@ class ChatUserAvatar extends StatelessWidget {
     this.userId,
     this.photoUrl,
     this.radius = 17,
+    this.onTap,
   });
 
   static const List<Color> _avatarColors = [
@@ -29,9 +31,9 @@ class ChatUserAvatar extends StatelessWidget {
     final colorKey = userId?.trim().isNotEmpty == true
         ? userId!.trim()
         : displayName?.trim() ?? "";
-    final colorIndex = (colorKey.hashCode & 0x7fffffff) % _avatarColors.length;
+    final colorIndex = _stableHash(colorKey) % _avatarColors.length;
 
-    return CircleAvatar(
+    final avatar = CircleAvatar(
       radius: radius,
       backgroundColor: _avatarColors[colorIndex],
       foregroundImage:
@@ -49,6 +51,31 @@ class ChatUserAvatar extends StatelessWidget {
             )
           : null,
     );
+
+    if (onTap == null) return avatar;
+
+    return Semantics(
+      button: true,
+      label:
+          "Open ${displayName?.trim().isNotEmpty == true ? displayName!.trim() : 'user'} profile",
+      child: Material(
+        color: Colors.transparent,
+        shape: const CircleBorder(),
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: onTap,
+          child: Padding(padding: const EdgeInsets.all(3), child: avatar),
+        ),
+      ),
+    );
+  }
+
+  int _stableHash(String value) {
+    var hash = 0;
+    for (final codeUnit in value.codeUnits) {
+      hash = ((hash * 31) + codeUnit) & 0x7fffffff;
+    }
+    return hash;
   }
 
   String _initialFor(String? name) {

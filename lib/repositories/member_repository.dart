@@ -7,6 +7,20 @@ class MemberRepository {
 
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
+  Future<Map<String, dynamic>?> getMember({
+    required String gubId,
+    required String uid,
+  }) async {
+    final document = await _firestore
+        .collection("gubs")
+        .doc(gubId)
+        .collection("members")
+        .doc(uid)
+        .get();
+
+    return document.data();
+  }
+
   Future<void> removeMember({
     required String gubId,
     required String uid,
