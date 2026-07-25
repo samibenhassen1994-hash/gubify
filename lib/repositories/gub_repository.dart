@@ -35,6 +35,76 @@ class GubRepository {
     return _firestore.collection("gubs").doc(gubId).snapshots();
   }
 
+  Stream<List<Map<String, dynamic>>> userGubsStream(String userId) {
+    return _firestore
+        .collection("users")
+        .doc(userId)
+        .collection("gubs")
+        .snapshots()
+        .asyncMap((userGubsSnapshot) async {
+          if (userGubsSnapshot.docs.isEmpty) {
+            return const <Map<String, dynamic>>[];
+          }
+
+          final userGubById = <String, Map<String, dynamic>>{};
+          for (final document in userGubsSnapshot.docs) {
+            final data = document.data();
+            final storedId = data["gubId"];
+            final gubId = storedId is String && storedId.trim().isNotEmpty
+                ? storedId.trim()
+                : document.id;
+            if (gubId.isNotEmpty) userGubById[gubId] = data;
+          }
+
+          final gubIds = userGubById.keys.toList(growable: false);
+          if (gubIds.isEmpty) return const <Map<String, dynamic>>[];
+
+          final existingGubs = <QueryDocumentSnapshot<Map<String, dynamic>>>[];
+          for (var start = 0; start < gubIds.length; start += 30) {
+            final end = (start + 30).clamp(0, gubIds.length);
+            final snapshot = await _firestore
+                .collection("gubs")
+                .where(
+                  FieldPath.documentId,
+                  whereIn: gubIds.sublist(start, end),
+                )
+                .get();
+            existingGubs.addAll(snapshot.docs);
+          }
+
+          final results = <Map<String, dynamic>>[];
+          for (final gubDocument in existingGubs) {
+            final userGub = userGubById[gubDocument.id]!;
+            final gub = gubDocument.data();
+            final storedRole = userGub["role"];
+            final role = storedRole is String && storedRole.trim().isNotEmpty
+                ? storedRole.trim()
+                : gub["ownerId"] == userId
+                ? "owner"
+                : "member";
+
+            results.add({
+              ...userGub,
+              ...gub,
+              "gubId": gubDocument.id,
+              "role": role,
+            });
+          }
+          results.sort((first, second) {
+            final firstJoinedAt = first["joinedAt"];
+            final secondJoinedAt = second["joinedAt"];
+            final firstMillis = firstJoinedAt is Timestamp
+                ? firstJoinedAt.millisecondsSinceEpoch
+                : 0;
+            final secondMillis = secondJoinedAt is Timestamp
+                ? secondJoinedAt.millisecondsSinceEpoch
+                : 0;
+            return secondMillis.compareTo(firstMillis);
+          });
+          return results;
+        });
+  }
+
   /// Aggiorna la cache dopo una modifica
   void updateHub(String gubId, Map<String, dynamic> data) {
     _hubCache[gubId] = data;

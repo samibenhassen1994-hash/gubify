@@ -10,10 +10,7 @@ class TaskRepository {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   CollectionReference<Map<String, dynamic>> tasksCollection(String gubId) {
-    return _firestore
-        .collection("gubs")
-        .doc(gubId)
-        .collection("tasks");
+    return _firestore.collection("gubs").doc(gubId).collection("tasks");
   }
 
   /// Generates a unique Task ID without creating any document.
@@ -22,15 +19,13 @@ class TaskRepository {
   }
 
   Future<void> createTask(TaskModel task) async {
-    await tasksCollection(task.gubId)
-        .doc(task.taskId)
-        .set(task.toFirestore());
+    await tasksCollection(task.gubId).doc(task.taskId).set(task.toFirestore());
   }
 
   Future<void> updateTask(TaskModel task) async {
-    await tasksCollection(task.gubId)
-        .doc(task.taskId)
-        .update(task.toFirestore());
+    await tasksCollection(
+      task.gubId,
+    ).doc(task.taskId).update(task.toFirestore());
   }
 
   Future<void> deleteTask({
@@ -44,9 +39,7 @@ class TaskRepository {
     required String gubId,
     required String taskId,
   }) async {
-    final doc = await tasksCollection(gubId)
-        .doc(taskId)
-        .get();
+    final doc = await tasksCollection(gubId).doc(taskId).get();
 
     if (!doc.exists) return null;
 
@@ -57,10 +50,7 @@ class TaskRepository {
     required String gubId,
     required String taskId,
   }) {
-    return tasksCollection(gubId)
-        .doc(taskId)
-        .snapshots()
-        .map((doc) {
+    return tasksCollection(gubId).doc(taskId).snapshots().map((doc) {
       if (!doc.exists) return null;
 
       return TaskModel.fromFirestore(doc.data()!);
@@ -76,5 +66,13 @@ class TaskRepository {
               .map((doc) => TaskModel.fromFirestore(doc.data()))
               .toList(),
         );
+  }
+
+  Stream<List<TaskModel>> profileActivityCandidatesStream(String gubId) {
+    return tasksCollection(gubId).snapshots().map(
+      (snapshot) => snapshot.docs
+          .map((doc) => TaskModel.fromFirestore(doc.data()))
+          .toList(growable: false),
+    );
   }
 }

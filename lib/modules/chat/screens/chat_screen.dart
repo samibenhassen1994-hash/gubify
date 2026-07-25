@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import '../../../widgets/gub_screen_background.dart';
 import '../models/chat_message_model.dart';
 import '../services/chat_service.dart';
 import '../widgets/chat_message_bubble.dart';
@@ -534,136 +535,141 @@ class _ChatScreenState extends State<ChatScreen> {
     final currentUserId = FirebaseAuth.instance.currentUser?.uid;
     final canSend = !_isSending && _messageController.text.trim().isNotEmpty;
 
-    return Scaffold(
-      resizeToAvoidBottomInset: true,
-      backgroundColor: const Color(0xFFF5F8FD),
-      appBar: AppBar(
-        leading: IconButton(
-          tooltip: "Close chat",
-          onPressed: () => Navigator.maybePop(context),
-          icon: const Icon(Icons.close_rounded),
+    return GubScreenBackground(
+      variant: GubBackgroundAssignments.tasks,
+      child: Scaffold(
+        resizeToAvoidBottomInset: true,
+        backgroundColor: Colors.transparent,
+        appBar: AppBar(
+          leading: IconButton(
+            tooltip: "Close chat",
+            onPressed: () => Navigator.maybePop(context),
+            icon: const Icon(Icons.close_rounded),
+          ),
+          title: const Text("Chat"),
+          backgroundColor: Colors.transparent,
+          surfaceTintColor: Colors.transparent,
+          elevation: 0,
+          scrolledUnderElevation: 0,
         ),
-        title: const Text("Chat"),
-        backgroundColor: Colors.white,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-      ),
-      body: SafeArea(
-        top: false,
-        child: Column(
-          children: [
-            Expanded(
-              child: StreamBuilder<List<ChatMessageModel>>(
-                stream: _messagesStream,
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
+        body: SafeArea(
+          top: false,
+          child: Column(
+            children: [
+              Expanded(
+                child: StreamBuilder<List<ChatMessageModel>>(
+                  stream: _messagesStream,
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
 
-                  if (snapshot.hasError) {
-                    return _ChatErrorState(onRetry: _retryMessages);
-                  }
+                    if (snapshot.hasError) {
+                      return _ChatErrorState(onRetry: _retryMessages);
+                    }
 
-                  final streamedMessages = snapshot.data ?? const [];
-                  _ensureTargetMessageAvailable(streamedMessages);
-                  final messages = _withLoadedTarget(streamedMessages);
+                    final streamedMessages = snapshot.data ?? const [];
+                    _ensureTargetMessageAvailable(streamedMessages);
+                    final messages = _withLoadedTarget(streamedMessages);
 
-                  if (messages.isEmpty) {
-                    return const _EmptyChatState();
-                  }
+                    if (messages.isEmpty) {
+                      return const _EmptyChatState();
+                    }
 
-                  _handleMessages(messages, currentUserId);
-                  _scheduleTargetMessageScroll(messages);
+                    _handleMessages(messages, currentUserId);
+                    _scheduleTargetMessageScroll(messages);
 
-                  return Stack(
-                    children: [
-                      SingleChildScrollView(
-                        controller: _scrollController,
-                        keyboardDismissBehavior:
-                            ScrollViewKeyboardDismissBehavior.onDrag,
-                        padding: EdgeInsets.fromLTRB(
-                          16,
-                          16,
-                          16,
-                          _pendingReceivedMessageCount > 0 ? 72 : 12,
-                        ),
-                        child: Column(
-                          children: [
-                            for (final message in messages)
-                              KeyedSubtree(
-                                key:
-                                    message.messageId == widget.initialMessageId
-                                    ? _targetMessageKey
-                                    : ValueKey(message.messageId),
-                                child: ChatMessageBubble(
-                                  message: message,
-                                  isCurrentUser:
-                                      currentUserId != null &&
-                                      message.senderId == currentUserId,
-                                  isHighlighted:
-                                      _isTargetHighlighted &&
+                    return Stack(
+                      children: [
+                        SingleChildScrollView(
+                          controller: _scrollController,
+                          keyboardDismissBehavior:
+                              ScrollViewKeyboardDismissBehavior.onDrag,
+                          padding: EdgeInsets.fromLTRB(
+                            16,
+                            16,
+                            16,
+                            _pendingReceivedMessageCount > 0 ? 72 : 12,
+                          ),
+                          child: Column(
+                            children: [
+                              for (final message in messages)
+                                KeyedSubtree(
+                                  key:
                                       message.messageId ==
-                                          widget.initialMessageId,
-                                  onAvatarTap: () =>
-                                      _openUserProfile(message.senderId),
-                                  onLongPress: () =>
-                                      _showMessageActions(message),
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                      if (_pendingReceivedMessageCount > 0)
-                        Positioned(
-                          left: 0,
-                          right: 0,
-                          bottom: 12,
-                          child: Center(
-                            child: Semantics(
-                              button: true,
-                              excludeSemantics: true,
-                              label:
-                                  "$_pendingReceivedMessageCount new "
-                                  "${_pendingReceivedMessageCount == 1 ? 'message' : 'messages'}. "
-                                  "Scroll to the latest messages.",
-                              child: FilledButton.icon(
-                                onPressed: _isScrollingToPendingMessages
-                                    ? null
-                                    : _scrollToPendingMessages,
-                                icon: const Icon(
-                                  Icons.keyboard_arrow_down_rounded,
-                                ),
-                                label: Text(
-                                  "$_pendingReceivedMessageCount new "
-                                  "${_pendingReceivedMessageCount == 1 ? 'message' : 'messages'}",
-                                ),
-                                style: FilledButton.styleFrom(
-                                  backgroundColor: const Color(0xFF2563EB),
-                                  foregroundColor: Colors.white,
-                                  disabledBackgroundColor: const Color(
-                                    0xFF2563EB,
+                                          widget.initialMessageId
+                                      ? _targetMessageKey
+                                      : ValueKey(message.messageId),
+                                  child: ChatMessageBubble(
+                                    message: message,
+                                    isCurrentUser:
+                                        currentUserId != null &&
+                                        message.senderId == currentUserId,
+                                    isHighlighted:
+                                        _isTargetHighlighted &&
+                                        message.messageId ==
+                                            widget.initialMessageId,
+                                    onAvatarTap: () =>
+                                        _openUserProfile(message.senderId),
+                                    onLongPress: () =>
+                                        _showMessageActions(message),
                                   ),
-                                  disabledForegroundColor: Colors.white,
-                                  elevation: 4,
+                                ),
+                            ],
+                          ),
+                        ),
+                        if (_pendingReceivedMessageCount > 0)
+                          Positioned(
+                            left: 0,
+                            right: 0,
+                            bottom: 12,
+                            child: Center(
+                              child: Semantics(
+                                button: true,
+                                excludeSemantics: true,
+                                label:
+                                    "$_pendingReceivedMessageCount new "
+                                    "${_pendingReceivedMessageCount == 1 ? 'message' : 'messages'}. "
+                                    "Scroll to the latest messages.",
+                                child: FilledButton.icon(
+                                  onPressed: _isScrollingToPendingMessages
+                                      ? null
+                                      : _scrollToPendingMessages,
+                                  icon: const Icon(
+                                    Icons.keyboard_arrow_down_rounded,
+                                  ),
+                                  label: Text(
+                                    "$_pendingReceivedMessageCount new "
+                                    "${_pendingReceivedMessageCount == 1 ? 'message' : 'messages'}",
+                                  ),
+                                  style: FilledButton.styleFrom(
+                                    backgroundColor: const Color(0xFF2563EB),
+                                    foregroundColor: Colors.white,
+                                    disabledBackgroundColor: const Color(
+                                      0xFF2563EB,
+                                    ),
+                                    disabledForegroundColor: Colors.white,
+                                    elevation: 4,
+                                  ),
                                 ),
                               ),
                             ),
                           ),
-                        ),
-                    ],
-                  );
-                },
+                      ],
+                    );
+                  },
+                ),
               ),
-            ),
-            ChatMessageComposer(
-              controller: _messageController,
-              focusNode: _messageFocusNode,
-              isSending: _isSending,
-              canSend: canSend,
-              maxLength: ChatService.maxMessageLength,
-              onSend: _sendMessage,
-            ),
-          ],
+              ChatMessageComposer(
+                controller: _messageController,
+                focusNode: _messageFocusNode,
+                isSending: _isSending,
+                canSend: canSend,
+                maxLength: ChatService.maxMessageLength,
+                onSend: _sendMessage,
+              ),
+            ],
+          ),
         ),
       ),
     );

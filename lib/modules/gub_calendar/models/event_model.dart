@@ -43,6 +43,9 @@ class EventModel {
   });
 
   factory EventModel.fromFirestore(Map<String, dynamic> json) {
+    final eventDate = json["eventDate"];
+    final createdAt = json["createdAt"];
+
     return EventModel(
       gubId: json["gubId"] ?? "",
       eventId: json["eventId"] ?? "",
@@ -52,8 +55,8 @@ class EventModel {
       type: json["type"] ?? "custom",
       creatorId: json["creatorId"] ?? "",
       creatorName: json["creatorName"] ?? "",
-      eventDate: json["eventDate"] as Timestamp,
-      createdAt: json["createdAt"] as Timestamp,
+      eventDate: eventDate is Timestamp ? eventDate : Timestamp(0, 0),
+      createdAt: createdAt is Timestamp ? createdAt : Timestamp(0, 0),
       status: json["status"] ?? "scheduled",
     );
   }

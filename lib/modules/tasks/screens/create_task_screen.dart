@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../../core/models/member_option.dart';
 import '../../../repositories/user_repository.dart';
 import '../../../services/gub_service.dart';
+import '../../../widgets/gub_screen_background.dart';
 import '../models/task_model.dart';
 import '../repositories/task_repository.dart';
 import '../services/task_service.dart';
@@ -136,61 +137,72 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text("Create Task")),
-      body: FutureBuilder<List<MemberOption>>(
-        future: GubService().getMembers(widget.gubId),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
+    return GubScreenBackground(
+      variant: GubBackgroundAssignments.tasks,
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        appBar: AppBar(
+          title: const Text("Create Task"),
+          backgroundColor: Colors.transparent,
+          surfaceTintColor: Colors.transparent,
+          elevation: 0,
+          scrolledUnderElevation: 0,
+        ),
+        body: FutureBuilder<List<MemberOption>>(
+          future: GubService().getMembers(widget.gubId),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
 
-          final members = snapshot.data ?? [];
-          if (_selectedMember == null && members.isNotEmpty) {
-            _selectedMember = members.first;
-          }
+            final members = snapshot.data ?? [];
+            if (_selectedMember == null && members.isNotEmpty) {
+              _selectedMember = members.first;
+            }
 
-          if (widget.isChatConversion) {
-            return ListView(
-              padding: const EdgeInsets.all(20),
-              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-              children: [
-                _ChatSourceCard(
-                  message: widget.sourcePreview!,
-                  authorName: widget.sourceAuthorName,
-                ),
-                const SizedBox(height: 20),
-                TextField(
-                  controller: _additionalDetailsController,
-                  minLines: 3,
-                  maxLines: 5,
-                  textCapitalization: TextCapitalization.sentences,
-                  decoration: const InputDecoration(
-                    labelText: "Additional details (optional)",
-                    hintText: "Explain what needs to be done",
-                    alignLabelWithHint: true,
-                    border: OutlineInputBorder(),
+            if (widget.isChatConversion) {
+              return ListView(
+                padding: const EdgeInsets.all(20),
+                keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior.onDrag,
+                children: [
+                  _ChatSourceCard(
+                    message: widget.sourcePreview!,
+                    authorName: widget.sourceAuthorName,
                   ),
-                ),
-                const SizedBox(height: 20),
-                ..._buildTaskFields(members),
-                const SizedBox(height: 32),
-                CreateTaskButton(loading: _loading, onPressed: _createTask),
-              ],
-            );
-          }
+                  const SizedBox(height: 20),
+                  TextField(
+                    controller: _additionalDetailsController,
+                    minLines: 3,
+                    maxLines: 5,
+                    textCapitalization: TextCapitalization.sentences,
+                    decoration: const InputDecoration(
+                      labelText: "Additional details (optional)",
+                      hintText: "Explain what needs to be done",
+                      alignLabelWithHint: true,
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  ..._buildTaskFields(members),
+                  const SizedBox(height: 32),
+                  CreateTaskButton(loading: _loading, onPressed: _createTask),
+                ],
+              );
+            }
 
-          return Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              children: [
-                ..._buildTaskFields(members),
-                const Spacer(),
-                CreateTaskButton(loading: _loading, onPressed: _createTask),
-              ],
-            ),
-          );
-        },
+            return Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                children: [
+                  ..._buildTaskFields(members),
+                  const Spacer(),
+                  CreateTaskButton(loading: _loading, onPressed: _createTask),
+                ],
+              ),
+            );
+          },
+        ),
       ),
     );
   }

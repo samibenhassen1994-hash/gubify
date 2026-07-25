@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import '../../../widgets/gub_screen_background.dart';
 import '../../chat/widgets/gub_chat_overlay.dart';
 import '../models/task_model.dart';
 import '../services/task_service.dart';
@@ -97,113 +98,126 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text("Task Details")),
-
-      body: StreamBuilder<TaskModel?>(
-        stream: TaskService.instance.taskStream(
-          gubId: widget.gubId,
-          taskId: widget.taskId,
+    return GubScreenBackground(
+      variant: GubBackgroundAssignments.tasks,
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        appBar: AppBar(
+          title: const Text("Task Details"),
+          backgroundColor: Colors.transparent,
+          surfaceTintColor: Colors.transparent,
+          elevation: 0,
+          scrolledUnderElevation: 0,
         ),
 
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
+        body: StreamBuilder<TaskModel?>(
+          stream: TaskService.instance.taskStream(
+            gubId: widget.gubId,
+            taskId: widget.taskId,
+          ),
 
-          final task = snapshot.data;
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
 
-          if (task == null) {
-            return const Center(child: Text("Task not found"));
-          }
+            final task = snapshot.data;
 
-          return ListView(
-            padding: const EdgeInsets.all(20),
-            children: [
-              Text(
-                task.title,
-                style: Theme.of(context).textTheme.headlineSmall,
-              ),
+            if (task == null) {
+              return const Center(child: Text("Task not found"));
+            }
 
-              const SizedBox(height: 16),
-
-              if (task.description.isNotEmpty) ...[
+            return ListView(
+              padding: const EdgeInsets.all(20),
+              children: [
                 Text(
-                  task.description,
-                  style: Theme.of(context).textTheme.bodyLarge,
+                  task.title,
+                  style: Theme.of(context).textTheme.headlineSmall,
                 ),
 
-                const SizedBox(height: 20),
-              ],
+                const SizedBox(height: 16),
 
-              if (task.sourceType == "chat" &&
-                  task.sourcePreview?.isNotEmpty == true) ...[
-                _ChatSourceCard(
-                  message: task.sourcePreview!,
-                  authorName: task.sourceAuthorName,
-                  onTap: task.sourceId != null && task.sourceId!.isNotEmpty
-                      ? () => _openOriginalMessage(task)
-                      : null,
-                  opening: _openingOriginalMessage,
-                ),
-                const SizedBox(height: 20),
-              ],
-
-              if (task.additionalDetails?.trim().isNotEmpty == true) ...[
-                Text(
-                  "Additional details",
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    color: const Color(0xFF2563EB),
-                    fontWeight: FontWeight.w700,
+                if (task.description.isNotEmpty) ...[
+                  Text(
+                    task.description,
+                    style: Theme.of(context).textTheme.bodyLarge,
                   ),
-                ),
-                const SizedBox(height: 6),
-                Text(task.additionalDetails!.trim()),
-                const SizedBox(height: 20),
-              ],
 
-              TaskStatusChip(status: task.status),
+                  const SizedBox(height: 20),
+                ],
 
-              const SizedBox(height: 20),
+                if (task.sourceType == "chat" &&
+                    task.sourcePreview?.isNotEmpty == true) ...[
+                  _ChatSourceCard(
+                    message: task.sourcePreview!,
+                    authorName: task.sourceAuthorName,
+                    onTap: task.sourceId != null && task.sourceId!.isNotEmpty
+                        ? () => _openOriginalMessage(task)
+                        : null,
+                    opening: _openingOriginalMessage,
+                  ),
+                  const SizedBox(height: 20),
+                ],
 
-              _InfoRow(title: "Created by", value: task.creatorName),
-
-              const SizedBox(height: 12),
-
-              _InfoRow(
-                title: "Assigned to",
-                value: task.assignedUserName ?? "Nobody",
-              ),
-
-              const SizedBox(height: 12),
-
-              _InfoRow(title: "Priority", value: task.priority),
-
-              const SizedBox(height: 12),
-
-              if (task.dueDate != null)
-                _InfoRow(title: "Due date", value: _formatDate(task.dueDate!)),
-
-              const SizedBox(height: 32),
-
-              if (_canComplete(task))
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton.icon(
-                    onPressed: _loading
-                        ? null
-                        : () {
-                            _completeTask(task);
-                          },
-                    icon: const Icon(Icons.task_alt),
-                    label: Text(
-                      _loading ? "Completing..." : "I've completed it",
+                if (task.additionalDetails?.trim().isNotEmpty == true) ...[
+                  Text(
+                    "Additional details",
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      color: const Color(0xFF2563EB),
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
+                  const SizedBox(height: 6),
+                  Text(task.additionalDetails!.trim()),
+                  const SizedBox(height: 20),
+                ],
+
+                TaskStatusChip(status: task.status),
+
+                const SizedBox(height: 20),
+
+                _InfoRow(title: "Created by", value: task.creatorName),
+
+                const SizedBox(height: 12),
+
+                _InfoRow(
+                  title: "Assigned to",
+                  value: task.assignedUserName ?? "Nobody",
                 ),
-            ],
-          );
-        },
+
+                const SizedBox(height: 12),
+
+                _InfoRow(title: "Priority", value: task.priority),
+
+                const SizedBox(height: 12),
+
+                if (task.dueDate != null)
+                  _InfoRow(
+                    title: "Due date",
+                    value: _formatDate(task.dueDate!),
+                  ),
+
+                const SizedBox(height: 32),
+
+                if (_canComplete(task))
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      onPressed: _loading
+                          ? null
+                          : () {
+                              _completeTask(task);
+                            },
+                      icon: const Icon(Icons.task_alt),
+                      label: Text(
+                        _loading ? "Completing..." : "I've completed it",
+                      ),
+                    ),
+                  ),
+              ],
+            );
+          },
+        ),
       ),
     );
   }

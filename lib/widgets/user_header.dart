@@ -2,17 +2,22 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import '../modules/chat/widgets/chat_user_avatar.dart';
 import '../modules/notifications/screens/notifications_screen.dart';
+import '../modules/profile/screens/personal_profile_screen.dart';
+import '../modules/profile/screens/user_profile_screen.dart';
 import '../repositories/user_repository.dart';
 
 class UserHeader extends StatelessWidget {
   final String? gubId;
   final bool darkMode;
+  final bool personalProfileEnabled;
 
   const UserHeader({
     super.key,
     this.gubId,
     this.darkMode = false,
+    this.personalProfileEnabled = false,
   });
 
   @override
@@ -30,23 +35,24 @@ class UserHeader extends StatelessWidget {
         }
 
         final data = snapshot.data;
-        final displayName = data?["displayName"] ?? "User";
+        final storedDisplayName = data?["displayName"];
+        final displayName =
+            storedDisplayName is String && storedDisplayName.trim().isNotEmpty
+            ? storedDisplayName.trim()
+            : "User";
+        final storedPhotoUrl = data?["photoUrl"] ?? data?["photoURL"];
+        final photoUrl = storedPhotoUrl is String ? storedPhotoUrl : null;
 
         return Padding(
           padding: const EdgeInsets.only(bottom: 20),
           child: Row(
             children: [
-              CircleAvatar(
-                radius: 22,
-                backgroundColor: darkMode
-                    ? Colors.white.withValues(alpha: .12)
-                    : const Color(0xFF2563EB).withValues(alpha: .12),
-                child: Icon(
-                  Icons.person,
-                  color: darkMode
-                      ? Colors.white
-                      : const Color(0xFF2563EB),
-                ),
+              _CurrentUserAvatar(
+                gubId: gubId,
+                userId: user.uid,
+                displayName: displayName,
+                photoUrl: photoUrl,
+                personalProfileEnabled: personalProfileEnabled,
               ),
 
               const SizedBox(width: 12),
@@ -104,9 +110,8 @@ class UserHeader extends StatelessWidget {
                             Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (_) => NotificationsScreen(
-                                  gubId: gubId!,
-                                ),
+                                builder: (_) =>
+                                    NotificationsScreen(gubId: gubId!),
                               ),
                             );
                           },
@@ -161,15 +166,72 @@ class UserHeader extends StatelessWidget {
                 icon: Icon(
                   Icons.settings_outlined,
                   size: 26,
-                  color: darkMode
-                      ? Colors.white70
-                      : Colors.black54,
+                  color: darkMode ? Colors.white70 : Colors.black54,
                 ),
               ),
             ],
           ),
         );
       },
+    );
+  }
+}
+
+class _CurrentUserAvatar extends StatefulWidget {
+  final String? gubId;
+  final String userId;
+  final String? displayName;
+  final String? photoUrl;
+  final bool personalProfileEnabled;
+
+  const _CurrentUserAvatar({
+    required this.gubId,
+    required this.userId,
+    required this.personalProfileEnabled,
+    this.displayName,
+    this.photoUrl,
+  });
+
+  @override
+  State<_CurrentUserAvatar> createState() => _CurrentUserAvatarState();
+}
+
+class _CurrentUserAvatarState extends State<_CurrentUserAvatar> {
+  bool _isOpeningProfile = false;
+
+  Future<void> _openProfile() async {
+    final gubId = widget.gubId;
+    if ((gubId == null && !widget.personalProfileEnabled) ||
+        _isOpeningProfile) {
+      return;
+    }
+
+    setState(() => _isOpeningProfile = true);
+    try {
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => gubId == null
+              ? PersonalProfileScreen(userId: widget.userId)
+              : UserProfileScreen(gubId: gubId, userId: widget.userId),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isOpeningProfile = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ChatUserAvatar(
+      displayName: widget.displayName,
+      userId: widget.userId,
+      photoUrl: widget.photoUrl,
+      radius: 22,
+      onTap:
+          (widget.gubId == null && !widget.personalProfileEnabled) ||
+              _isOpeningProfile
+          ? null
+          : _openProfile,
     );
   }
 }

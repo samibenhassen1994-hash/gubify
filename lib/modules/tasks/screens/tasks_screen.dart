@@ -1,7 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
-import '../../../widgets/gub_home_background.dart';
+import '../../../widgets/gub_screen_background.dart';
 
 import '../models/task_model.dart';
 import '../services/task_service.dart';
@@ -18,14 +18,17 @@ class TasksScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final currentUserId = FirebaseAuth.instance.currentUser!.uid;
 
-    return GubHomeBackground(
+    return GubScreenBackground(
+      variant: GubBackgroundAssignments.tasks,
       child: Scaffold(
         backgroundColor: Colors.transparent,
 
         appBar: AppBar(
           title: const Text("Tasks"),
           backgroundColor: Colors.transparent,
+          surfaceTintColor: Colors.transparent,
           elevation: 0,
+          scrolledUnderElevation: 0,
         ),
 
         floatingActionButton: FloatingActionButton(

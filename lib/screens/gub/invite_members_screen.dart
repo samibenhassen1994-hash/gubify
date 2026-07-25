@@ -36,7 +36,7 @@ class InviteMembersScreen extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const UserHeader(),
+                UserHeader(gubId: gubId),
 
                 Text(
                   gubName,

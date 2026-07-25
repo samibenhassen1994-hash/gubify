@@ -6,11 +6,13 @@ import '../screens/welcome_screen.dart';
 class GubPageHeader extends StatelessWidget {
   final String title;
   final String? gubId;
+  final bool personalProfileEnabled;
 
   const GubPageHeader({
     super.key,
     required this.title,
     this.gubId,
+    this.personalProfileEnabled = false,
   });
 
   @override
@@ -65,7 +67,10 @@ class GubPageHeader extends StatelessWidget {
 
             const SizedBox(height: 14),
 
-            UserHeader(gubId: gubId),
+            UserHeader(
+              gubId: gubId,
+              personalProfileEnabled: personalProfileEnabled,
+            ),
           ],
         ),
       ),

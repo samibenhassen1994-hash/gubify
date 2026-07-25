@@ -22,45 +22,33 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   Future<void> _openWebsite() async {
     final uri = Uri.parse('https://www.gubify.com');
 
-    await launchUrl(
-      uri,
-      mode: LaunchMode.externalApplication,
-    );
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 
   Future<void> _openSupport() async {
     final uri = Uri.parse('https://www.gubify.com/support');
 
-    await launchUrl(
-      uri,
-      mode: LaunchMode.externalApplication,
-    );
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 
   void _goToCreateGub() {
     Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (_) => const CreateGubScreen(),
-      ),
+      MaterialPageRoute(builder: (_) => const CreateGubScreen()),
     );
   }
 
   void _goToMyGubs() {
     Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (_) => const MyGubsScreen(),
-      ),
+      MaterialPageRoute(builder: (_) => const MyGubsScreen()),
     );
   }
 
   void _goToJoinGub() {
     Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (_) => const JoinGubScreen(),
-      ),
+      MaterialPageRoute(builder: (_) => const JoinGubScreen()),
     );
   }
 
@@ -72,7 +60,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
           padding: const EdgeInsets.symmetric(horizontal: 20),
           child: Column(
             children: [
-              const UserHeader(darkMode: true),
+              const UserHeader(darkMode: true, personalProfileEnabled: true),
 
               // Il logo resta centrato nella parte libera della schermata.
               Expanded(
@@ -88,8 +76,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                           shape: BoxShape.circle,
                           boxShadow: [
                             BoxShadow(
-                              color: const Color(0xFF3B82F6)
-                                  .withOpacity(0.50),
+                              color: const Color(0xFF3B82F6).withOpacity(0.50),
                               blurRadius: 150,
                               spreadRadius: 45,
                             ),
@@ -133,10 +120,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
 
               const SizedBox(height: 20),
 
-              PrimaryButton(
-                text: 'Create Gub',
-                onPressed: _goToCreateGub,
-              ),
+              PrimaryButton(text: 'Create Gub', onPressed: _goToCreateGub),
 
               const SizedBox(height: 12),
 
@@ -218,9 +202,8 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     return FutureBuilder<Map<String, dynamic>?>(
       future: UserRepository.instance.getUser(user.uid),
       builder: (context, snapshot) {
-        final name = snapshot.data?['displayName'] ??
-            user.displayName ??
-            'User';
+        final name =
+            snapshot.data?['displayName'] ?? user.displayName ?? 'User';
 
         return Text(
           'Hi, $name',
@@ -247,9 +230,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
         onPressed: onPressed,
         style: OutlinedButton.styleFrom(
           backgroundColor: Colors.white.withOpacity(0.06),
-          side: BorderSide(
-            color: Colors.white.withOpacity(0.15),
-          ),
+          side: BorderSide(color: Colors.white.withOpacity(0.15)),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(18),
           ),

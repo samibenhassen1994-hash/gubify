@@ -64,4 +64,12 @@ class EventRepository {
               .toList(),
         );
   }
+
+  Stream<List<EventModel>> profileActivityCandidatesStream(String gubId) {
+    return eventsCollection(gubId).snapshots().map(
+      (snapshot) => snapshot.docs
+          .map((doc) => EventModel.fromFirestore(doc.data()))
+          .toList(growable: false),
+    );
+  }
 }

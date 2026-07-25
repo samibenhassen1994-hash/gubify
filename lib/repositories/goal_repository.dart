@@ -139,6 +139,12 @@ class GoalRepository {
     );
   }
 
+  Stream<List<GoalModel>> profileActivityCandidatesStream(String gubId) {
+    return goalsCollection(
+      gubId,
+    ).snapshots().map((snapshot) => _goalsFromDocs(snapshot.docs));
+  }
+
   /// Restituisce il Goal attivo (Future)
   Future<GoalModel?> getActiveGoal(String gubId) async {
     final snapshot = await goalsCollection(gubId).get();

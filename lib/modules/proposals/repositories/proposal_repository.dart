@@ -62,6 +62,14 @@ class ProposalRepository {
         );
   }
 
+  Stream<List<ProposalModel>> profileActivityCandidatesStream(String gubId) {
+    return proposalsCollection(gubId).snapshots().map(
+      (snapshot) => snapshot.docs
+          .map((doc) => ProposalModel.fromFirestore(doc.data()))
+          .toList(growable: false),
+    );
+  }
+
   Future<void> vote({
     required String gubId,
     required String proposalId,

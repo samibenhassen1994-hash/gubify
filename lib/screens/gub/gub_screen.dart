@@ -4,8 +4,8 @@ import 'package:flutter/material.dart';
 import '../../repositories/gub_repository.dart';
 import '../../modules/chat/widgets/gub_chat_overlay.dart';
 import '../../widgets/gub_access_guard.dart';
-import '../../widgets/gub_home_background.dart';
 import '../../widgets/gub_page_header.dart';
+import '../../widgets/gub_screen_background.dart';
 import '../../modules/tasks/widgets/task_home_card.dart';
 
 import 'widgets/gub_actions_section.dart';
@@ -22,7 +22,8 @@ class GubScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GubHomeBackground(
+    return GubScreenBackground(
+      variant: GubBackgroundAssignments.tasks,
       child: GubChatOverlay(
         key: ValueKey(gubId),
         gubId: gubId,

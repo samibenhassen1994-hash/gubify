@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../widgets/gub_screen_background.dart';
 import '../services/proposal_service.dart';
 import '../models/proposal_model.dart';
 import '../widgets/proposal_card.dart';
@@ -17,42 +18,54 @@ class ProposalsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text("Proposals")),
-      floatingActionButton: FloatingActionButton.extended(
-        icon: const Icon(Icons.add),
-        label: const Text("Proposal"),
-        onPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) =>
-                  CreateProposalScreen(gubId: gubId, memberCount: memberCount),
-            ),
-          );
-        },
-      ),
-      body: StreamBuilder<List<ProposalModel>>(
-        stream: ProposalService.instance.proposalsStream(gubId),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
+    return GubScreenBackground(
+      variant: GubBackgroundAssignments.proposals,
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        appBar: AppBar(
+          title: const Text("Proposals"),
+          backgroundColor: Colors.transparent,
+          surfaceTintColor: Colors.transparent,
+          elevation: 0,
+          scrolledUnderElevation: 0,
+        ),
+        floatingActionButton: FloatingActionButton.extended(
+          icon: const Icon(Icons.add),
+          label: const Text("Proposal"),
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => CreateProposalScreen(
+                  gubId: gubId,
+                  memberCount: memberCount,
+                ),
+              ),
+            );
+          },
+        ),
+        body: StreamBuilder<List<ProposalModel>>(
+          stream: ProposalService.instance.proposalsStream(gubId),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
 
-          if (!snapshot.hasData || snapshot.data!.isEmpty) {
-            return const Center(child: Text("No proposals yet."));
-          }
+            if (!snapshot.hasData || snapshot.data!.isEmpty) {
+              return const Center(child: Text("No proposals yet."));
+            }
 
-          final proposals = snapshot.data!;
+            final proposals = snapshot.data!;
 
-          return ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: proposals.length,
-            itemBuilder: (context, index) {
-              return ProposalCard(proposal: proposals[index]);
-            },
-          );
-        },
+            return ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: proposals.length,
+              itemBuilder: (context, index) {
+                return ProposalCard(proposal: proposals[index]);
+              },
+            );
+          },
+        ),
       ),
     );
   }

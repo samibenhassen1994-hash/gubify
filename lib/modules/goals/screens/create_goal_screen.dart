@@ -3,6 +3,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 
 import '../../../core/formatters/monetary_amount_input_formatter.dart';
+import '../../../widgets/gub_screen_background.dart';
 import '../services/goal_service.dart';
 
 class CreateGoalScreen extends StatefulWidget {
@@ -16,7 +17,6 @@ class CreateGoalScreen extends StatefulWidget {
 
 class _CreateGoalScreenState extends State<CreateGoalScreen> {
   static const Color _primaryColor = Color(0xFF2563EB);
-  static const Color _pageColor = Color(0xFFF5F8FD);
   static const Color _textColor = Color(0xFF0F172A);
   static const Color _secondaryTextColor = Color(0xFF64748B);
   static const Color _borderColor = Color(0xFFDCE6F5);
@@ -317,304 +317,310 @@ class _CreateGoalScreenState extends State<CreateGoalScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      resizeToAvoidBottomInset: true,
-      backgroundColor: _pageColor,
-      appBar: AppBar(
-        backgroundColor: _pageColor,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        title: const Text(
-          "New Shared Budget",
-          style: TextStyle(color: _textColor, fontWeight: FontWeight.w700),
+    return GubScreenBackground(
+      variant: GubBackgroundAssignments.sharedBudget,
+      whiteOverlayOpacity: GubBackgroundAssignments.economicWhiteOverlayOpacity,
+      child: Scaffold(
+        resizeToAvoidBottomInset: true,
+        backgroundColor: Colors.transparent,
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          surfaceTintColor: Colors.transparent,
+          elevation: 0,
+          scrolledUnderElevation: 0,
+          title: const Text(
+            "New Shared Budget",
+            style: TextStyle(color: _textColor, fontWeight: FontWeight.w700),
+          ),
         ),
-      ),
-      body: SafeArea(
-        top: false,
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            if (constraints.maxHeight > _largestViewportHeight) {
-              _largestViewportHeight = constraints.maxHeight;
-            }
+        body: SafeArea(
+          top: false,
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              if (constraints.maxHeight > _largestViewportHeight) {
+                _largestViewportHeight = constraints.maxHeight;
+              }
 
-            final keyboardOccupiedHeight =
-                (_largestViewportHeight - constraints.maxHeight)
-                    .clamp(0.0, double.infinity)
-                    .toDouble();
+              final keyboardOccupiedHeight =
+                  (_largestViewportHeight - constraints.maxHeight)
+                      .clamp(0.0, double.infinity)
+                      .toDouble();
 
-            return ListView(
-              controller: _scrollController,
-              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.manual,
-              padding: EdgeInsets.fromLTRB(
-                20,
-                12,
-                20,
-                36 + keyboardOccupiedHeight,
-              ),
-              children: [
-                Center(
-                  child: Container(
-                    width: 74,
-                    height: 74,
-                    decoration: BoxDecoration(
-                      color: _softBlueColor,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: const Color(0xFFBFDBFE)),
+              return ListView(
+                controller: _scrollController,
+                keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior.manual,
+                padding: EdgeInsets.fromLTRB(
+                  20,
+                  12,
+                  20,
+                  36 + keyboardOccupiedHeight,
+                ),
+                children: [
+                  Center(
+                    child: Container(
+                      width: 74,
+                      height: 74,
+                      decoration: BoxDecoration(
+                        color: _softBlueColor,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: const Color(0xFFBFDBFE)),
+                      ),
+                      child: const Icon(
+                        Icons.flag_rounded,
+                        size: 38,
+                        color: _primaryColor,
+                      ),
                     ),
-                    child: const Icon(
-                      Icons.flag_rounded,
-                      size: 38,
-                      color: _primaryColor,
+                  ),
+
+                  const SizedBox(height: 18),
+
+                  const Text(
+                    "Create a Shared Budget",
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: _textColor,
+                      fontSize: 28,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -0.5,
                     ),
                   ),
-                ),
 
-                const SizedBox(height: 18),
+                  const SizedBox(height: 7),
 
-                const Text(
-                  "Create a Shared Budget",
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: _textColor,
-                    fontSize: 28,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -0.5,
+                  const Text(
+                    "Set a shared target and reach it together.",
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: _secondaryTextColor,
+                      fontSize: 15,
+                      height: 1.4,
+                    ),
                   ),
-                ),
 
-                const SizedBox(height: 7),
+                  const SizedBox(height: 28),
 
-                const Text(
-                  "Set a shared target and reach it together.",
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: _secondaryTextColor,
-                    fontSize: 15,
-                    height: 1.4,
-                  ),
-                ),
-
-                const SizedBox(height: 28),
-
-                _sectionCard(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      _sectionHeader(
-                        icon: Icons.edit_note_rounded,
-                        title: "Shared Budget details",
-                        subtitle: "Give your group a clear objective.",
-                      ),
-
-                      const SizedBox(height: 20),
-
-                      Container(
-                        key: _titleFieldKey,
-                        child: TextField(
-                          controller: _titleController,
-                          focusNode: _titleFocusNode,
-                          maxLength: 100,
-                          maxLengthEnforcement: MaxLengthEnforcement.enforced,
-                          textInputAction: TextInputAction.next,
-                          onSubmitted: (_) {
-                            _descriptionFocusNode.requestFocus();
-                          },
-                          decoration: _inputDecoration(
-                            label: "Title",
-                            hint: "Example: Summer holiday fund",
-                            icon: Icons.title_rounded,
-                          ),
+                  _sectionCard(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _sectionHeader(
+                          icon: Icons.edit_note_rounded,
+                          title: "Shared Budget details",
+                          subtitle: "Give your group a clear objective.",
                         ),
-                      ),
 
-                      const SizedBox(height: 16),
+                        const SizedBox(height: 20),
 
-                      Container(
-                        key: _descriptionFieldKey,
-                        child: TextField(
-                          controller: _descriptionController,
-                          focusNode: _descriptionFocusNode,
-                          keyboardType: TextInputType.multiline,
-                          minLines: 3,
-                          maxLines: 5,
-                          maxLength: 500,
-                          maxLengthEnforcement: MaxLengthEnforcement.enforced,
-                          decoration: _inputDecoration(
-                            label: "Description",
-                            hint: "Explain what the Shared Budget is for",
-                            icon: Icons.subject_rounded,
-                          ),
-                        ),
-                      ),
-
-                      const SizedBox(height: 16),
-
-                      Container(
-                        key: _amountFieldKey,
-                        child: TextField(
-                          controller: _amountController,
-                          focusNode: _amountFocusNode,
-                          keyboardType: const TextInputType.numberWithOptions(
-                            decimal: true,
-                          ),
-                          inputFormatters: const [
-                            MonetaryAmountInputFormatter(),
-                          ],
-                          textInputAction: TextInputAction.done,
-                          onSubmitted: (_) {
-                            if (!_isLoading) {
-                              _createGoal();
-                            }
-                          },
-                          decoration: _inputDecoration(
-                            label: "Target amount",
-                            hint: "0.00",
-                            icon: Icons.euro_rounded,
-                            prefixText: "€ ",
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 18),
-
-                _sectionCard(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      _sectionHeader(
-                        icon: Icons.calendar_month_rounded,
-                        title: "Shared Budget deadline",
-                        subtitle: "The deadline is optional.",
-                      ),
-
-                      const SizedBox(height: 16),
-
-                      Material(
-                        color: Colors.transparent,
-                        child: InkWell(
-                          onTap: _pickDeadline,
-                          borderRadius: BorderRadius.circular(16),
-                          child: Container(
-                            padding: const EdgeInsets.all(15),
-                            decoration: BoxDecoration(
-                              color: _softBlueColor,
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(
-                                color: const Color(0xFFBFDBFE),
-                              ),
-                            ),
-                            child: Row(
-                              children: [
-                                Container(
-                                  width: 42,
-                                  height: 42,
-                                  decoration: BoxDecoration(
-                                    color: Colors.white,
-                                    borderRadius: BorderRadius.circular(13),
-                                  ),
-                                  child: const Icon(
-                                    Icons.event_available_rounded,
-                                    color: _primaryColor,
-                                  ),
-                                ),
-                                const SizedBox(width: 13),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      const Text(
-                                        "Deadline",
-                                        style: TextStyle(
-                                          color: _secondaryTextColor,
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w500,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 3),
-                                      Text(
-                                        _deadline == null
-                                            ? "No deadline selected"
-                                            : "${_deadline!.day.toString().padLeft(2, '0')}/"
-                                                  "${_deadline!.month.toString().padLeft(2, '0')}/"
-                                                  "${_deadline!.year}",
-                                        style: const TextStyle(
-                                          color: _textColor,
-                                          fontSize: 15,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const Icon(
-                                  Icons.chevron_right_rounded,
-                                  color: Color(0xFF94A3B8),
-                                ),
-                              ],
+                        Container(
+                          key: _titleFieldKey,
+                          child: TextField(
+                            controller: _titleController,
+                            focusNode: _titleFocusNode,
+                            maxLength: 100,
+                            maxLengthEnforcement: MaxLengthEnforcement.enforced,
+                            textInputAction: TextInputAction.next,
+                            onSubmitted: (_) {
+                              _descriptionFocusNode.requestFocus();
+                            },
+                            decoration: _inputDecoration(
+                              label: "Title",
+                              hint: "Example: Summer holiday fund",
+                              icon: Icons.title_rounded,
                             ),
                           ),
                         ),
-                      ),
 
-                      if (_deadline != null) ...[
-                        const SizedBox(height: 10),
-                        TextButton.icon(
-                          onPressed: () {
-                            setState(() {
-                              _deadline = null;
-                            });
-                          },
-                          icon: const Icon(Icons.close_rounded, size: 18),
-                          label: const Text("Remove deadline"),
+                        const SizedBox(height: 16),
+
+                        Container(
+                          key: _descriptionFieldKey,
+                          child: TextField(
+                            controller: _descriptionController,
+                            focusNode: _descriptionFocusNode,
+                            keyboardType: TextInputType.multiline,
+                            minLines: 3,
+                            maxLines: 5,
+                            maxLength: 500,
+                            maxLengthEnforcement: MaxLengthEnforcement.enforced,
+                            decoration: _inputDecoration(
+                              label: "Description",
+                              hint: "Explain what the Shared Budget is for",
+                              icon: Icons.subject_rounded,
+                            ),
+                          ),
+                        ),
+
+                        const SizedBox(height: 16),
+
+                        Container(
+                          key: _amountFieldKey,
+                          child: TextField(
+                            controller: _amountController,
+                            focusNode: _amountFocusNode,
+                            keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true,
+                            ),
+                            inputFormatters: const [
+                              MonetaryAmountInputFormatter(),
+                            ],
+                            textInputAction: TextInputAction.done,
+                            onSubmitted: (_) {
+                              if (!_isLoading) {
+                                _createGoal();
+                              }
+                            },
+                            decoration: _inputDecoration(
+                              label: "Target amount",
+                              hint: "0.00",
+                              icon: Icons.euro_rounded,
+                              prefixText: "€ ",
+                            ),
+                          ),
                         ),
                       ],
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 26),
-
-                SizedBox(
-                  height: 56,
-                  child: FilledButton.icon(
-                    onPressed: _isLoading ? null : _createGoal,
-                    style: FilledButton.styleFrom(
-                      backgroundColor: _primaryColor,
-                      foregroundColor: Colors.white,
-                      disabledBackgroundColor: _primaryColor.withValues(
-                        alpha: 0.55,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      elevation: 0,
                     ),
-                    icon: _isLoading
-                        ? const SizedBox(
-                            width: 21,
-                            height: 21,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2.2,
-                              color: Colors.white,
+                  ),
+
+                  const SizedBox(height: 18),
+
+                  _sectionCard(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _sectionHeader(
+                          icon: Icons.calendar_month_rounded,
+                          title: "Shared Budget deadline",
+                          subtitle: "The deadline is optional.",
+                        ),
+
+                        const SizedBox(height: 16),
+
+                        Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            onTap: _pickDeadline,
+                            borderRadius: BorderRadius.circular(16),
+                            child: Container(
+                              padding: const EdgeInsets.all(15),
+                              decoration: BoxDecoration(
+                                color: _softBlueColor,
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color: const Color(0xFFBFDBFE),
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 42,
+                                    height: 42,
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(13),
+                                    ),
+                                    child: const Icon(
+                                      Icons.event_available_rounded,
+                                      color: _primaryColor,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 13),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        const Text(
+                                          "Deadline",
+                                          style: TextStyle(
+                                            color: _secondaryTextColor,
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 3),
+                                        Text(
+                                          _deadline == null
+                                              ? "No deadline selected"
+                                              : "${_deadline!.day.toString().padLeft(2, '0')}/"
+                                                    "${_deadline!.month.toString().padLeft(2, '0')}/"
+                                                    "${_deadline!.year}",
+                                          style: const TextStyle(
+                                            color: _textColor,
+                                            fontSize: 15,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const Icon(
+                                    Icons.chevron_right_rounded,
+                                    color: Color(0xFF94A3B8),
+                                  ),
+                                ],
+                              ),
                             ),
-                          )
-                        : const Icon(Icons.flag_rounded),
-                    label: Text(
-                      _isLoading ? "Creating..." : "Create Shared Budget",
-                      style: const TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w700,
+                          ),
+                        ),
+
+                        if (_deadline != null) ...[
+                          const SizedBox(height: 10),
+                          TextButton.icon(
+                            onPressed: () {
+                              setState(() {
+                                _deadline = null;
+                              });
+                            },
+                            icon: const Icon(Icons.close_rounded, size: 18),
+                            label: const Text("Remove deadline"),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 26),
+
+                  SizedBox(
+                    height: 56,
+                    child: FilledButton.icon(
+                      onPressed: _isLoading ? null : _createGoal,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: _primaryColor,
+                        foregroundColor: Colors.white,
+                        disabledBackgroundColor: _primaryColor.withValues(
+                          alpha: 0.55,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        elevation: 0,
+                      ),
+                      icon: _isLoading
+                          ? const SizedBox(
+                              width: 21,
+                              height: 21,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Icon(Icons.flag_rounded),
+                      label: Text(
+                        _isLoading ? "Creating..." : "Create Shared Budget",
+                        style: const TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
                   ),
-                ),
-              ],
-            );
-          },
+                ],
+              );
+            },
+          ),
         ),
       ),
     );

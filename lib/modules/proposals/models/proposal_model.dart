@@ -71,6 +71,9 @@ class ProposalModel {
   });
 
   factory ProposalModel.fromFirestore(Map<String, dynamic> json) {
+    final createdAt = json["createdAt"];
+    final expiresAt = json["expiresAt"];
+
     return ProposalModel(
       gubId: json["gubId"] ?? "",
       proposalId: json["proposalId"] ?? "",
@@ -83,8 +86,8 @@ class ProposalModel {
 
       status: json["status"] ?? "voting",
 
-      createdAt: json["createdAt"] as Timestamp,
-      expiresAt: json["expiresAt"] as Timestamp,
+      createdAt: createdAt is Timestamp ? createdAt : Timestamp(0, 0),
+      expiresAt: expiresAt is Timestamp ? expiresAt : Timestamp(0, 0),
 
       eventDate: json["eventDate"] as Timestamp?,
 

@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import '../../../widgets/gub_screen_background.dart';
 import '../models/goal_model.dart';
 import '../services/goal_service.dart';
 import '../widgets/delete_goal_dialog.dart';
@@ -26,73 +27,82 @@ class GoalsScreen extends StatelessWidget {
     final currentUserId = FirebaseAuth.instance.currentUser?.uid;
     final initialIndex = initialTab == SharedBudgetInitialTab.archive ? 1 : 0;
 
-    return DefaultTabController(
-      length: 2,
-      initialIndex: initialIndex,
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text("Shared Budget"),
-          bottom: const TabBar(
-            tabs: [
-              Tab(text: "Active"),
-              Tab(text: "Archive"),
-            ],
-          ),
-        ),
-        floatingActionButton: canCreateBudget
-            ? FloatingActionButton.extended(
-                icon: const Icon(Icons.add),
-                label: const Text("New Shared Budget"),
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => CreateGoalScreen(gubId: gubId),
-                    ),
-                  );
-                },
-              )
-            : null,
-        body: StreamBuilder<List<GoalModel>>(
-          stream: GoalService.instance.goalsStream(gubId),
-          builder: (context, snapshot) {
-            if (snapshot.hasError) {
-              return const Center(
-                child: Text("Unable to load Shared Budgets."),
-              );
-            }
-
-            if (!snapshot.hasData) {
-              return const Center(child: CircularProgressIndicator());
-            }
-
-            final goals = snapshot.data!;
-            final activeBudgets = goals
-                .where((goal) => !goal.isCompleted)
-                .toList(growable: false);
-            final archivedBudgets = goals
-                .where((goal) => goal.isCompleted)
-                .toList(growable: false);
-
-            return TabBarView(
-              children: [
-                _budgetList(
-                  context: context,
-                  budgets: activeBudgets,
-                  emptyMessage: "No active Shared Budgets.",
-                  currentUserId: currentUserId,
-                  allowDelete: true,
-                ),
-                _budgetList(
-                  context: context,
-                  budgets: archivedBudgets,
-                  emptyMessage: "No archived Shared Budgets.",
-                  currentUserId: currentUserId,
-                  allowDelete: false,
-                ),
+    return GubScreenBackground(
+      variant: GubBackgroundAssignments.sharedBudget,
+      whiteOverlayOpacity: GubBackgroundAssignments.economicWhiteOverlayOpacity,
+      child: DefaultTabController(
+        length: 2,
+        initialIndex: initialIndex,
+        child: Scaffold(
+          backgroundColor: Colors.transparent,
+          appBar: AppBar(
+            title: const Text("Shared Budget"),
+            backgroundColor: Colors.transparent,
+            surfaceTintColor: Colors.transparent,
+            elevation: 0,
+            scrolledUnderElevation: 0,
+            bottom: const TabBar(
+              tabs: [
+                Tab(text: "Active"),
+                Tab(text: "Archive"),
               ],
-            );
-          },
+            ),
+          ),
+          floatingActionButton: canCreateBudget
+              ? FloatingActionButton.extended(
+                  icon: const Icon(Icons.add),
+                  label: const Text("New Shared Budget"),
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => CreateGoalScreen(gubId: gubId),
+                      ),
+                    );
+                  },
+                )
+              : null,
+          body: StreamBuilder<List<GoalModel>>(
+            stream: GoalService.instance.goalsStream(gubId),
+            builder: (context, snapshot) {
+              if (snapshot.hasError) {
+                return const Center(
+                  child: Text("Unable to load Shared Budgets."),
+                );
+              }
+
+              if (!snapshot.hasData) {
+                return const Center(child: CircularProgressIndicator());
+              }
+
+              final goals = snapshot.data!;
+              final activeBudgets = goals
+                  .where((goal) => !goal.isCompleted)
+                  .toList(growable: false);
+              final archivedBudgets = goals
+                  .where((goal) => goal.isCompleted)
+                  .toList(growable: false);
+
+              return TabBarView(
+                children: [
+                  _budgetList(
+                    context: context,
+                    budgets: activeBudgets,
+                    emptyMessage: "No active Shared Budgets.",
+                    currentUserId: currentUserId,
+                    allowDelete: true,
+                  ),
+                  _budgetList(
+                    context: context,
+                    budgets: archivedBudgets,
+                    emptyMessage: "No archived Shared Budgets.",
+                    currentUserId: currentUserId,
+                    allowDelete: false,
+                  ),
+                ],
+              );
+            },
+          ),
         ),
       ),
     );

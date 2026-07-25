@@ -18,7 +18,7 @@ class MyGubsScreen extends StatelessWidget {
       body: GubHomeBackground(
         child: Column(
           children: [
-            const GubPageHeader(title: "My Gubs"),
+            const GubPageHeader(title: "My Gubs", personalProfileEnabled: true),
 
             Expanded(
               child: FutureBuilder<QuerySnapshot>(
@@ -30,19 +30,14 @@ class MyGubsScreen extends StatelessWidget {
                     .get(),
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(
-                      child: CircularProgressIndicator(),
-                    );
+                    return const Center(child: CircularProgressIndicator());
                   }
 
                   if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
                     return const Center(
                       child: Text(
                         "You haven't joined any Gub yet.",
-                        style: TextStyle(
-                          fontSize: 16,
-                          color: Colors.black54,
-                        ),
+                        style: TextStyle(fontSize: 16, color: Colors.black54),
                       ),
                     );
                   }

@@ -1,7 +1,11 @@
 import 'package:firebase_auth/firebase_auth.dart';
 
 import '../../../repositories/member_repository.dart';
+import '../../../repositories/goal_repository.dart';
+import '../../../repositories/gub_repository.dart';
 import '../../../repositories/user_repository.dart';
+import '../../gub_calendar/repositories/event_repository.dart';
+import '../../proposals/repositories/proposal_repository.dart';
 import '../../tasks/repositories/task_repository.dart';
 import '../models/user_profile_model.dart';
 
@@ -11,6 +15,53 @@ class UserProfileService {
   static final UserProfileService instance = UserProfileService._();
 
   final FirebaseAuth _auth = FirebaseAuth.instance;
+
+  Future<UserProfileModel> loadPersonalProfile({required String userId}) async {
+    final currentUser = _auth.currentUser;
+    if (currentUser == null || currentUser.uid != userId) {
+      throw StateError("You must be signed in to view your profile.");
+    }
+
+    final userData = await UserRepository.instance.getUser(userId);
+    final displayName = _firstNonEmptyString([
+      userData?["displayName"],
+      currentUser.displayName,
+    ]);
+    final photoUrl = _firstNonEmptyString([
+      userData?["photoUrl"],
+      userData?["photoURL"],
+      currentUser.photoURL,
+    ]);
+
+    return UserProfileModel(
+      userId: userId,
+      displayName: displayName ?? "User",
+      photoUrl: photoUrl,
+      isCurrentUser: true,
+    );
+  }
+
+  Stream<List<PersonalGubModel>> personalGubsStream({required String userId}) {
+    final currentUserId = _auth.currentUser?.uid;
+    if (currentUserId == null || currentUserId != userId) {
+      return Stream.error(
+        StateError("You must be signed in to view your Gubs."),
+      );
+    }
+
+    return GubRepository.instance
+        .userGubsStream(userId)
+        .map(
+          (gubs) => [
+            for (final gub in gubs)
+              PersonalGubModel(
+                gubId: _asNonEmptyString(gub["gubId"]) ?? "",
+                name: _asNonEmptyString(gub["name"]) ?? "Unnamed Gub",
+                role: _asNonEmptyString(gub["role"]),
+              ),
+          ].where((gub) => gub.gubId.isNotEmpty).toList(growable: false),
+        );
+  }
 
   Future<UserProfileModel?> loadProfile({
     required String gubId,
@@ -44,7 +95,11 @@ class UserProfileService {
       userData?["displayName"],
       targetMembership["displayName"],
     ]);
-    final photoUrl = _firstNonEmptyString([targetMembership["photoUrl"]]);
+    final photoUrl = _firstNonEmptyString([
+      userData?["photoUrl"],
+      userData?["photoURL"],
+      targetMembership["photoUrl"],
+    ]);
 
     return UserProfileModel(
       userId: userId,
@@ -55,46 +110,134 @@ class UserProfileService {
     );
   }
 
-  Stream<List<UserTaskActivity>> taskActivityStream({
+  Stream<List<UserActivityEntry>> activityStream({
     required String gubId,
     required String userId,
+    required UserActivityType type,
   }) {
-    return TaskRepository.instance.tasksStream(gubId).map((tasks) {
-      final activities = <UserTaskActivity>[];
+    return switch (type) {
+      UserActivityType.tasks => _taskActivityStream(gubId, userId),
+      UserActivityType.proposals => _proposalActivityStream(gubId, userId),
+      UserActivityType.events => _eventActivityStream(gubId, userId),
+      UserActivityType.groupGoals => Stream.value(const <UserActivityEntry>[]),
+      UserActivityType.sharedBudget => _sharedBudgetActivityStream(
+        gubId,
+        userId,
+      ),
+    };
+  }
+
+  Stream<List<UserActivityEntry>> _taskActivityStream(
+    String gubId,
+    String userId,
+  ) {
+    return TaskRepository.instance.profileActivityCandidatesStream(gubId).map((
+      tasks,
+    ) {
+      final activities = <UserActivityEntry>[];
 
       for (final task in tasks) {
-        if (task.completedBy == userId) {
-          activities.add(
-            UserTaskActivity(
-              task: task,
-              type: UserTaskActivityType.completed,
-              occurredAt: task.completedAt ?? task.createdAt,
-            ),
-          );
-        } else if (task.creatorId == userId) {
-          activities.add(
-            UserTaskActivity(
-              task: task,
-              type: UserTaskActivityType.created,
-              occurredAt: task.createdAt,
-            ),
-          );
-        } else if (task.assignedUserId == userId) {
-          activities.add(
-            UserTaskActivity(
-              task: task,
-              type: UserTaskActivityType.assigned,
-              occurredAt: task.createdAt,
-            ),
-          );
-        }
+        final kind = task.completedBy == userId
+            ? UserActivityKind.taskCompleted
+            : task.creatorId == userId
+            ? UserActivityKind.taskCreated
+            : task.assignedUserId == userId
+            ? UserActivityKind.taskAssigned
+            : null;
+        if (kind == null) continue;
+
+        activities.add(
+          UserActivityEntry(
+            id: task.taskId,
+            title: task.title,
+            status: task.status,
+            kind: kind,
+            occurredAt: kind == UserActivityKind.taskCompleted
+                ? task.completedAt ?? task.createdAt
+                : task.createdAt,
+            task: task,
+          ),
+        );
       }
 
-      activities.sort(
-        (first, second) => second.occurredAt.compareTo(first.occurredAt),
-      );
-      return activities;
+      return _sortActivities(activities);
     });
+  }
+
+  Stream<List<UserActivityEntry>> _proposalActivityStream(
+    String gubId,
+    String userId,
+  ) {
+    return ProposalRepository.instance
+        .profileActivityCandidatesStream(gubId)
+        .map(
+          (proposals) => _sortActivities([
+            for (final proposal in proposals)
+              if (proposal.creatorId == userId)
+                UserActivityEntry(
+                  id: proposal.proposalId,
+                  title: proposal.title,
+                  status: proposal.status,
+                  kind: UserActivityKind.proposalCreated,
+                  occurredAt: proposal.createdAt,
+                  proposal: proposal,
+                ),
+          ]),
+        );
+  }
+
+  Stream<List<UserActivityEntry>> _eventActivityStream(
+    String gubId,
+    String userId,
+  ) {
+    return EventRepository.instance
+        .profileActivityCandidatesStream(gubId)
+        .map(
+          (events) => _sortActivities([
+            for (final event in events)
+              if (event.creatorId == userId)
+                UserActivityEntry(
+                  id: event.eventId,
+                  title: event.title,
+                  status: event.status,
+                  kind: UserActivityKind.eventCreated,
+                  occurredAt: event.createdAt,
+                  event: event,
+                ),
+          ]),
+        );
+  }
+
+  Stream<List<UserActivityEntry>> _sharedBudgetActivityStream(
+    String gubId,
+    String userId,
+  ) {
+    return GoalRepository.instance
+        .profileActivityCandidatesStream(gubId)
+        .map(
+          (goals) => _sortActivities([
+            for (final goal in goals)
+              if (goal.ownerId == userId)
+                UserActivityEntry(
+                  id: goal.goalId,
+                  title: goal.title,
+                  status: goal.status,
+                  kind: UserActivityKind.sharedBudgetCreated,
+                  occurredAt: goal.createdAt,
+                  goal: goal,
+                ),
+          ]),
+        );
+  }
+
+  List<UserActivityEntry> _sortActivities(List<UserActivityEntry> activities) {
+    activities.sort((first, second) {
+      final dateComparison = second.occurredAt.compareTo(first.occurredAt);
+      return dateComparison != 0
+          ? dateComparison
+          : second.id.compareTo(first.id);
+    });
+    return activities;
   }
 
   String? _firstNonEmptyString(List<Object?> values) {
