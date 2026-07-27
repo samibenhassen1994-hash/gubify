@@ -67,11 +67,7 @@ class GubDashboardService {
 
   static final GubDashboardService instance = GubDashboardService._();
 
-  Stream<GubDashboardSummary> summaryStream(
-    String gubId, {
-    required bool calendarEnabled,
-    required bool budgetEnabled,
-  }) {
+  Stream<GubDashboardSummary> summaryStream(String gubId) {
     late final StreamController<GubDashboardSummary> controller;
 
     StreamSubscription<List<TaskModel>>? taskSubscription;
@@ -198,53 +194,49 @@ class GubDashboardService {
               },
             );
 
-        if (calendarEnabled) {
-          eventSubscription = EventService.instance
-              .eventsStream(gubId)
-              .listen(
-                (events) {
-                  update(
-                    eventsLoaded: true,
-                    eventsFailed: false,
-                    upcomingEventCount: events.length,
-                    nextEvent: events.isEmpty ? null : events.first,
-                    clearNextEvent: events.isEmpty,
-                  );
-                },
-                onError: (Object _) {
-                  update(
-                    eventsLoaded: true,
-                    eventsFailed: true,
-                    upcomingEventCount: 0,
-                    clearNextEvent: true,
-                  );
-                },
-              );
-        }
+        eventSubscription = EventService.instance
+            .eventsStream(gubId)
+            .listen(
+              (events) {
+                update(
+                  eventsLoaded: true,
+                  eventsFailed: false,
+                  upcomingEventCount: events.length,
+                  nextEvent: events.isEmpty ? null : events.first,
+                  clearNextEvent: events.isEmpty,
+                );
+              },
+              onError: (Object _) {
+                update(
+                  eventsLoaded: true,
+                  eventsFailed: true,
+                  upcomingEventCount: 0,
+                  clearNextEvent: true,
+                );
+              },
+            );
 
-        if (budgetEnabled) {
-          budgetSubscription = SharedBudgetService.instance
-              .activeSharedBudgetsStream(gubId)
-              .listen(
-                (budgets) {
-                  update(
-                    budgetsLoaded: true,
-                    budgetsFailed: false,
-                    activeBudgetCount: budgets.length,
-                    latestBudget: budgets.isEmpty ? null : budgets.first,
-                    clearLatestBudget: budgets.isEmpty,
-                  );
-                },
-                onError: (Object _) {
-                  update(
-                    budgetsLoaded: true,
-                    budgetsFailed: true,
-                    activeBudgetCount: 0,
-                    clearLatestBudget: true,
-                  );
-                },
-              );
-        }
+        budgetSubscription = SharedBudgetService.instance
+            .activeSharedBudgetsStream(gubId)
+            .listen(
+              (budgets) {
+                update(
+                  budgetsLoaded: true,
+                  budgetsFailed: false,
+                  activeBudgetCount: budgets.length,
+                  latestBudget: budgets.isEmpty ? null : budgets.first,
+                  clearLatestBudget: budgets.isEmpty,
+                );
+              },
+              onError: (Object _) {
+                update(
+                  budgetsLoaded: true,
+                  budgetsFailed: true,
+                  activeBudgetCount: 0,
+                  clearLatestBudget: true,
+                );
+              },
+            );
       },
       onCancel: cancelSubscriptions,
     );

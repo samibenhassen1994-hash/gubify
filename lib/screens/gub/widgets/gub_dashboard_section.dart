@@ -17,14 +17,12 @@ class GubDashboardSection extends StatefulWidget {
   final String gubId;
   final String ownerId;
   final int memberCount;
-  final List<String> activeModules;
 
   const GubDashboardSection({
     super.key,
     required this.gubId,
     required this.ownerId,
     required this.memberCount,
-    required this.activeModules,
   });
 
   @override
@@ -34,9 +32,6 @@ class GubDashboardSection extends StatefulWidget {
 class _GubDashboardSectionState extends State<GubDashboardSection> {
   late Stream<GubDashboardSummary> _summaryStream;
 
-  bool get _calendarEnabled => widget.activeModules.contains("calendar");
-  // Legacy module key retained because persisted Gub configurations use `goals`.
-  bool get _budgetEnabled => widget.activeModules.contains("goals");
   bool get _isOwner => FirebaseAuth.instance.currentUser?.uid == widget.ownerId;
 
   @override
@@ -48,19 +43,13 @@ class _GubDashboardSectionState extends State<GubDashboardSection> {
   @override
   void didUpdateWidget(covariant GubDashboardSection oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.gubId != widget.gubId ||
-        oldWidget.activeModules.contains("calendar") != _calendarEnabled ||
-        oldWidget.activeModules.contains("goals") != _budgetEnabled) {
+    if (oldWidget.gubId != widget.gubId) {
       _summaryStream = _createSummaryStream();
     }
   }
 
   Stream<GubDashboardSummary> _createSummaryStream() {
-    return GubDashboardService.instance.summaryStream(
-      widget.gubId,
-      calendarEnabled: _calendarEnabled,
-      budgetEnabled: _budgetEnabled,
-    );
+    return GubDashboardService.instance.summaryStream(widget.gubId);
   }
 
   @override
@@ -76,35 +65,32 @@ class _GubDashboardSectionState extends State<GubDashboardSection> {
             _TodayCard(
               taskText: _taskText(summary, compact: false),
               proposalText: _proposalText(summary, compact: false),
-              eventText: _calendarEnabled ? _nextEventText(summary) : null,
+              eventText: _nextEventText(summary),
               onTasksTap: _openTasks,
               onProposalsTap: () => _openProposals(summary.activeProposal),
-              onCalendarTap: _calendarEnabled ? _openCalendar : null,
+              onCalendarTap: _openCalendar,
             ),
             const SizedBox(height: 12),
             _ModuleGrid(
               taskText: _taskText(summary, compact: true),
               proposalText: _proposalText(summary, compact: true),
               calendarText: _calendarText(summary),
-              calendarEnabled: _calendarEnabled,
               onTasksTap: _openTasks,
               onProposalsTap: () => _openProposals(summary.activeProposal),
               onCalendarTap: _openCalendar,
               onEventTap: _showEventsComingSoon,
             ),
-            if (_budgetEnabled) ...[
-              const SizedBox(height: 12),
-              _SharedBudgetSummaryCard(
-                summary: summary,
-                gubId: widget.gubId,
-                isOwner: _isOwner,
-                onTap: summary.latestBudget == null
-                    ? _openBudgets
-                    : () => _openBudget(summary.latestBudget!),
-                onArchive: _openBudgetArchive,
-                onActiveBudgets: _openActiveBudgets,
-              ),
-            ],
+            const SizedBox(height: 12),
+            _SharedBudgetSummaryCard(
+              summary: summary,
+              gubId: widget.gubId,
+              isOwner: _isOwner,
+              onTap: summary.latestBudget == null
+                  ? _openBudgets
+                  : () => _openBudget(summary.latestBudget!),
+              onArchive: _openBudgetArchive,
+              onActiveBudgets: _openActiveBudgets,
+            ),
           ],
         );
       },
@@ -134,7 +120,6 @@ class _GubDashboardSectionState extends State<GubDashboardSection> {
   }
 
   String _nextEventText(GubDashboardSummary summary) {
-    if (!_calendarEnabled) return "Calendar not enabled";
     if (!summary.eventsLoaded) return "Loading...";
     if (summary.eventsFailed) return "Unable to load events";
 
@@ -149,7 +134,6 @@ class _GubDashboardSectionState extends State<GubDashboardSection> {
   }
 
   String _calendarText(GubDashboardSummary summary) {
-    if (!_calendarEnabled) return "Module not enabled";
     if (!summary.eventsLoaded) return "Loading...";
     if (summary.eventsFailed) return "Unable to load events";
 
@@ -178,7 +162,6 @@ class _GubDashboardSectionState extends State<GubDashboardSection> {
   }
 
   void _openCalendar() {
-    if (!_calendarEnabled) return;
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) =>
@@ -188,7 +171,6 @@ class _GubDashboardSectionState extends State<GubDashboardSection> {
   }
 
   void _openBudgets() {
-    if (!_budgetEnabled) return;
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) =>
@@ -365,7 +347,6 @@ class _ModuleGrid extends StatelessWidget {
   final String taskText;
   final String calendarText;
   final String proposalText;
-  final bool calendarEnabled;
   final VoidCallback onTasksTap;
   final VoidCallback onCalendarTap;
   final VoidCallback onProposalsTap;
@@ -375,7 +356,6 @@ class _ModuleGrid extends StatelessWidget {
     required this.taskText,
     required this.calendarText,
     required this.proposalText,
-    required this.calendarEnabled,
     required this.onTasksTap,
     required this.onCalendarTap,
     required this.onProposalsTap,
@@ -393,15 +373,14 @@ class _ModuleGrid extends StatelessWidget {
         subtitle: taskText,
         onTap: onTasksTap,
       ),
-      if (calendarEnabled)
-        _ModuleCard(
-          icon: Icons.calendar_month_outlined,
-          iconColor: const Color(0xFF2563EB),
-          iconBackground: const Color(0xFFDBEAFE),
-          title: "Calendar",
-          subtitle: calendarText,
-          onTap: onCalendarTap,
-        ),
+      _ModuleCard(
+        icon: Icons.calendar_month_outlined,
+        iconColor: const Color(0xFF2563EB),
+        iconBackground: const Color(0xFFDBEAFE),
+        title: "Calendar",
+        subtitle: calendarText,
+        onTap: onCalendarTap,
+      ),
       _ModuleCard(
         icon: Icons.how_to_vote_outlined,
         iconColor: const Color(0xFF16A34A),

@@ -10,10 +10,7 @@ class GubService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
-  Future<String> createHub({
-    required String name,
-    required Map<String, bool> modules,
-  }) async {
+  Future<String> createHub({required String name}) async {
     final user = _auth.currentUser;
 
     if (user == null) {
@@ -55,7 +52,6 @@ class GubService {
       "ownerId": user.uid,
       "inviteCode": inviteCode,
       "memberCount": 1,
-      "modules": modules,
       "createdAt": FieldValue.serverTimestamp(),
     });
 
@@ -79,7 +75,6 @@ class GubService {
         "inviteCode": inviteCode,
         "memberCount": 1,
         "ownerId": user.uid,
-        "modules": modules,
         "joinedAt": FieldValue.serverTimestamp(),
       },
     );
@@ -87,7 +82,7 @@ class GubService {
     await batch.commit();
 
     return hubRef.id;
-}
+  }
 
   Future<String> joinHub({required String inviteCode}) async {
     final user = _auth.currentUser;
@@ -169,7 +164,6 @@ class GubService {
         "inviteCode": hubDoc["inviteCode"],
         "memberCount": (hubDoc["memberCount"] ?? 1) + 1,
         "ownerId": hubDoc["ownerId"],
-        "modules": hubDoc["modules"],
         "joinedAt": FieldValue.serverTimestamp(),
       },
     );
@@ -225,6 +219,7 @@ class GubService {
 
     await batch.commit();
   }
+
   Stream<List<MemberOption>> membersStream(String gubId) {
     return _firestore
         .collection("gubs")
@@ -260,4 +255,3 @@ class GubService {
     }).toList();
   }
 }
-

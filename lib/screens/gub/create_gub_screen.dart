@@ -2,10 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../config/app_limits.dart';
+import '../../services/gub_service.dart';
 import '../../widgets/gub_content_card.dart';
 import '../../widgets/gub_screen_background.dart';
 import '../../widgets/user_header.dart';
-import 'module_selection_screen.dart';
+import 'gub_screen.dart';
 
 class CreateGubScreen extends StatefulWidget {
   const CreateGubScreen({super.key});
@@ -22,6 +23,7 @@ class _CreateGubScreenState extends State<CreateGubScreen> {
 
   double _largestViewportHeight = 0;
   bool _scrollScheduled = false;
+  bool _loading = false;
 
   @override
   void initState() {
@@ -72,7 +74,9 @@ class _CreateGubScreenState extends State<CreateGubScreen> {
     super.dispose();
   }
 
-  void _continue() {
+  Future<void> _continue() async {
+    if (_loading) return;
+
     final gubName = _nameController.text.trim();
 
     if (gubName.length < AppLimits.gubNameMinLength) {
@@ -100,13 +104,29 @@ class _CreateGubScreenState extends State<CreateGubScreen> {
     }
 
     FocusManager.instance.primaryFocus?.unfocus();
+    setState(() => _loading = true);
 
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => ModuleSelectionScreen(gubName: gubName),
-      ),
-    );
+    try {
+      final gubId = await GubService().createHub(name: gubName);
+
+      if (!mounted) return;
+
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => GubScreen(gubId: gubId)),
+        (_) => false,
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(e.toString())));
+    } finally {
+      if (mounted) {
+        setState(() => _loading = false);
+      }
+    }
   }
 
   void _goBack() {
@@ -239,8 +259,17 @@ class _CreateGubScreenState extends State<CreateGubScreen> {
                                 width: double.infinity,
                                 height: 55,
                                 child: FilledButton(
-                                  onPressed: _continue,
-                                  child: const Text("Continue"),
+                                  onPressed: _loading ? null : _continue,
+                                  child: _loading
+                                      ? const SizedBox(
+                                          width: 24,
+                                          height: 24,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 3,
+                                            color: Colors.white,
+                                          ),
+                                        )
+                                      : const Text("Create Gub"),
                                 ),
                               ),
 

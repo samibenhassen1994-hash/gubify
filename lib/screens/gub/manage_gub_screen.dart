@@ -68,19 +68,6 @@ class ManageGubScreen extends StatelessWidget {
               ),
             ),
 
-            const SizedBox(height: 10),
-
-            GubContentCard(
-              padding: EdgeInsets.zero,
-              child: ListTile(
-                leading: const Icon(Icons.extension),
-                title: const Text("Manage Modules"),
-                subtitle: const Text("Coming soon"),
-                trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-                onTap: null,
-              ),
-            ),
-
             const SizedBox(height: 30),
 
             const Text(

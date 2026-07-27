@@ -13,7 +13,6 @@ import 'widgets/gub_dashboard_section.dart';
 import 'widgets/gub_members_badge.dart';
 import 'widgets/invite_code_card.dart';
 import 'widgets/members_card.dart';
-import 'widgets/modules_card.dart';
 
 class GubScreen extends StatelessWidget {
   final String gubId;
@@ -48,15 +47,6 @@ class GubScreen extends StatelessWidget {
                 final String inviteCode = data["inviteCode"] ?? "";
                 final String ownerId = data["ownerId"] ?? "";
                 final int memberCount = data["memberCount"] ?? 1;
-
-                final modules = Map<String, dynamic>.from(
-                  data["modules"] ?? {},
-                );
-
-                final activeModules = modules.entries
-                    .where((entry) => entry.value == true)
-                    .map((entry) => entry.key)
-                    .toList();
 
                 return SingleChildScrollView(
                   padding: const EdgeInsets.fromLTRB(20, 10, 20, 120),
@@ -97,16 +87,11 @@ class GubScreen extends StatelessWidget {
                         gubId: gubId,
                         ownerId: ownerId,
                         memberCount: memberCount,
-                        activeModules: activeModules,
                       ),
 
                       const SizedBox(height: 12),
 
                       MembersCard(gubId: gubId, memberCount: memberCount),
-
-                      const SizedBox(height: 12),
-
-                      ModulesCard(gubId: gubId, activeModules: activeModules),
 
                       const SizedBox(height: 12),
 
