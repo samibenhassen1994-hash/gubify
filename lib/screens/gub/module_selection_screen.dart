@@ -86,10 +86,7 @@ class _ModuleSelectionScreenState extends State<ModuleSelectionScreen> {
     bool enabled = true,
   }) {
     return Card(
-      elevation: 0,
-      color: Colors.white.withValues(alpha: .88),
       margin: const EdgeInsets.only(bottom: 12),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
       child: SwitchListTile(
         value: _modules[keyName]!,
         onChanged: enabled

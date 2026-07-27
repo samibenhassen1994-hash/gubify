@@ -16,9 +16,7 @@ class CalendarEventCard extends StatelessWidget {
     final date = event.eventDate.toDate();
 
     return Card(
-      elevation: 0,
       margin: const EdgeInsets.only(bottom: 12),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       child: Padding(
         padding: const EdgeInsets.all(18),
         child: Row(

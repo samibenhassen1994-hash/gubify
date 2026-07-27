@@ -112,6 +112,23 @@ class TaskCard extends StatelessWidget {
                     label: const Text("I've completed it"),
                   ),
                 ),
+              ] else if (task.status == "completed") ...[
+                const SizedBox(height: 18),
+
+                const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.task_alt, size: 24, color: Colors.green),
+                    SizedBox(width: 8),
+                    Text(
+                      "Completed",
+                      style: TextStyle(
+                        color: Colors.green,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
               ],
             ],
           ),

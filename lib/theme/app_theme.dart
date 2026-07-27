@@ -12,8 +12,17 @@ class AppTheme {
 
     scaffoldBackgroundColor: AppColors.background,
 
-    colorScheme: ColorScheme.fromSeed(
-      seedColor: AppColors.primary,
+    colorScheme: ColorScheme.fromSeed(seedColor: AppColors.primary),
+
+    cardTheme: CardThemeData(
+      color: Colors.white,
+      surfaceTintColor: Colors.transparent,
+      shadowColor: const Color(0x1A0F172A),
+      elevation: 1,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(18),
+        side: const BorderSide(color: Color(0xFFE2E8F0), width: 0.8),
+      ),
     ),
 
     appBarTheme: const AppBarTheme(

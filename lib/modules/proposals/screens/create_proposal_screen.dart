@@ -5,6 +5,7 @@ import 'package:flutter/rendering.dart';
 
 import '../../../services/user_service.dart';
 import '../../../widgets/gub_screen_background.dart';
+import '../../chat/widgets/gub_chat_overlay.dart';
 import '../models/proposal_model.dart';
 import '../services/proposal_service.dart';
 
@@ -287,11 +288,13 @@ class _CreateProposalScreenState extends State<CreateProposalScreen> {
   Future<void> _pickEventDate() async {
     FocusManager.instance.primaryFocus?.unfocus();
 
-    final date = await showDatePicker(
-      context: context,
-      firstDate: DateTime.now(),
-      lastDate: DateTime.now().add(const Duration(days: 365)),
-      initialDate: eventDate ?? DateTime.now(),
+    final date = await GubChatOverlay.runWithChatOverlayHidden(
+      () => showDatePicker(
+        context: context,
+        firstDate: DateTime.now(),
+        lastDate: DateTime.now().add(const Duration(days: 365)),
+        initialDate: eventDate ?? DateTime.now(),
+      ),
     );
 
     if (!mounted || date == null) return;
@@ -304,9 +307,11 @@ class _CreateProposalScreenState extends State<CreateProposalScreen> {
   Future<void> _pickEventTime() async {
     FocusManager.instance.primaryFocus?.unfocus();
 
-    final time = await showTimePicker(
-      context: context,
-      initialTime: eventTime ?? TimeOfDay.now(),
+    final time = await GubChatOverlay.runWithChatOverlayHidden(
+      () => showTimePicker(
+        context: context,
+        initialTime: eventTime ?? TimeOfDay.now(),
+      ),
     );
 
     if (!mounted || time == null) return;

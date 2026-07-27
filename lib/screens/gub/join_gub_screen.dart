@@ -3,7 +3,8 @@ import 'package:flutter/services.dart';
 
 import '../../config/app_limits.dart';
 import '../../services/gub_service.dart';
-import '../../widgets/gub_home_background.dart';
+import '../../widgets/gub_content_card.dart';
+import '../../widgets/gub_screen_background.dart';
 import '../../widgets/user_header.dart';
 import 'gub_screen.dart';
 
@@ -120,8 +121,10 @@ class _JoinGubScreenState extends State<JoinGubScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.transparent,
       resizeToAvoidBottomInset: true,
-      body: GubHomeBackground(
+      body: GubScreenBackground(
+        variant: GubBackgroundAssignments.joinGub,
         child: SafeArea(
           child: LayoutBuilder(
             builder: (context, constraints) {
@@ -167,85 +170,94 @@ class _JoinGubScreenState extends State<JoinGubScreen> {
                           ),
                         ),
 
-                        const UserHeader(),
-
-                        const SizedBox(height: 30),
-
-                        const Icon(
-                          Icons.hub_outlined,
-                          size: 82,
-                          color: Color(0xFF2563EB),
-                        ),
-
-                        const SizedBox(height: 30),
-
-                        const Text(
-                          "Join a Gub",
-                          style: TextStyle(
-                            fontSize: 32,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
+                        const UserHeader(showCard: true),
 
                         const SizedBox(height: 10),
 
-                        const Text(
-                          "Enter the invitation code shared with you.",
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: Colors.grey,
-                            height: 1.5,
-                          ),
-                        ),
-
-                        const SizedBox(height: 30),
-
-                        Container(
-                          key: _inviteCodeFieldKey,
-                          child: TextField(
-                            controller: _controller,
-                            focusNode: _inviteCodeFocusNode,
-                            maxLength: AppLimits.inviteCodeLength,
-                            textCapitalization: TextCapitalization.characters,
-                            textInputAction: TextInputAction.done,
-                            onSubmitted: (_) => _joinHub(),
-                            inputFormatters: [
-                              FilteringTextInputFormatter.allow(
-                                RegExp(r'[A-Za-z0-9-]'),
+                        GubContentCard(
+                          child: Column(
+                            children: [
+                              const Icon(
+                                Icons.hub_outlined,
+                                size: 82,
+                                color: Color(0xFF2563EB),
                               ),
-                            ],
-                            decoration: const InputDecoration(
-                              labelText: "Invitation Code",
-                              border: OutlineInputBorder(),
-                              prefixIcon: Icon(Icons.vpn_key),
-                            ),
-                          ),
-                        ),
 
-                        if (keyboardIsOpen)
-                          const SizedBox(height: 16)
-                        else
-                          const Spacer(),
+                              const SizedBox(height: 30),
 
-                        SizedBox(
-                          width: double.infinity,
-                          height: 55,
-                          child: FilledButton(
-                            onPressed: _loading ? null : _joinHub,
-                            child: _loading
-                                ? const SizedBox(
-                                    width: 24,
-                                    height: 24,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 3,
-                                      color: Colors.white,
+                              const Text(
+                                "Join a Gub",
+                                style: TextStyle(
+                                  fontSize: 32,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+
+                              const SizedBox(height: 10),
+
+                              const Text(
+                                "Enter the invitation code shared with you.",
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  color: Colors.grey,
+                                  height: 1.5,
+                                ),
+                              ),
+
+                              const SizedBox(height: 30),
+
+                              Container(
+                                key: _inviteCodeFieldKey,
+                                child: TextField(
+                                  controller: _controller,
+                                  focusNode: _inviteCodeFocusNode,
+                                  maxLength: AppLimits.inviteCodeLength,
+                                  textCapitalization:
+                                      TextCapitalization.characters,
+                                  textInputAction: TextInputAction.done,
+                                  onSubmitted: (_) => _joinHub(),
+                                  inputFormatters: [
+                                    FilteringTextInputFormatter.allow(
+                                      RegExp(r'[A-Za-z0-9-]'),
                                     ),
-                                  )
-                                : const Text(
-                                    "Join Gub",
-                                    style: TextStyle(fontSize: 17),
+                                  ],
+                                  decoration: const InputDecoration(
+                                    labelText: "Invitation Code",
+                                    border: OutlineInputBorder(),
+                                    prefixIcon: Icon(Icons.vpn_key),
                                   ),
+                                ),
+                              ),
+
+                              if (keyboardIsOpen)
+                                const SizedBox(height: 16)
+                              else
+                                const SizedBox(height: 30),
+
+                              SizedBox(
+                                width: double.infinity,
+                                height: 55,
+                                child: FilledButton(
+                                  onPressed: _loading ? null : _joinHub,
+                                  child: _loading
+                                      ? const SizedBox(
+                                          width: 24,
+                                          height: 24,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 3,
+                                            color: Colors.white,
+                                          ),
+                                        )
+                                      : const Text(
+                                          "Join Gub",
+                                          style: TextStyle(fontSize: 17),
+                                        ),
+                                ),
+                              ),
+
+                              const SizedBox(height: 2),
+                            ],
                           ),
                         ),
 

@@ -63,7 +63,11 @@ class GubScreen extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      GubPageHeader(title: gubName, gubId: gubId),
+                      GubPageHeader(
+                        title: gubName,
+                        gubId: gubId,
+                        userHeaderInCard: true,
+                      ),
 
                       GubMembersBadge(memberCount: memberCount),
 

@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../config/app_limits.dart';
-import '../../widgets/gub_home_background.dart';
+import '../../widgets/gub_content_card.dart';
+import '../../widgets/gub_screen_background.dart';
 import '../../widgets/user_header.dart';
 import 'module_selection_screen.dart';
 
@@ -41,9 +42,7 @@ class _CreateGubScreenState extends State<CreateGubScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       // Aspetta che Android abbia ridimensionato la schermata
       // dopo l'apertura della tastiera.
-      await Future<void>.delayed(
-        const Duration(milliseconds: 250),
-      );
+      await Future<void>.delayed(const Duration(milliseconds: 250));
 
       if (!mounted || !_nameFocusNode.hasFocus) {
         _scrollScheduled = false;
@@ -105,9 +104,7 @@ class _CreateGubScreenState extends State<CreateGubScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => ModuleSelectionScreen(
-          gubName: gubName,
-        ),
+        builder: (_) => ModuleSelectionScreen(gubName: gubName),
       ),
     );
   }
@@ -120,8 +117,10 @@ class _CreateGubScreenState extends State<CreateGubScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.transparent,
       resizeToAvoidBottomInset: true,
-      body: GubHomeBackground(
+      body: GubScreenBackground(
+        variant: GubBackgroundAssignments.createGub,
         child: SafeArea(
           child: LayoutBuilder(
             builder: (context, constraints) {
@@ -141,10 +140,9 @@ class _CreateGubScreenState extends State<CreateGubScreen> {
 
               final keyboardIsOpen = keyboardOccupiedHeight > 40;
 
-              final minimumContentHeight =
-                  (constraints.maxHeight - 48)
-                      .clamp(0.0, double.infinity)
-                      .toDouble();
+              final minimumContentHeight = (constraints.maxHeight - 48)
+                  .clamp(0.0, double.infinity)
+                  .toDouble();
 
               if (_nameFocusNode.hasFocus && keyboardIsOpen) {
                 _scheduleBringFieldIntoView();
@@ -161,9 +159,7 @@ class _CreateGubScreenState extends State<CreateGubScreen> {
                   24 + keyboardOccupiedHeight,
                 ),
                 child: ConstrainedBox(
-                  constraints: BoxConstraints(
-                    minHeight: minimumContentHeight,
-                  ),
+                  constraints: BoxConstraints(minHeight: minimumContentHeight),
                   child: IntrinsicHeight(
                     child: Column(
                       children: [
@@ -175,75 +171,81 @@ class _CreateGubScreenState extends State<CreateGubScreen> {
                           ),
                         ),
 
-                        const UserHeader(),
-
-                        const SizedBox(height: 30),
-
-                        const Icon(
-                          Icons.hub_outlined,
-                          size: 82,
-                          color: Color(0xFF2563EB),
-                        ),
-
-                        const SizedBox(height: 30),
-
-                        const Text(
-                          "Create your Gub",
-                          style: TextStyle(
-                            fontSize: 32,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
+                        const UserHeader(showCard: true),
 
                         const SizedBox(height: 10),
 
-                        const Text(
-                          "Start by choosing a name for your Gub.",
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: Colors.grey,
-                            height: 1.5,
-                          ),
-                        ),
+                        GubContentCard(
+                          child: Column(
+                            children: [
+                              const Icon(
+                                Icons.hub_outlined,
+                                size: 82,
+                                color: Color(0xFF2563EB),
+                              ),
 
-                        const SizedBox(height: 30),
+                              const SizedBox(height: 30),
 
-                        Container(
-                          key: _nameFieldKey,
-                          child: TextField(
-                            controller: _nameController,
-                            focusNode: _nameFocusNode,
-                            maxLength: AppLimits.gubNameMaxLength,
-                            textInputAction: TextInputAction.done,
-                            onSubmitted: (_) => _continue(),
-                            inputFormatters: [
-                              FilteringTextInputFormatter.allow(
-                                RegExp(
-                                  r"[a-zA-Z0-9À-ÿ '\-_]",
+                              const Text(
+                                "Create your Gub",
+                                style: TextStyle(
+                                  fontSize: 32,
+                                  fontWeight: FontWeight.bold,
                                 ),
                               ),
+
+                              const SizedBox(height: 10),
+
+                              const Text(
+                                "Start by choosing a name for your Gub.",
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  color: Colors.grey,
+                                  height: 1.5,
+                                ),
+                              ),
+
+                              const SizedBox(height: 30),
+
+                              Container(
+                                key: _nameFieldKey,
+                                child: TextField(
+                                  controller: _nameController,
+                                  focusNode: _nameFocusNode,
+                                  maxLength: AppLimits.gubNameMaxLength,
+                                  textInputAction: TextInputAction.done,
+                                  onSubmitted: (_) => _continue(),
+                                  inputFormatters: [
+                                    FilteringTextInputFormatter.allow(
+                                      RegExp(r"[a-zA-Z0-9À-ÿ '\-_]"),
+                                    ),
+                                  ],
+                                  decoration: const InputDecoration(
+                                    labelText: "Choose a name",
+                                    border: OutlineInputBorder(),
+                                  ),
+                                ),
+                              ),
+
+                              // Riduce la distanza quando la tastiera
+                              // restringe la viewport.
+                              if (keyboardIsOpen)
+                                const SizedBox(height: 16)
+                              else
+                                const SizedBox(height: 30),
+
+                              SizedBox(
+                                width: double.infinity,
+                                height: 55,
+                                child: FilledButton(
+                                  onPressed: _continue,
+                                  child: const Text("Continue"),
+                                ),
+                              ),
+
+                              const SizedBox(height: 2),
                             ],
-                            decoration: const InputDecoration(
-                              labelText: "Choose a name",
-                              border: OutlineInputBorder(),
-                            ),
-                          ),
-                        ),
-
-                        // A tastiera chiusa mantiene il pulsante in basso.
-                        // A tastiera aperta lo avvicina al campo.
-                        if (keyboardIsOpen)
-                          const SizedBox(height: 16)
-                        else
-                          const Spacer(),
-
-                        SizedBox(
-                          width: double.infinity,
-                          height: 55,
-                          child: FilledButton(
-                            onPressed: _continue,
-                            child: const Text("Continue"),
                           ),
                         ),
 

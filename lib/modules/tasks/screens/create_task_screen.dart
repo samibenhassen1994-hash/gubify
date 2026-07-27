@@ -5,7 +5,9 @@ import 'package:flutter/material.dart';
 import '../../../core/models/member_option.dart';
 import '../../../repositories/user_repository.dart';
 import '../../../services/gub_service.dart';
+import '../../../widgets/gub_content_card.dart';
 import '../../../widgets/gub_screen_background.dart';
+import '../../chat/widgets/gub_chat_overlay.dart';
 import '../models/task_model.dart';
 import '../repositories/task_repository.dart';
 import '../services/task_service.dart';
@@ -57,11 +59,13 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
 
   Future<void> _pickDueDate() async {
     final now = DateTime.now();
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: now,
-      firstDate: now,
-      lastDate: DateTime(now.year + 5),
+    final picked = await GubChatOverlay.runWithChatOverlayHidden(
+      () => showDatePicker(
+        context: context,
+        initialDate: now,
+        firstDate: now,
+        lastDate: DateTime(now.year + 5),
+      ),
     );
 
     if (picked == null || !mounted) return;
@@ -160,46 +164,44 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
               _selectedMember = members.first;
             }
 
-            if (widget.isChatConversion) {
-              return ListView(
-                padding: const EdgeInsets.all(20),
-                keyboardDismissBehavior:
-                    ScrollViewKeyboardDismissBehavior.onDrag,
-                children: [
-                  _ChatSourceCard(
-                    message: widget.sourcePreview!,
-                    authorName: widget.sourceAuthorName,
+            return ListView(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 120),
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+              children: [
+                GubContentCard(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (widget.isChatConversion) ...[
+                        _ChatSourceCard(
+                          message: widget.sourcePreview!,
+                          authorName: widget.sourceAuthorName,
+                        ),
+                        const SizedBox(height: 20),
+                        TextField(
+                          controller: _additionalDetailsController,
+                          minLines: 3,
+                          maxLines: 5,
+                          textCapitalization: TextCapitalization.sentences,
+                          decoration: const InputDecoration(
+                            labelText: "Additional details (optional)",
+                            hintText: "Explain what needs to be done",
+                            alignLabelWithHint: true,
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                      ],
+                      ..._buildTaskFields(members),
+                      const SizedBox(height: 32),
+                      CreateTaskButton(
+                        loading: _loading,
+                        onPressed: _createTask,
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 20),
-                  TextField(
-                    controller: _additionalDetailsController,
-                    minLines: 3,
-                    maxLines: 5,
-                    textCapitalization: TextCapitalization.sentences,
-                    decoration: const InputDecoration(
-                      labelText: "Additional details (optional)",
-                      hintText: "Explain what needs to be done",
-                      alignLabelWithHint: true,
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  ..._buildTaskFields(members),
-                  const SizedBox(height: 32),
-                  CreateTaskButton(loading: _loading, onPressed: _createTask),
-                ],
-              );
-            }
-
-            return Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                children: [
-                  ..._buildTaskFields(members),
-                  const Spacer(),
-                  CreateTaskButton(loading: _loading, onPressed: _createTask),
-                ],
-              ),
+                ),
+              ],
             );
           },
         ),

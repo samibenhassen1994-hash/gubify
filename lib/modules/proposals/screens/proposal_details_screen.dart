@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import '../../../widgets/gub_content_card.dart';
 import '../../../widgets/gub_screen_background.dart';
 import '../models/proposal_model.dart';
 import '../services/proposal_service.dart';
@@ -104,35 +105,44 @@ class ProposalDetailsScreen extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Center(
-                        child: Icon(
-                          Icons.how_to_vote_rounded,
-                          size: 64,
-                          color: Colors.blue,
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-                      Text(
-                        p.title,
-                        style: const TextStyle(
-                          fontSize: 28,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        p.description,
-                        style: const TextStyle(color: Colors.grey),
-                      ),
-                      const SizedBox(height: 20),
-                      Chip(
-                        backgroundColor: statusColor.withOpacity(.15),
-                        label: Text(
-                          p.status.toUpperCase(),
-                          style: TextStyle(
-                            color: statusColor,
-                            fontWeight: FontWeight.bold,
-                          ),
+                      GubContentCard(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Center(
+                              child: Icon(
+                                Icons.how_to_vote_rounded,
+                                size: 64,
+                                color: Colors.blue,
+                              ),
+                            ),
+                            const SizedBox(height: 20),
+                            Text(
+                              p.title,
+                              style: const TextStyle(
+                                fontSize: 28,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              p.description,
+                              style: const TextStyle(color: Colors.grey),
+                            ),
+                            const SizedBox(height: 20),
+                            Chip(
+                              backgroundColor: statusColor.withValues(
+                                alpha: .15,
+                              ),
+                              label: Text(
+                                p.status.toUpperCase(),
+                                style: TextStyle(
+                                  color: statusColor,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                       const SizedBox(height: 20),
@@ -183,104 +193,111 @@ class ProposalDetailsScreen extends StatelessWidget {
                       ),
 
                       const SizedBox(height: 20),
-                      Card(
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              LinearProgressIndicator(
-                                value: progress,
-                                minHeight: 8,
-                                borderRadius: BorderRadius.circular(20),
+                      GubContentCard(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Card(
+                              child: Padding(
+                                padding: const EdgeInsets.all(16),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    LinearProgressIndicator(
+                                      value: progress,
+                                      minHeight: 8,
+                                      borderRadius: BorderRadius.circular(20),
+                                    ),
+                                    const SizedBox(height: 12),
+                                    Text(
+                                      '$totalVotes / ${p.memberCount} members voted',
+                                    ),
+                                  ],
+                                ),
                               ),
-                              const SizedBox(height: 12),
-                              Text(
-                                '$totalVotes / ${p.memberCount} members voted',
+                            ),
+                            const SizedBox(height: 20),
+                            Card(
+                              child: Padding(
+                                padding: const EdgeInsets.all(16),
+                                child: Column(
+                                  children: [
+                                    Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        const Text(
+                                          '👍 YES',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                        Text('${p.yesVotes}'),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 16),
+                                    Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        const Text(
+                                          '👎 NO',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                        Text('${p.noVotes}'),
+                                      ],
+                                    ),
+                                  ],
+                                ),
                               ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-                      Card(
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Column(
-                            children: [
-                              Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
-                                children: [
-                                  const Text(
-                                    '👍 YES',
-                                    style: TextStyle(
+                            ),
+                            const SizedBox(height: 20),
+                            if (hasVoted)
+                              Card(
+                                color: userVote == 'yes'
+                                    ? Colors.green.shade50
+                                    : Colors.red.shade50,
+                                child: ListTile(
+                                  leading: Icon(
+                                    userVote == 'yes'
+                                        ? Icons.check_circle
+                                        : Icons.cancel,
+                                  ),
+                                  title: Text(
+                                    userVote == 'yes'
+                                        ? 'You voted YES'
+                                        : 'You voted NO',
+                                    style: const TextStyle(
                                       fontWeight: FontWeight.bold,
                                     ),
                                   ),
-                                  Text('${p.yesVotes}'),
-                                ],
+                                ),
                               ),
-                              const SizedBox(height: 16),
-                              Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
-                                children: [
-                                  const Text(
-                                    '👎 NO',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                  Text('${p.noVotes}'),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-                      if (hasVoted)
-                        Card(
-                          color: userVote == 'yes'
-                              ? Colors.green.shade50
-                              : Colors.red.shade50,
-                          child: ListTile(
-                            leading: Icon(
-                              userVote == 'yes'
-                                  ? Icons.check_circle
-                                  : Icons.cancel,
-                            ),
-                            title: Text(
-                              userVote == 'yes'
-                                  ? 'You voted YES'
-                                  : 'You voted NO',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
+                            const SizedBox(height: 24),
+                            SizedBox(
+                              width: double.infinity,
+                              child: FilledButton.icon(
+                                onPressed: hasVoted || p.status != 'voting'
+                                    ? null
+                                    : () => submitVote('yes'),
+                                icon: const Icon(Icons.thumb_up),
+                                label: const Text('Vote YES'),
                               ),
                             ),
-                          ),
-                        ),
-                      const SizedBox(height: 24),
-                      SizedBox(
-                        width: double.infinity,
-                        child: FilledButton.icon(
-                          onPressed: hasVoted || p.status != 'voting'
-                              ? null
-                              : () => submitVote('yes'),
-                          icon: const Icon(Icons.thumb_up),
-                          label: const Text('Vote YES'),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      SizedBox(
-                        width: double.infinity,
-                        child: OutlinedButton.icon(
-                          onPressed: hasVoted || p.status != 'voting'
-                              ? null
-                              : () => submitVote('no'),
-                          icon: const Icon(Icons.thumb_down),
-                          label: const Text('Vote NO'),
+                            const SizedBox(height: 12),
+                            SizedBox(
+                              width: double.infinity,
+                              child: OutlinedButton.icon(
+                                onPressed: hasVoted || p.status != 'voting'
+                                    ? null
+                                    : () => submitVote('no'),
+                                icon: const Icon(Icons.thumb_down),
+                                label: const Text('Vote NO'),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ],

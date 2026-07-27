@@ -184,7 +184,6 @@ class _PersonalGubCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Card(
-      color: Colors.white.withValues(alpha: 0.93),
       margin: const EdgeInsets.only(bottom: 10),
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
@@ -263,7 +262,6 @@ class _PersonalProfileMessage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Card(
-      color: Colors.white.withValues(alpha: 0.93),
       child: Padding(
         padding: const EdgeInsets.all(28),
         child: Column(

@@ -7,12 +7,14 @@ class GubPageHeader extends StatelessWidget {
   final String title;
   final String? gubId;
   final bool personalProfileEnabled;
+  final bool userHeaderInCard;
 
   const GubPageHeader({
     super.key,
     required this.title,
     this.gubId,
     this.personalProfileEnabled = false,
+    this.userHeaderInCard = false,
   });
 
   @override
@@ -70,6 +72,7 @@ class GubPageHeader extends StatelessWidget {
             UserHeader(
               gubId: gubId,
               personalProfileEnabled: personalProfileEnabled,
+              showCard: userHeaderInCard,
             ),
           ],
         ),

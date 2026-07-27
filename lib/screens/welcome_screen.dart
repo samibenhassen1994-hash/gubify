@@ -60,7 +60,12 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
           padding: const EdgeInsets.symmetric(horizontal: 20),
           child: Column(
             children: [
-              const UserHeader(darkMode: true, personalProfileEnabled: true),
+              const UserHeader(
+                darkMode: true,
+                personalProfileEnabled: true,
+                showCard: true,
+                darkCard: true,
+              ),
 
               // Il logo resta centrato nella parte libera della schermata.
               Expanded(

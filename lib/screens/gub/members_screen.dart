@@ -3,6 +3,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../../services/member_service.dart';
+import '../../widgets/gub_content_card.dart';
+import '../../widgets/gub_screen_background.dart';
 
 class MembersScreen extends StatelessWidget {
   final String gubId;
@@ -16,123 +18,140 @@ class MembersScreen extends StatelessWidget {
 
     final bool isOwner = currentUser != null && currentUser.uid == ownerId;
 
-    return Scaffold(
-      appBar: AppBar(title: const Text("Members")),
-      body: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance
-            .collection("gubs")
-            .doc(gubId)
-            .collection("members")
-            .orderBy("joinedAt")
-            .snapshots(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
+    return GubScreenBackground(
+      variant: GubBackgroundAssignments.tasks,
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        appBar: AppBar(
+          title: const Text("Members"),
+          backgroundColor: Colors.transparent,
+          surfaceTintColor: Colors.transparent,
+          elevation: 0,
+          scrolledUnderElevation: 0,
+        ),
+        body: StreamBuilder<QuerySnapshot>(
+          stream: FirebaseFirestore.instance
+              .collection("gubs")
+              .doc(gubId)
+              .collection("members")
+              .orderBy("joinedAt")
+              .snapshots(),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
 
-          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-            return const Center(child: Text("No members found."));
-          }
-
-          final members = snapshot.data!.docs;
-
-          return ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: members.length,
-            itemBuilder: (context, index) {
-              final member = members[index].data() as Map<String, dynamic>;
-
-              final uid = member["uid"];
-
-              final bool isMe = currentUser != null && currentUser.uid == uid;
-
-              return Card(
-                elevation: 0,
-                margin: const EdgeInsets.only(bottom: 12),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(18),
-                ),
-                child: ListTile(
-                  leading: CircleAvatar(
-                    backgroundColor: Colors.blue.shade100,
-                    child: const Icon(Icons.person),
-                  ),
-                  title: Text(member["displayName"] ?? "User"),
-                  subtitle: Text(isMe ? "You" : (member["role"] ?? "Member")),
-
-                  trailing: isOwner && !isMe
-                      ? PopupMenuButton<String>(
-                          onSelected: (value) async {
-                            if (value != "remove") {
-                              return;
-                            }
-
-                            final confirm =
-                                await showDialog<bool>(
-                                  context: context,
-                                  builder: (_) => AlertDialog(
-                                    title: const Text("Remove member"),
-                                    content: Text(
-                                      "Remove ${member["displayName"]} from this Hub?",
-                                    ),
-                                    actions: [
-                                      TextButton(
-                                        onPressed: () {
-                                          Navigator.pop(context, false);
-                                        },
-                                        child: const Text("Cancel"),
-                                      ),
-                                      FilledButton(
-                                        onPressed: () {
-                                          Navigator.pop(context, true);
-                                        },
-                                        child: const Text("Remove"),
-                                      ),
-                                    ],
-                                  ),
-                                ) ??
-                                false;
-
-                            if (!confirm) return;
-
-                            await MemberService.instance.removeMember(
-                              gubId: gubId,
-                              uid: uid,
-                              ownerId: ownerId,
-                              currentUserId: currentUser.uid,
-                            );
-
-                            if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(
-                                    "${member["displayName"]} removed.",
-                                  ),
-                                ),
-                              );
-                            }
-                          },
-                          itemBuilder: (_) => const [
-                            PopupMenuItem(
-                              value: "remove",
-                              child: Row(
-                                children: [
-                                  Icon(Icons.person_remove, color: Colors.red),
-                                  SizedBox(width: 10),
-                                  Text("Remove member"),
-                                ],
-                              ),
-                            ),
-                          ],
-                        )
-                      : member["role"] == "Owner"
-                      ? const Icon(Icons.workspace_premium, color: Colors.amber)
-                      : null,
+            if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+              return const Padding(
+                padding: EdgeInsets.all(20),
+                child: GubContentCard(
+                  child: Text("No members found.", textAlign: TextAlign.center),
                 ),
               );
-            },
-          );
-        },
+            }
+
+            final members = snapshot.data!.docs;
+
+            return ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: members.length,
+              itemBuilder: (context, index) {
+                final member = members[index].data() as Map<String, dynamic>;
+
+                final uid = member["uid"];
+
+                final bool isMe = currentUser != null && currentUser.uid == uid;
+
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  child: ListTile(
+                    leading: CircleAvatar(
+                      backgroundColor: Colors.blue.shade100,
+                      child: const Icon(Icons.person),
+                    ),
+                    title: Text(member["displayName"] ?? "User"),
+                    subtitle: Text(isMe ? "You" : (member["role"] ?? "Member")),
+
+                    trailing: isOwner && !isMe
+                        ? PopupMenuButton<String>(
+                            onSelected: (value) async {
+                              if (value != "remove") {
+                                return;
+                              }
+
+                              final confirm =
+                                  await showDialog<bool>(
+                                    context: context,
+                                    builder: (_) => AlertDialog(
+                                      title: const Text("Remove member"),
+                                      content: Text(
+                                        "Remove ${member["displayName"]} from this Gub?",
+                                      ),
+                                      actions: [
+                                        TextButton(
+                                          onPressed: () {
+                                            Navigator.pop(context, false);
+                                          },
+                                          child: const Text("Cancel"),
+                                        ),
+                                        FilledButton(
+                                          onPressed: () {
+                                            Navigator.pop(context, true);
+                                          },
+                                          child: const Text("Remove"),
+                                        ),
+                                      ],
+                                    ),
+                                  ) ??
+                                  false;
+
+                              if (!confirm) return;
+
+                              await MemberService.instance.removeMember(
+                                gubId: gubId,
+                                uid: uid,
+                                ownerId: ownerId,
+                                currentUserId: currentUser.uid,
+                              );
+
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      "${member["displayName"]} removed.",
+                                    ),
+                                  ),
+                                );
+                              }
+                            },
+                            itemBuilder: (_) => const [
+                              PopupMenuItem(
+                                value: "remove",
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      Icons.person_remove,
+                                      color: Colors.red,
+                                    ),
+                                    SizedBox(width: 10),
+                                    Text("Remove member"),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          )
+                        : member["role"] == "Owner"
+                        ? const Icon(
+                            Icons.workspace_premium,
+                            color: Colors.amber,
+                          )
+                        : null,
+                  ),
+                );
+              },
+            );
+          },
+        ),
       ),
     );
   }

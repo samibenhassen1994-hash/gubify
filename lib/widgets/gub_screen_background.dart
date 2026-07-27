@@ -11,6 +11,10 @@ abstract final class GubBackgroundAssignments {
   static const events = GubBackgroundVariant.mint;
   static const groupGoals = GubBackgroundVariant.mint;
   static const sharedBudget = GubBackgroundVariant.sunset;
+  static const myGubs = GubBackgroundVariant.lilac;
+  static const createGub = GubBackgroundVariant.blue;
+  static const joinGub = GubBackgroundVariant.mint;
+  static const board = GubBackgroundVariant.sunset;
 }
 
 extension GubBackgroundVariantAsset on GubBackgroundVariant {

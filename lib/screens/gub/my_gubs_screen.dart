@@ -2,10 +2,10 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
-import '../../widgets/gub_home_background.dart';
-import 'gub_screen.dart';
 import '../../widgets/gub_access_guard.dart';
 import '../../widgets/gub_page_header.dart';
+import '../../widgets/gub_screen_background.dart';
+import 'gub_screen.dart';
 
 class MyGubsScreen extends StatelessWidget {
   const MyGubsScreen({super.key});
@@ -14,11 +14,17 @@ class MyGubsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final uid = FirebaseAuth.instance.currentUser!.uid;
 
-    return Scaffold(
-      body: GubHomeBackground(
-        child: Column(
+    return GubScreenBackground(
+      variant: GubBackgroundAssignments.myGubs,
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        body: Column(
           children: [
-            const GubPageHeader(title: "My Gubs", personalProfileEnabled: true),
+            const GubPageHeader(
+              title: "My Gubs",
+              personalProfileEnabled: true,
+              userHeaderInCard: true,
+            ),
 
             Expanded(
               child: FutureBuilder<QuerySnapshot>(
@@ -53,12 +59,7 @@ class MyGubsScreen extends StatelessWidget {
                       final gubId = hub["gubId"];
 
                       return Card(
-                        elevation: 0,
-                        color: Colors.white.withValues(alpha: .88),
                         margin: const EdgeInsets.only(bottom: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(22),
-                        ),
                         child: ListTile(
                           contentPadding: const EdgeInsets.symmetric(
                             horizontal: 18,

@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 
 import '../../../core/formatters/monetary_amount_input_formatter.dart';
 import '../../../widgets/gub_screen_background.dart';
+import '../../chat/widgets/gub_chat_overlay.dart';
 import '../services/goal_service.dart';
 
 class CreateGoalScreen extends StatefulWidget {
@@ -238,11 +239,13 @@ class _CreateGoalScreenState extends State<CreateGoalScreen> {
   Future<void> _pickDeadline() async {
     FocusManager.instance.primaryFocus?.unfocus();
 
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _deadline ?? DateTime.now(),
-      firstDate: DateTime.now(),
-      lastDate: DateTime(2100),
+    final picked = await GubChatOverlay.runWithChatOverlayHidden(
+      () => showDatePicker(
+        context: context,
+        initialDate: _deadline ?? DateTime.now(),
+        firstDate: DateTime.now(),
+        lastDate: DateTime(2100),
+      ),
     );
 
     if (!mounted || picked == null) return;

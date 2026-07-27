@@ -21,129 +21,127 @@ class ChatMessageBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bubbleColor = isCurrentUser ? const Color(0xFF2563EB) : Colors.white;
-    final foregroundColor = isCurrentUser
-        ? Colors.white
-        : const Color(0xFF0F172A);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final maxBubbleWidth = constraints.maxWidth * 0.78;
+        final bubbleColor = isCurrentUser
+            ? const Color(0xFFDDEBFF)
+            : const Color(0xFFF7F8FA);
 
-    final bubble = AnimatedContainer(
-      duration: const Duration(milliseconds: 200),
-      constraints: BoxConstraints(
-        maxWidth:
-            MediaQuery.sizeOf(context).width * (isCurrentUser ? 0.78 : 0.68),
-      ),
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.fromLTRB(14, 10, 14, 8),
-      decoration: BoxDecoration(
-        color: bubbleColor,
-        borderRadius: BorderRadius.only(
-          topLeft: const Radius.circular(18),
-          topRight: const Radius.circular(18),
-          bottomLeft: Radius.circular(isCurrentUser ? 18 : 5),
-          bottomRight: Radius.circular(isCurrentUser ? 5 : 18),
-        ),
-        border: Border.all(
-          color: isHighlighted
-              ? const Color(0xFF60A5FA)
-              : isCurrentUser
-              ? Colors.transparent
-              : const Color(0xFFDCE6F5),
-          width: isHighlighted ? 3 : 1,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: isHighlighted
-                ? const Color(0xFF2563EB).withValues(alpha: 0.28)
-                : Colors.black.withValues(alpha: 0.04),
-            blurRadius: isHighlighted ? 14 : 8,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (!isCurrentUser) ...[
-            Text(
-              message.senderName,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: Color(0xFF2563EB),
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
+        final bubble = GestureDetector(
+          onLongPress: onLongPress,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            constraints: BoxConstraints(maxWidth: maxBubbleWidth),
+            padding: const EdgeInsets.fromLTRB(13, 9, 13, 7),
+            decoration: BoxDecoration(
+              color: bubbleColor,
+              borderRadius: BorderRadius.only(
+                topLeft: const Radius.circular(18),
+                topRight: const Radius.circular(18),
+                bottomLeft: Radius.circular(isCurrentUser ? 18 : 6),
+                bottomRight: Radius.circular(isCurrentUser ? 6 : 18),
               ),
-            ),
-            const SizedBox(height: 3),
-          ],
-          Text(
-            message.text,
-            style: TextStyle(
-              color: foregroundColor,
-              fontSize: 15,
-              height: 1.35,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Align(
-            alignment: Alignment.centerRight,
-            child: Text(
-              _formatTime(message.createdAt.toDate()),
-              style: TextStyle(
-                color: foregroundColor.withValues(alpha: 0.7),
-                fontSize: 10,
-                fontWeight: FontWeight.w500,
+              border: Border.all(
+                color: isHighlighted
+                    ? const Color(0xFF60A5FA)
+                    : isCurrentUser
+                    ? const Color(0xFFC7DBFA)
+                    : const Color(0xFFE2E8F0),
+                width: isHighlighted ? 3 : 1,
               ),
+              boxShadow: [
+                BoxShadow(
+                  color: isHighlighted
+                      ? const Color(0xFF2563EB).withValues(alpha: 0.28)
+                      : const Color(0xFF0F172A).withValues(alpha: 0.035),
+                  blurRadius: isHighlighted ? 14 : 5,
+                  offset: const Offset(0, 2),
+                ),
+              ],
             ),
-          ),
-        ],
-      ),
-    );
-
-    final interactiveBubble = GestureDetector(
-      onLongPress: onLongPress,
-      child: bubble,
-    );
-
-    final avatar = Padding(
-      padding: const EdgeInsets.only(top: 2),
-      child: ChatUserAvatar(
-        displayName: message.senderName,
-        userId: message.senderId,
-        onTap: onAvatarTap,
-      ),
-    );
-
-    return Align(
-      alignment: isCurrentUser ? Alignment.centerRight : Alignment.centerLeft,
-      child: Row(
-        mainAxisAlignment: isCurrentUser
-            ? MainAxisAlignment.end
-            : MainAxisAlignment.start,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: isCurrentUser
-            ? [
-                Flexible(
-                  child: Align(
-                    alignment: Alignment.centerRight,
-                    child: interactiveBubble,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (!isCurrentUser) ...[
+                  Text(
+                    message.senderName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Color(0xFF2563EB),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                ],
+                Text(
+                  message.text,
+                  style: const TextStyle(
+                    color: Color(0xFF0F172A),
+                    fontSize: 15,
+                    height: 1.35,
                   ),
                 ),
-                const SizedBox(width: 8),
-                avatar,
-              ]
-            : [
-                avatar,
-                const SizedBox(width: 8),
-                Flexible(
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: interactiveBubble,
+                const SizedBox(height: 3),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: Text(
+                    _formatTime(message.createdAt.toDate()),
+                    style: const TextStyle(
+                      color: Color(0xFF64748B),
+                      fontSize: 10,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                 ),
               ],
-      ),
+            ),
+          ),
+        );
+
+        final avatar = Padding(
+          padding: const EdgeInsets.only(top: 2),
+          child: ChatUserAvatar(
+            displayName: message.senderName,
+            userId: message.senderId,
+            onTap: onAvatarTap,
+          ),
+        );
+
+        if (isCurrentUser) {
+          return Padding(
+            padding: const EdgeInsets.only(right: 2, bottom: 8),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Flexible(
+                  child: Align(alignment: Alignment.centerRight, child: bubble),
+                ),
+                const SizedBox(width: 7),
+                avatar,
+              ],
+            ),
+          );
+        }
+
+        return Padding(
+          padding: const EdgeInsets.only(left: 2, bottom: 8),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              avatar,
+              const SizedBox(width: 7),
+              Flexible(
+                child: Align(alignment: Alignment.centerLeft, child: bubble),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 

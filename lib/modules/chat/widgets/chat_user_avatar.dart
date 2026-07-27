@@ -6,6 +6,7 @@ class ChatUserAvatar extends StatelessWidget {
   final String? photoUrl;
   final double radius;
   final VoidCallback? onTap;
+  final Color? backgroundColor;
 
   const ChatUserAvatar({
     super.key,
@@ -14,6 +15,7 @@ class ChatUserAvatar extends StatelessWidget {
     this.photoUrl,
     this.radius = 17,
     this.onTap,
+    this.backgroundColor,
   });
 
   static const List<Color> _avatarColors = [
@@ -35,7 +37,7 @@ class ChatUserAvatar extends StatelessWidget {
 
     final avatar = CircleAvatar(
       radius: radius,
-      backgroundColor: _avatarColors[colorIndex],
+      backgroundColor: backgroundColor ?? _avatarColors[colorIndex],
       foregroundImage:
           normalizedPhotoUrl != null && normalizedPhotoUrl.isNotEmpty
           ? NetworkImage(normalizedPhotoUrl)

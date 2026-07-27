@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import '../../../widgets/gub_content_card.dart';
 import '../../../widgets/gub_screen_background.dart';
 import '../models/goal_model.dart';
 import '../services/goal_service.dart';
@@ -140,12 +141,8 @@ class GoalsScreen extends StatelessWidget {
   }
 
   Widget _emptySection(String message) {
-    return Container(
+    return GubContentCard(
       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 20),
-      decoration: BoxDecoration(
-        color: Colors.grey.shade100,
-        borderRadius: BorderRadius.circular(16),
-      ),
       child: Text(
         message,
         textAlign: TextAlign.center,

@@ -58,6 +58,18 @@ class GubChatOverlay extends StatefulWidget {
     );
   }
 
+  static Future<T> runWithChatOverlayHidden<T>(
+    Future<T> Function() action,
+  ) async {
+    final controller = _GubChatOverlayController.instance;
+    controller.suspend();
+    try {
+      return await action();
+    } finally {
+      controller.resume();
+    }
+  }
+
   @override
   State<GubChatOverlay> createState() => _GubChatOverlayState();
 }
@@ -215,7 +227,10 @@ class _GubChatOverlayState extends State<GubChatOverlay> {
   }
 
   bool get _isOverlaySuppressed =>
-      _isChatOpen || _isTaskConversionOpen || _isUserProfileOpen;
+      _isChatOpen ||
+      _isTaskConversionOpen ||
+      _isUserProfileOpen ||
+      _GubChatOverlayController.instance.isSuspended;
 
   Future<void> _openChat({String? initialMessageId}) async {
     if (_isChatOpen || !mounted) return;
@@ -361,6 +376,9 @@ class _GubChatOverlayController {
       _GubChatOverlayController._();
 
   _GubChatOverlayState? _activeOverlay;
+  int _suspensionCount = 0;
+
+  bool get isSuspended => _suspensionCount > 0;
 
   void attach(_GubChatOverlayState overlay) {
     _activeOverlay = overlay;
@@ -374,6 +392,20 @@ class _GubChatOverlayController {
 
   void bringToFront() {
     _activeOverlay?.bringToFront();
+  }
+
+  void suspend() {
+    _suspensionCount++;
+    _activeOverlay?._removeOverlay();
+  }
+
+  void resume() {
+    if (_suspensionCount == 0) return;
+
+    _suspensionCount--;
+    if (_suspensionCount == 0) {
+      _activeOverlay?._scheduleOverlaySync(bringToFront: true);
+    }
   }
 
   Future<bool> openChat({
