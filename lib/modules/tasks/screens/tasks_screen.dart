@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../../../widgets/gub_content_card.dart';
 import '../../../widgets/gub_screen_background.dart';
+import '../../chat/widgets/gub_chat_overlay.dart';
 import '../models/task_model.dart';
 import '../services/task_service.dart';
 import '../widgets/task_card.dart';
@@ -18,97 +19,100 @@ class TasksScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final currentUserId = FirebaseAuth.instance.currentUser!.uid;
 
-    return DefaultTabController(
-      length: 2,
-      child: GubScreenBackground(
-        variant: GubBackgroundAssignments.tasks,
-        child: Scaffold(
-          backgroundColor: Colors.transparent,
-          appBar: AppBar(
-            title: const Text("Tasks"),
+    return ChatFloatingActionButtonRouteScope(
+      additionalBottomOffset: kFloatingActionButtonMargin,
+      child: DefaultTabController(
+        length: 2,
+        child: GubScreenBackground(
+          variant: GubBackgroundAssignments.tasks,
+          child: Scaffold(
             backgroundColor: Colors.transparent,
-            surfaceTintColor: Colors.transparent,
-            elevation: 0,
-            scrolledUnderElevation: 0,
-          ),
-          floatingActionButton: FloatingActionButton(
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => CreateTaskScreen(gubId: gubId),
-                ),
-              );
-            },
-            child: const Icon(Icons.add),
-          ),
-          body: Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-                child: Material(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(14),
-                  clipBehavior: Clip.antiAlias,
-                  child: const TabBar(
-                    tabs: [
-                      Tab(text: "Active"),
-                      Tab(text: "Completed"),
-                    ],
+            appBar: AppBar(
+              title: const Text("Tasks"),
+              backgroundColor: Colors.transparent,
+              surfaceTintColor: Colors.transparent,
+              elevation: 0,
+              scrolledUnderElevation: 0,
+            ),
+            floatingActionButton: FloatingActionButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => CreateTaskScreen(gubId: gubId),
+                  ),
+                );
+              },
+              child: const Icon(Icons.add),
+            ),
+            body: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                  child: Material(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(14),
+                    clipBehavior: Clip.antiAlias,
+                    child: const TabBar(
+                      tabs: [
+                        Tab(text: "Active"),
+                        Tab(text: "Completed"),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-              Expanded(
-                child: StreamBuilder<List<TaskModel>>(
-                  stream: TaskService.instance.tasksStream(gubId),
-                  builder: (context, snapshot) {
-                    if (snapshot.connectionState == ConnectionState.waiting) {
-                      return const Center(child: CircularProgressIndicator());
-                    }
+                Expanded(
+                  child: StreamBuilder<List<TaskModel>>(
+                    stream: TaskService.instance.tasksStream(gubId),
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
 
-                    final tasks = snapshot.data ?? const <TaskModel>[];
-                    final myTasks = tasks
-                        .where(
-                          (task) =>
-                              task.status == "active" &&
-                              !task.archived &&
-                              task.assignedUserId == currentUserId,
-                        )
-                        .toList(growable: false);
-                    final activeTasks = tasks
-                        .where(
-                          (task) =>
-                              task.status == "active" &&
-                              !task.archived &&
-                              task.assignedUserId != currentUserId,
-                        )
-                        .toList(growable: false);
-                    final completedTasks = tasks
-                        .where(
-                          (task) =>
-                              task.status == "completed" && !task.archived,
-                        )
-                        .toList(growable: false);
+                      final tasks = snapshot.data ?? const <TaskModel>[];
+                      final myTasks = tasks
+                          .where(
+                            (task) =>
+                                task.status == "active" &&
+                                !task.archived &&
+                                task.assignedUserId == currentUserId,
+                          )
+                          .toList(growable: false);
+                      final activeTasks = tasks
+                          .where(
+                            (task) =>
+                                task.status == "active" &&
+                                !task.archived &&
+                                task.assignedUserId != currentUserId,
+                          )
+                          .toList(growable: false);
+                      final completedTasks = tasks
+                          .where(
+                            (task) =>
+                                task.status == "completed" && !task.archived,
+                          )
+                          .toList(growable: false);
 
-                    return TabBarView(
-                      children: [
-                        _activeTasksList(
-                          context,
-                          currentUserId: currentUserId,
-                          myTasks: myTasks,
-                          activeTasks: activeTasks,
-                        ),
-                        _completedTasksList(
-                          context,
-                          currentUserId: currentUserId,
-                          tasks: completedTasks,
-                        ),
-                      ],
-                    );
-                  },
+                      return TabBarView(
+                        children: [
+                          _activeTasksList(
+                            context,
+                            currentUserId: currentUserId,
+                            myTasks: myTasks,
+                            activeTasks: activeTasks,
+                          ),
+                          _completedTasksList(
+                            context,
+                            currentUserId: currentUserId,
+                            tasks: completedTasks,
+                          ),
+                        ],
+                      );
+                    },
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

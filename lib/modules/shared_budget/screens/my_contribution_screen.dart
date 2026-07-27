@@ -4,18 +4,18 @@ import 'package:flutter/material.dart';
 
 import '../../../widgets/gub_screen_background.dart';
 import '../../../core/formatters/monetary_amount_input_formatter.dart';
-import '../models/goal_model.dart';
-import '../services/goal_member_service.dart';
-import '../services/goal_service.dart';
+import '../models/shared_budget_model.dart';
+import '../services/shared_budget_member_service.dart';
+import '../services/shared_budget_service.dart';
 
 class MyContributionScreen extends StatefulWidget {
   final String gubId;
-  final String goalId;
+  final String sharedBudgetId;
 
   const MyContributionScreen({
     super.key,
     required this.gubId,
-    required this.goalId,
+    required this.sharedBudgetId,
   });
 
   @override
@@ -33,18 +33,21 @@ class _MyContributionScreenState extends State<MyContributionScreen> {
     super.dispose();
   }
 
-  Future<void> _submit(GoalModel goal) async {
+  Future<void> _submit(SharedBudgetModel sharedBudget) async {
     final user = FirebaseAuth.instance.currentUser;
 
     if (user == null) return;
 
     final normalizedValue = _amountController.text.trim().replaceAll(',', '.');
     final amount = double.tryParse(normalizedValue);
-    final remainingAmount = (goal.targetAmount - goal.currentAmount)
-        .clamp(0.0, double.infinity)
-        .toDouble();
+    final remainingAmount =
+        (sharedBudget.targetAmount - sharedBudget.currentAmount)
+            .clamp(0.0, double.infinity)
+            .toDouble();
 
-    if (goal.isCompleted || goal.archived || remainingAmount <= 0) {
+    if (sharedBudget.isCompleted ||
+        sharedBudget.archived ||
+        remainingAmount <= 0) {
       _showMessage("This Shared Budget is already completed.");
       return;
     }
@@ -64,9 +67,9 @@ class _MyContributionScreenState extends State<MyContributionScreen> {
     setState(() => _loading = true);
 
     try {
-      await GoalMemberService.instance.submitContribution(
+      await SharedBudgetMemberService.instance.submitContribution(
         gubId: widget.gubId,
-        goalId: widget.goalId,
+        sharedBudgetId: widget.sharedBudgetId,
         uid: user.uid,
         amount: amount,
       );
@@ -114,19 +117,20 @@ class _MyContributionScreenState extends State<MyContributionScreen> {
           elevation: 0,
           scrolledUnderElevation: 0,
         ),
-        body: StreamBuilder<GoalModel?>(
-          stream: GoalService.instance.goalStream(
+        body: StreamBuilder<SharedBudgetModel?>(
+          stream: SharedBudgetService.instance.sharedBudgetStream(
             gubId: widget.gubId,
-            goalId: widget.goalId,
+            sharedBudgetId: widget.sharedBudgetId,
           ),
-          builder: (context, goalSnapshot) {
-            if (goalSnapshot.connectionState == ConnectionState.waiting) {
+          builder: (context, sharedBudgetSnapshot) {
+            if (sharedBudgetSnapshot.connectionState ==
+                ConnectionState.waiting) {
               return const Center(child: CircularProgressIndicator());
             }
 
-            final goal = goalSnapshot.data;
+            final sharedBudget = sharedBudgetSnapshot.data;
 
-            if (goal == null) {
+            if (sharedBudget == null) {
               return const Center(
                 child: Text("This Shared Budget is no longer available."),
               );
@@ -137,9 +141,9 @@ class _MyContributionScreenState extends State<MyContributionScreen> {
             }
 
             return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-              stream: GoalMemberService.instance.memberStream(
+              stream: SharedBudgetMemberService.instance.memberStream(
                 gubId: widget.gubId,
-                goalId: widget.goalId,
+                sharedBudgetId: widget.sharedBudgetId,
                 uid: user.uid,
               ),
               builder: (context, memberSnapshot) {
@@ -155,11 +159,14 @@ class _MyContributionScreenState extends State<MyContributionScreen> {
 
                 final contributionConfirmed =
                     memberData["confirmed"] as bool? ?? false;
-                final remainingAmount = (goal.targetAmount - goal.currentAmount)
-                    .clamp(0.0, double.infinity)
-                    .toDouble();
+                final remainingAmount =
+                    (sharedBudget.targetAmount - sharedBudget.currentAmount)
+                        .clamp(0.0, double.infinity)
+                        .toDouble();
                 final budgetCompleted =
-                    goal.isCompleted || goal.archived || remainingAmount <= 0;
+                    sharedBudget.isCompleted ||
+                    sharedBudget.archived ||
+                    remainingAmount <= 0;
                 final canSubmit =
                     !budgetCompleted && !contributionConfirmed && !_loading;
 
@@ -201,7 +208,9 @@ class _MyContributionScreenState extends State<MyContributionScreen> {
                         SizedBox(
                           height: 55,
                           child: FilledButton(
-                            onPressed: canSubmit ? () => _submit(goal) : null,
+                            onPressed: canSubmit
+                                ? () => _submit(sharedBudget)
+                                : null,
                             child: _loading
                                 ? const CircularProgressIndicator(
                                     color: Colors.white,

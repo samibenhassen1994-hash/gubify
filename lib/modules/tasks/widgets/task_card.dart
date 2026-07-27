@@ -156,7 +156,7 @@ String? getTaskSourceLabel(String sourceType) {
     case "budget":
       return "From shared budget";
     case "goal":
-      return "From group goal";
+      return "From shared budget";
     case "board":
       return "From board";
     case "manual":

@@ -1,9 +1,9 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
-import '../../modules/goals/screens/goal_members_screen.dart';
-import '../../modules/goals/screens/goals_screen.dart';
-import '../../modules/goals/services/goal_service.dart';
+import '../../modules/shared_budget/screens/shared_budget_members_screen.dart';
+import '../../modules/shared_budget/screens/shared_budget_screen.dart';
+import '../../modules/shared_budget/services/shared_budget_service.dart';
 import '../../modules/gub_calendar/repositories/event_repository.dart';
 import '../../modules/gub_calendar/screens/gub_calendar_screen.dart';
 import '../../modules/proposals/repositories/proposal_repository.dart';
@@ -29,14 +29,19 @@ class NotificationRouter {
         (_stringValue(data["module"]) ?? _stringValue(data["screen"]) ?? "")
             .toLowerCase();
 
-    final goalId = _stringValue(data["goalId"]);
+    // `goalId` is retained for notifications already stored in Firestore.
+    final sharedBudgetId = _stringValue(data["goalId"]);
     final proposalId = _stringValue(data["proposalId"]);
     final taskId = _stringValue(data["taskId"]);
     final eventId = _stringValue(data["eventId"]);
     final postId = _stringValue(data["postId"]);
 
-    if (goalId != null) {
-      await _openGoal(context: context, gubId: effectiveGubId, goalId: goalId);
+    if (sharedBudgetId != null) {
+      await _openSharedBudgetDetails(
+        context: context,
+        gubId: effectiveGubId,
+        sharedBudgetId: sharedBudgetId,
+      );
       return;
     }
 
@@ -69,7 +74,7 @@ class NotificationRouter {
     }
 
     if (type.startsWith("goal_")) {
-      await _openGoals(context: context, gubId: effectiveGubId);
+      await _openSharedBudget(context: context, gubId: effectiveGubId);
       return;
     }
 
@@ -98,7 +103,7 @@ class NotificationRouter {
       case "goals":
       case "shared_budget":
       case "sharedbudget":
-        await _openGoals(context: context, gubId: effectiveGubId);
+        await _openSharedBudget(context: context, gubId: effectiveGubId);
         return;
 
       case "proposal":
@@ -129,19 +134,19 @@ class NotificationRouter {
     }
   }
 
-  static Future<void> _openGoal({
+  static Future<void> _openSharedBudgetDetails({
     required BuildContext context,
     required String gubId,
-    required String goalId,
+    required String sharedBudgetId,
   }) async {
-    final goal = await GoalService.instance.getGoalById(
+    final sharedBudget = await SharedBudgetService.instance.getSharedBudgetById(
       gubId: gubId,
-      goalId: goalId,
+      sharedBudgetId: sharedBudgetId,
     );
 
     if (!context.mounted) return;
 
-    if (goal == null) {
+    if (sharedBudget == null) {
       _showMessage(context, "This Shared Budget is no longer available.");
       return;
     }
@@ -149,10 +154,10 @@ class NotificationRouter {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => GoalMembersScreen(
+        builder: (_) => SharedBudgetMembersScreen(
           gubId: gubId,
-          goalId: goal.goalId,
-          ownerId: goal.ownerId,
+          sharedBudgetId: sharedBudget.sharedBudgetId,
+          ownerId: sharedBudget.ownerId,
         ),
       ),
     );
@@ -228,7 +233,7 @@ class NotificationRouter {
     await _openCalendar(context: context, gubId: gubId);
   }
 
-  static Future<void> _openGoals({
+  static Future<void> _openSharedBudget({
     required BuildContext context,
     required String gubId,
   }) async {
@@ -249,7 +254,7 @@ class NotificationRouter {
       context,
       MaterialPageRoute(
         builder: (_) =>
-            GoalsScreen(gubId: gubId, canCreateBudget: canCreateBudget),
+            SharedBudgetScreen(gubId: gubId, canCreateBudget: canCreateBudget),
       ),
     );
   }

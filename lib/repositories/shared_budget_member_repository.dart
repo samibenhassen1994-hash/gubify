@@ -1,37 +1,40 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
-class GoalMemberRepository {
-  GoalMemberRepository._();
+class SharedBudgetMemberRepository {
+  SharedBudgetMemberRepository._();
 
-  static final GoalMemberRepository instance = GoalMemberRepository._();
+  static final SharedBudgetMemberRepository instance =
+      SharedBudgetMemberRepository._();
 
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
+  // The `goals` collection is a legacy Firestore path for Shared Budgets.
+
   Stream<QuerySnapshot<Map<String, dynamic>>> membersStream({
     required String gubId,
-    required String goalId,
+    required String sharedBudgetId,
   }) {
     return _firestore
         .collection("gubs")
         .doc(gubId)
         .collection("goals")
-        .doc(goalId)
+        .doc(sharedBudgetId)
         .collection("members")
         .snapshots();
   }
 
   Stream<DocumentSnapshot<Map<String, dynamic>>> memberStream({
     required String gubId,
-    required String goalId,
+    required String sharedBudgetId,
     required String uid,
   }) {
     return _firestore
         .collection("gubs")
         .doc(gubId)
         .collection("goals")
-        .doc(goalId)
+        .doc(sharedBudgetId)
         .collection("members")
         .doc(uid)
         .snapshots();
@@ -39,7 +42,7 @@ class GoalMemberRepository {
 
   Future<void> updateContribution({
     required String gubId,
-    required String goalId,
+    required String sharedBudgetId,
     required String uid,
     required double amount,
   }) async {
@@ -49,18 +52,20 @@ class GoalMemberRepository {
       throw StateError("You can only update your own contribution.");
     }
 
-    final goalReference = _firestore
+    final sharedBudgetReference = _firestore
         .collection("gubs")
         .doc(gubId)
         .collection("goals")
-        .doc(goalId);
-    final memberReference = goalReference.collection("members").doc(uid);
+        .doc(sharedBudgetId);
+    final memberReference = sharedBudgetReference
+        .collection("members")
+        .doc(uid);
 
     await _firestore.runTransaction((transaction) async {
-      final goalSnapshot = await transaction.get(goalReference);
+      final sharedBudgetSnapshot = await transaction.get(sharedBudgetReference);
       final memberSnapshot = await transaction.get(memberReference);
 
-      if (!goalSnapshot.exists) {
+      if (!sharedBudgetSnapshot.exists) {
         throw StateError("Shared Budget not found.");
       }
 
@@ -68,13 +73,14 @@ class GoalMemberRepository {
         throw StateError("Member not found.");
       }
 
-      final goalData = goalSnapshot.data()!;
+      final sharedBudgetData = sharedBudgetSnapshot.data()!;
       final memberData = memberSnapshot.data()!;
-      final targetAmount = (goalData["targetAmount"] as num?)?.toDouble() ?? 0;
+      final targetAmount =
+          (sharedBudgetData["targetAmount"] as num?)?.toDouble() ?? 0;
       final currentAmount =
-          (goalData["currentAmount"] as num?)?.toDouble() ?? 0;
-      final status = goalData["status"] ?? "active";
-      final archived = goalData["archived"] ?? false;
+          (sharedBudgetData["currentAmount"] as num?)?.toDouble() ?? 0;
+      final status = sharedBudgetData["status"] ?? "active";
+      final archived = sharedBudgetData["archived"] ?? false;
       final alreadyConfirmed = memberData["confirmed"] ?? false;
       final remainingAmount = (targetAmount - currentAmount)
           .clamp(0.0, double.infinity)
@@ -126,7 +132,7 @@ class GoalMemberRepository {
 
   Future<({String memberName, double amount})> confirmContribution({
     required String gubId,
-    required String goalId,
+    required String sharedBudgetId,
     required String uid,
     required String confirmedById,
   }) async {
@@ -137,19 +143,23 @@ class GoalMemberRepository {
     }
 
     final gubReference = _firestore.collection("gubs").doc(gubId);
-    final goalReference = gubReference.collection("goals").doc(goalId);
-    final memberReference = goalReference.collection("members").doc(uid);
+    final sharedBudgetReference = gubReference
+        .collection("goals")
+        .doc(sharedBudgetId);
+    final memberReference = sharedBudgetReference
+        .collection("members")
+        .doc(uid);
 
     return _firestore.runTransaction((transaction) async {
       final gubSnapshot = await transaction.get(gubReference);
-      final goalSnapshot = await transaction.get(goalReference);
+      final sharedBudgetSnapshot = await transaction.get(sharedBudgetReference);
       final memberSnapshot = await transaction.get(memberReference);
 
       if (!gubSnapshot.exists) {
         throw StateError("Gub not found.");
       }
 
-      if (!goalSnapshot.exists) {
+      if (!sharedBudgetSnapshot.exists) {
         throw StateError("Shared Budget not found.");
       }
 
@@ -163,20 +173,21 @@ class GoalMemberRepository {
         throw StateError("Only the Gub owner can confirm a contribution.");
       }
 
-      final goalData = goalSnapshot.data()!;
+      final sharedBudgetData = sharedBudgetSnapshot.data()!;
       final memberData = memberSnapshot.data()!;
       final memberName = memberData["displayName"] is String
           ? memberData["displayName"] as String
           : "Member";
       final confirmed = memberData["confirmed"] ?? false;
       final memberAmount = (memberData["amount"] as num?)?.toDouble() ?? 0;
-      final targetAmount = (goalData["targetAmount"] as num?)?.toDouble() ?? 0;
+      final targetAmount =
+          (sharedBudgetData["targetAmount"] as num?)?.toDouble() ?? 0;
       final currentAmount =
-          (goalData["currentAmount"] as num?)?.toDouble() ?? 0;
+          (sharedBudgetData["currentAmount"] as num?)?.toDouble() ?? 0;
       final completedMembers =
-          (goalData["completedMembers"] as num?)?.toInt() ?? 0;
-      final status = goalData["status"] ?? "active";
-      final archived = goalData["archived"] ?? false;
+          (sharedBudgetData["completedMembers"] as num?)?.toInt() ?? 0;
+      final status = sharedBudgetData["status"] ?? "active";
+      final archived = sharedBudgetData["archived"] ?? false;
 
       if (confirmed) {
         throw StateError("This contribution has already been confirmed.");
@@ -225,7 +236,7 @@ class GoalMemberRepository {
         "confirmed": true,
         "confirmedAt": now,
       });
-      transaction.update(goalReference, {
+      transaction.update(sharedBudgetReference, {
         "currentAmount": newCurrentAmount,
         "completedMembers": completedMembers + 1,
         if (isCompleted) ...{

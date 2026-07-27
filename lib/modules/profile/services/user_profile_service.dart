@@ -1,7 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 
 import '../../../repositories/member_repository.dart';
-import '../../../repositories/goal_repository.dart';
+import '../../../repositories/shared_budget_repository.dart';
 import '../../../repositories/gub_repository.dart';
 import '../../../repositories/user_repository.dart';
 import '../../gub_calendar/repositories/event_repository.dart';
@@ -119,7 +119,6 @@ class UserProfileService {
       UserActivityType.tasks => _taskActivityStream(gubId, userId),
       UserActivityType.proposals => _proposalActivityStream(gubId, userId),
       UserActivityType.events => _eventActivityStream(gubId, userId),
-      UserActivityType.groupGoals => Stream.value(const <UserActivityEntry>[]),
       UserActivityType.sharedBudget => _sharedBudgetActivityStream(
         gubId,
         userId,
@@ -212,19 +211,19 @@ class UserProfileService {
     String gubId,
     String userId,
   ) {
-    return GoalRepository.instance
+    return SharedBudgetRepository.instance
         .profileActivityCandidatesStream(gubId)
         .map(
-          (goals) => _sortActivities([
-            for (final goal in goals)
-              if (goal.ownerId == userId)
+          (sharedBudgets) => _sortActivities([
+            for (final sharedBudget in sharedBudgets)
+              if (sharedBudget.ownerId == userId)
                 UserActivityEntry(
-                  id: goal.goalId,
-                  title: goal.title,
-                  status: goal.status,
+                  id: sharedBudget.sharedBudgetId,
+                  title: sharedBudget.title,
+                  status: sharedBudget.status,
                   kind: UserActivityKind.sharedBudgetCreated,
-                  occurredAt: goal.createdAt,
-                  goal: goal,
+                  occurredAt: sharedBudget.createdAt,
+                  sharedBudget: sharedBudget,
                 ),
           ]),
         );

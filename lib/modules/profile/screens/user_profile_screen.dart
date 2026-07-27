@@ -271,12 +271,6 @@ const _activityCategories = [
     icon: Icons.event_outlined,
   ),
   _ActivityCategory(
-    type: UserActivityType.groupGoals,
-    title: "Group goals",
-    description: "Activity is not attributable yet",
-    icon: Icons.flag_outlined,
-  ),
-  _ActivityCategory(
     type: UserActivityType.sharedBudget,
     title: "Shared budget",
     description: "Created Shared Budgets",

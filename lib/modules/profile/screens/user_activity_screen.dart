@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../widgets/gub_screen_background.dart';
-import '../../goals/screens/goal_members_screen.dart';
+import '../../shared_budget/screens/shared_budget_members_screen.dart';
 import '../../proposals/screens/proposal_details_screen.dart';
 import '../../tasks/screens/task_details_screen.dart';
 import '../models/user_profile_model.dart';
@@ -116,13 +116,13 @@ class _UserActivityScreenState extends State<UserActivityScreen> {
   bool _canOpen(UserActivityEntry activity) {
     return activity.task != null ||
         activity.proposal != null ||
-        activity.goal != null;
+        activity.sharedBudget != null;
   }
 
   void _openActivity(UserActivityEntry activity) {
     final task = activity.task;
     final proposal = activity.proposal;
-    final goal = activity.goal;
+    final sharedBudget = activity.sharedBudget;
 
     if (task != null) {
       Navigator.of(context).push(
@@ -137,13 +137,13 @@ class _UserActivityScreenState extends State<UserActivityScreen> {
           builder: (_) => ProposalDetailsScreen(proposal: proposal),
         ),
       );
-    } else if (goal != null) {
+    } else if (sharedBudget != null) {
       Navigator.of(context).push(
         MaterialPageRoute(
-          builder: (_) => GoalMembersScreen(
+          builder: (_) => SharedBudgetMembersScreen(
             gubId: widget.gubId,
-            goalId: goal.goalId,
-            ownerId: goal.ownerId,
+            sharedBudgetId: sharedBudget.sharedBudgetId,
+            ownerId: sharedBudget.ownerId,
           ),
         ),
       );
@@ -277,10 +277,6 @@ class _ActivityMessage extends StatelessWidget {
       icon: Icons.how_to_vote_outlined,
     ),
     UserActivityType.events => (title: "Events", icon: Icons.event_outlined),
-    UserActivityType.groupGoals => (
-      title: "Group goals",
-      icon: Icons.flag_outlined,
-    ),
     UserActivityType.sharedBudget => (
       title: "Shared budget",
       icon: Icons.savings_outlined,
@@ -293,7 +289,6 @@ GubBackgroundVariant _backgroundFor(UserActivityType type) {
     UserActivityType.tasks => GubBackgroundAssignments.tasks,
     UserActivityType.proposals => GubBackgroundAssignments.proposals,
     UserActivityType.events => GubBackgroundAssignments.events,
-    UserActivityType.groupGoals => GubBackgroundAssignments.groupGoals,
     UserActivityType.sharedBudget => GubBackgroundAssignments.sharedBudget,
   };
 }

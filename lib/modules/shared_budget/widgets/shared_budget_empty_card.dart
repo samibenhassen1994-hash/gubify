@@ -1,13 +1,17 @@
 import 'package:flutter/material.dart';
 
-import '../screens/create_goal_screen.dart';
-import '../screens/goals_screen.dart';
+import '../screens/create_shared_budget_screen.dart';
+import '../screens/shared_budget_screen.dart';
 
-class GoalEmptyCard extends StatelessWidget {
+class SharedBudgetEmptyCard extends StatelessWidget {
   final bool isOwner;
   final String gubId;
 
-  const GoalEmptyCard({super.key, required this.isOwner, required this.gubId});
+  const SharedBudgetEmptyCard({
+    super.key,
+    required this.isOwner,
+    required this.gubId,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -49,7 +53,7 @@ class GoalEmptyCard extends StatelessWidget {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => CreateGoalScreen(gubId: gubId),
+                      builder: (_) => CreateSharedBudgetScreen(gubId: gubId),
                     ),
                   );
                 },
@@ -61,7 +65,7 @@ class GoalEmptyCard extends StatelessWidget {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => GoalsScreen(
+                    builder: (_) => SharedBudgetScreen(
                       gubId: gubId,
                       initialTab: SharedBudgetInitialTab.archive,
                       canCreateBudget: isOwner,

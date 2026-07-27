@@ -1,6 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-class GoalMemberModel {
+class SharedBudgetMemberModel {
   final String uid;
   final String displayName;
   final String? photoUrl;
@@ -14,7 +14,7 @@ class GoalMemberModel {
   final Timestamp updatedAt;
   final Timestamp? confirmedAt;
 
-  const GoalMemberModel({
+  const SharedBudgetMemberModel({
     required this.uid,
     required this.displayName,
     this.photoUrl,
@@ -24,8 +24,8 @@ class GoalMemberModel {
     this.confirmedAt,
   });
 
-  factory GoalMemberModel.fromFirestore(Map<String, dynamic> json) {
-    return GoalMemberModel(
+  factory SharedBudgetMemberModel.fromFirestore(Map<String, dynamic> json) {
+    return SharedBudgetMemberModel(
       uid: json["uid"] ?? "",
       displayName: json["displayName"] ?? "",
       photoUrl: json["photoUrl"],
@@ -48,7 +48,7 @@ class GoalMemberModel {
     };
   }
 
-  GoalMemberModel copyWith({
+  SharedBudgetMemberModel copyWith({
     String? uid,
     String? displayName,
     String? photoUrl,
@@ -57,7 +57,7 @@ class GoalMemberModel {
     Timestamp? updatedAt,
     Timestamp? confirmedAt,
   }) {
-    return GoalMemberModel(
+    return SharedBudgetMemberModel(
       uid: uid ?? this.uid,
       displayName: displayName ?? this.displayName,
       photoUrl: photoUrl ?? this.photoUrl,

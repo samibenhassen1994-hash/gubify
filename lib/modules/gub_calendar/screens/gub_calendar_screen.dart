@@ -133,7 +133,7 @@ class GubCalendarScreen extends StatelessWidget {
                               )
                             : null,
                       );
-                    }).toList(),
+                    }),
                   ],
                 );
               },

@@ -9,7 +9,6 @@ abstract final class GubBackgroundAssignments {
   static const tasks = GubBackgroundVariant.blue;
   static const proposals = GubBackgroundVariant.lilac;
   static const events = GubBackgroundVariant.mint;
-  static const groupGoals = GubBackgroundVariant.mint;
   static const sharedBudget = GubBackgroundVariant.sunset;
   static const myGubs = GubBackgroundVariant.lilac;
   static const createGub = GubBackgroundVariant.blue;

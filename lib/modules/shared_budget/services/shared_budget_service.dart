@@ -4,20 +4,20 @@ import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
-import '../models/goal_member_model.dart';
-import '../models/goal_model.dart';
-import '../../../repositories/goal_repository.dart';
+import '../models/shared_budget_member_model.dart';
+import '../models/shared_budget_model.dart';
+import '../../../repositories/shared_budget_repository.dart';
 import '../../notifications/services/notification_service.dart';
 
-class GoalService {
-  GoalService._();
+class SharedBudgetService {
+  SharedBudgetService._();
 
-  static final GoalService instance = GoalService._();
+  static final SharedBudgetService instance = SharedBudgetService._();
 
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  Future<void> createGoal({
+  Future<void> createSharedBudget({
     required String gubId,
     required String title,
     required String description,
@@ -28,7 +28,7 @@ class GoalService {
     final normalizedValues = _validate(title, description, targetAmount);
     final members = await _loadHubMembers(gubId);
 
-    final goal = _buildGoal(
+    final sharedBudget = _buildSharedBudget(
       creatorId: creator.uid,
       title: normalizedValues.title,
       description: normalizedValues.description,
@@ -37,11 +37,14 @@ class GoalService {
       deadline: deadline,
     );
 
-    await GoalRepository.instance.createGoal(gubId, goal);
+    await SharedBudgetRepository.instance.createSharedBudget(
+      gubId,
+      sharedBudget,
+    );
 
-    final goalMembers = members
+    final sharedBudgetMembers = members
         .map(
-          (member) => GoalMemberModel(
+          (member) => SharedBudgetMemberModel(
             uid: member["uid"],
             displayName: member["displayName"] ?? "User",
             photoUrl: member["photoUrl"],
@@ -53,10 +56,10 @@ class GoalService {
         )
         .toList();
 
-    await GoalRepository.instance.createGoalMembers(
+    await SharedBudgetRepository.instance.createSharedBudgetMembers(
       gubId: gubId,
-      goalId: goal.goalId,
-      members: goalMembers,
+      sharedBudgetId: sharedBudget.sharedBudgetId,
+      members: sharedBudgetMembers,
     );
 
     var creatorName = creator.displayName ?? "Administrator";
@@ -69,20 +72,25 @@ class GoalService {
     }
 
     try {
+      // Legacy notification type, module key and payload field are preserved.
       await NotificationService.instance.send(
         gubId: gubId,
         title: "New Shared Budget",
-        body: "$creatorName created “${goal.title}”.",
+        body: "$creatorName created “${sharedBudget.title}”.",
         type: "goal_created",
         senderId: creator.uid,
         senderName: creatorName,
         markSenderAsRead: true,
-        data: {"module": "goals", "gubId": gubId, "goalId": goal.goalId},
+        data: {
+          "module": "goals",
+          "gubId": gubId,
+          "goalId": sharedBudget.sharedBudgetId,
+        },
       );
     } catch (error, stackTrace) {
       developer.log(
         "Unable to send the Shared Budget creation notification.",
-        name: "GoalService.createGoal",
+        name: "SharedBudgetService.createSharedBudget",
         error: error,
         stackTrace: stackTrace,
       );
@@ -90,39 +98,51 @@ class GoalService {
   }
 
   /// Future (lo lasciamo per compatibilità)
-  Future<GoalModel?> getActiveGoal(String gubId) {
-    return GoalRepository.instance.getActiveGoal(gubId);
+  Future<SharedBudgetModel?> getActiveSharedBudget(String gubId) {
+    return SharedBudgetRepository.instance.getActiveSharedBudget(gubId);
   }
 
   /// Stream in tempo reale
-  Stream<List<GoalModel>> activeGoalsStream(String gubId) {
-    return GoalRepository.instance.activeGoalsStream(gubId);
+  Stream<List<SharedBudgetModel>> activeSharedBudgetsStream(String gubId) {
+    return SharedBudgetRepository.instance.activeSharedBudgetsStream(gubId);
   }
 
-  Stream<List<GoalModel>> goalsStream(String gubId) {
-    return GoalRepository.instance.goalsStream(gubId);
+  Stream<List<SharedBudgetModel>> sharedBudgetsStream(String gubId) {
+    return SharedBudgetRepository.instance.sharedBudgetsStream(gubId);
   }
 
-  Stream<List<GoalModel>> completedGoalsStream(String gubId) {
-    return GoalRepository.instance.completedGoalsStream(gubId);
+  Stream<List<SharedBudgetModel>> completedSharedBudgetsStream(String gubId) {
+    return SharedBudgetRepository.instance.completedSharedBudgetsStream(gubId);
   }
 
-  Future<void> deleteGoal({required String gubId, required String goalId}) {
-    return GoalRepository.instance.deleteGoal(gubId, goalId);
-  }
-
-  Future<GoalModel?> getGoalById({
+  Future<void> deleteSharedBudget({
     required String gubId,
-    required String goalId,
+    required String sharedBudgetId,
   }) {
-    return GoalRepository.instance.getGoal(gubId, goalId);
+    return SharedBudgetRepository.instance.deleteSharedBudget(
+      gubId,
+      sharedBudgetId,
+    );
   }
 
-  Stream<GoalModel?> goalStream({
+  Future<SharedBudgetModel?> getSharedBudgetById({
     required String gubId,
-    required String goalId,
+    required String sharedBudgetId,
   }) {
-    return GoalRepository.instance.goalStream(gubId, goalId);
+    return SharedBudgetRepository.instance.getSharedBudget(
+      gubId,
+      sharedBudgetId,
+    );
+  }
+
+  Stream<SharedBudgetModel?> sharedBudgetStream({
+    required String gubId,
+    required String sharedBudgetId,
+  }) {
+    return SharedBudgetRepository.instance.sharedBudgetStream(
+      gubId,
+      sharedBudgetId,
+    );
   }
 
   ({String title, String description}) _validate(
@@ -193,7 +213,7 @@ class GoalService {
     return user;
   }
 
-  GoalModel _buildGoal({
+  SharedBudgetModel _buildSharedBudget({
     required String creatorId,
     required String title,
     required String description,
@@ -201,8 +221,8 @@ class GoalService {
     required int memberCount,
     DateTime? deadline,
   }) {
-    return GoalModel(
-      goalId: _generateGoalId(),
+    return SharedBudgetModel(
+      sharedBudgetId: _generateSharedBudgetId(),
       title: title,
       description: description,
       targetAmount: targetAmount,
@@ -217,7 +237,7 @@ class GoalService {
     );
   }
 
-  String _generateGoalId() {
+  String _generateSharedBudgetId() {
     final random = Random();
 
     return DateTime.now().millisecondsSinceEpoch.toString() +

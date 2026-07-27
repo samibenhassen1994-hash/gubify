@@ -1,11 +1,14 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
+import '../models/board_post_model.dart';
+import '../repositories/post_repository.dart';
+
 class PostService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
-  Future<void> createPost({
+  Future<String> createPost({
     required String gubId,
     required String message,
   }) async {
@@ -17,15 +20,20 @@ class PostService {
 
     final userDoc = await _firestore.collection("users").doc(user.uid).get();
 
-    final displayName = userDoc.data()?["displayName"] ?? "Utente";
+    final displayName = userDoc.data()?["displayName"] ?? "User";
 
-    await _firestore.collection("gubs").doc(gubId).collection("posts").add({
-      "authorId": user.uid,
-      "authorName": displayName,
-      "message": message.trim(),
-      "likes": 0,
-      "comments": 0,
-      "createdAt": FieldValue.serverTimestamp(),
-    });
+    await PostRepository.instance.createPost(
+      gubId: gubId,
+      authorId: user.uid,
+      authorName: displayName,
+      authorPhoto: user.photoURL,
+      message: message.trim(),
+    );
+
+    return displayName;
+  }
+
+  Stream<List<BoardPostModel>> postsStream(String gubId) {
+    return PostRepository.instance.postsStream(gubId);
   }
 }

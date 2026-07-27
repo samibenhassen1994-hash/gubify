@@ -3,28 +3,29 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../../../widgets/gub_screen_background.dart';
-import '../models/goal_model.dart';
-import '../services/goal_member_service.dart';
-import '../services/goal_service.dart';
+import '../models/shared_budget_model.dart';
+import '../services/shared_budget_member_service.dart';
+import '../services/shared_budget_service.dart';
 import 'my_contribution_screen.dart';
 
-class GoalMembersScreen extends StatefulWidget {
+class SharedBudgetMembersScreen extends StatefulWidget {
   final String gubId;
-  final String goalId;
+  final String sharedBudgetId;
   final String ownerId;
 
-  const GoalMembersScreen({
+  const SharedBudgetMembersScreen({
     super.key,
     required this.gubId,
-    required this.goalId,
+    required this.sharedBudgetId,
     required this.ownerId,
   });
 
   @override
-  State<GoalMembersScreen> createState() => _GoalMembersScreenState();
+  State<SharedBudgetMembersScreen> createState() =>
+      _SharedBudgetMembersScreenState();
 }
 
-class _GoalMembersScreenState extends State<GoalMembersScreen> {
+class _SharedBudgetMembersScreenState extends State<SharedBudgetMembersScreen> {
   final Set<String> _confirmingMemberIds = {};
 
   Future<void> _confirmContribution({
@@ -61,9 +62,9 @@ class _GoalMembersScreenState extends State<GoalMembersScreen> {
     setState(() => _confirmingMemberIds.add(uid));
 
     try {
-      await GoalMemberService.instance.confirmContribution(
+      await SharedBudgetMemberService.instance.confirmContribution(
         gubId: widget.gubId,
-        goalId: widget.goalId,
+        sharedBudgetId: widget.sharedBudgetId,
         uid: uid,
         confirmedById: confirmedById,
       );
@@ -104,28 +105,29 @@ class _GoalMembersScreenState extends State<GoalMembersScreen> {
           elevation: 0,
           scrolledUnderElevation: 0,
         ),
-        body: StreamBuilder<GoalModel?>(
-          stream: GoalService.instance.goalStream(
+        body: StreamBuilder<SharedBudgetModel?>(
+          stream: SharedBudgetService.instance.sharedBudgetStream(
             gubId: widget.gubId,
-            goalId: widget.goalId,
+            sharedBudgetId: widget.sharedBudgetId,
           ),
-          builder: (context, goalSnapshot) {
-            if (goalSnapshot.connectionState == ConnectionState.waiting) {
+          builder: (context, sharedBudgetSnapshot) {
+            if (sharedBudgetSnapshot.connectionState ==
+                ConnectionState.waiting) {
               return const Center(child: CircularProgressIndicator());
             }
 
-            final goal = goalSnapshot.data;
+            final sharedBudget = sharedBudgetSnapshot.data;
 
-            if (goal == null) {
+            if (sharedBudget == null) {
               return const Center(
                 child: Text("This Shared Budget is no longer available."),
               );
             }
 
             return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-              stream: GoalMemberService.instance.membersStream(
+              stream: SharedBudgetMemberService.instance.membersStream(
                 gubId: widget.gubId,
-                goalId: widget.goalId,
+                sharedBudgetId: widget.sharedBudgetId,
               ),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
@@ -151,8 +153,8 @@ class _GoalMembersScreenState extends State<GoalMembersScreen> {
                     final isConfirming = _confirmingMemberIds.contains(uid);
                     final canConfirm =
                         isOwner &&
-                        !goal.isCompleted &&
-                        !goal.archived &&
+                        !sharedBudget.isCompleted &&
+                        !sharedBudget.archived &&
                         !confirmed &&
                         amount > 0;
 
@@ -181,7 +183,7 @@ class _GoalMembersScreenState extends State<GoalMembersScreen> {
                                   MaterialPageRoute(
                                     builder: (_) => MyContributionScreen(
                                       gubId: widget.gubId,
-                                      goalId: widget.goalId,
+                                      sharedBudgetId: widget.sharedBudgetId,
                                     ),
                                   ),
                                 );

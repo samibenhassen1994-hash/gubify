@@ -31,7 +31,7 @@ class ProposalsScreen extends StatelessWidget {
         ),
         floatingActionButton: FloatingActionButton.extended(
           icon: const Icon(Icons.add),
-          label: const Text("Proposal"),
+          label: const Text("Create Proposal"),
           onPressed: () {
             Navigator.push(
               context,

@@ -5,18 +5,19 @@ import 'package:flutter/services.dart';
 import '../../../core/formatters/monetary_amount_input_formatter.dart';
 import '../../../widgets/gub_screen_background.dart';
 import '../../chat/widgets/gub_chat_overlay.dart';
-import '../services/goal_service.dart';
+import '../services/shared_budget_service.dart';
 
-class CreateGoalScreen extends StatefulWidget {
+class CreateSharedBudgetScreen extends StatefulWidget {
   final String gubId;
 
-  const CreateGoalScreen({super.key, required this.gubId});
+  const CreateSharedBudgetScreen({super.key, required this.gubId});
 
   @override
-  State<CreateGoalScreen> createState() => _CreateGoalScreenState();
+  State<CreateSharedBudgetScreen> createState() =>
+      _CreateSharedBudgetScreenState();
 }
 
-class _CreateGoalScreenState extends State<CreateGoalScreen> {
+class _CreateSharedBudgetScreenState extends State<CreateSharedBudgetScreen> {
   static const Color _primaryColor = Color(0xFF2563EB);
   static const Color _textColor = Color(0xFF0F172A);
   static const Color _secondaryTextColor = Color(0xFF64748B);
@@ -255,7 +256,7 @@ class _CreateGoalScreenState extends State<CreateGoalScreen> {
     });
   }
 
-  Future<void> _createGoal() async {
+  Future<void> _createSharedBudget() async {
     final title = _titleController.text.trim();
     final description = _descriptionController.text.trim();
 
@@ -277,7 +278,7 @@ class _CreateGoalScreenState extends State<CreateGoalScreen> {
     });
 
     try {
-      await GoalService.instance.createGoal(
+      await SharedBudgetService.instance.createSharedBudget(
         gubId: widget.gubId,
         title: title,
         description: description,
@@ -471,7 +472,7 @@ class _CreateGoalScreenState extends State<CreateGoalScreen> {
                             textInputAction: TextInputAction.done,
                             onSubmitted: (_) {
                               if (!_isLoading) {
-                                _createGoal();
+                                _createSharedBudget();
                               }
                             },
                             decoration: _inputDecoration(
@@ -589,7 +590,7 @@ class _CreateGoalScreenState extends State<CreateGoalScreen> {
                   SizedBox(
                     height: 56,
                     child: FilledButton.icon(
-                      onPressed: _isLoading ? null : _createGoal,
+                      onPressed: _isLoading ? null : _createSharedBudget,
                       style: FilledButton.styleFrom(
                         backgroundColor: _primaryColor,
                         foregroundColor: Colors.white,

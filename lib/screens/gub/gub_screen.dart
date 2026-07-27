@@ -6,11 +6,11 @@ import '../../modules/chat/widgets/gub_chat_overlay.dart';
 import '../../widgets/gub_access_guard.dart';
 import '../../widgets/gub_page_header.dart';
 import '../../widgets/gub_screen_background.dart';
-import '../../modules/tasks/widgets/task_home_card.dart';
 
 import 'widgets/gub_actions_section.dart';
+import 'widgets/gub_board_button.dart';
+import 'widgets/gub_dashboard_section.dart';
 import 'widgets/gub_members_badge.dart';
-import 'widgets/gub_modules_section.dart';
 import 'widgets/invite_code_card.dart';
 import 'widgets/members_card.dart';
 import 'widgets/modules_card.dart';
@@ -59,7 +59,7 @@ class GubScreen extends StatelessWidget {
                     .toList();
 
                 return SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(20, 10, 20, 20),
+                  padding: const EdgeInsets.fromLTRB(20, 10, 20, 120),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -69,20 +69,36 @@ class GubScreen extends StatelessWidget {
                         userHeaderInCard: true,
                       ),
 
-                      GubMembersBadge(memberCount: memberCount),
+                      LayoutBuilder(
+                        builder: (context, constraints) {
+                          final boardButtonLeft = constraints.maxWidth / 2 + 70;
+
+                          return SizedBox(
+                            height: 54,
+                            width: double.infinity,
+                            child: Stack(
+                              alignment: Alignment.center,
+                              clipBehavior: Clip.none,
+                              children: [
+                                GubMembersBadge(memberCount: memberCount),
+                                Positioned(
+                                  left: boardButtonLeft,
+                                  child: GubBoardButton(gubId: gubId),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
 
                       const SizedBox(height: 22),
 
-                      GubModulesSection(
+                      GubDashboardSection(
                         gubId: gubId,
-                        memberCount: memberCount,
                         ownerId: ownerId,
+                        memberCount: memberCount,
                         activeModules: activeModules,
                       ),
-
-                      const SizedBox(height: 12),
-
-                      TaskHomeCard(gubId: gubId),
 
                       const SizedBox(height: 12),
 

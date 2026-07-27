@@ -96,6 +96,10 @@ class UserHeader extends StatelessWidget {
 
                     final type = data["type"] ?? "";
 
+                    if (type == "board_post") {
+                      return false;
+                    }
+
                     if (readBy.contains(user.uid)) {
                       return false;
                     }

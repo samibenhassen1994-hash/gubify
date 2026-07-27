@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 
-import '../services/goal_service.dart';
+import '../services/shared_budget_service.dart';
 
-Future<bool> showDeleteGoalDialog({
+Future<bool> showDeleteSharedBudgetDialog({
   required BuildContext context,
   required String gubId,
-  required String goalId,
+  required String sharedBudgetId,
 }) async {
   var isDeleting = false;
 
@@ -15,7 +15,7 @@ Future<bool> showDeleteGoalDialog({
     builder: (dialogContext) {
       return StatefulBuilder(
         builder: (context, setDialogState) {
-          Future<void> deleteGoal() async {
+          Future<void> deleteSharedBudget() async {
             if (isDeleting) return;
 
             setDialogState(() {
@@ -23,9 +23,9 @@ Future<bool> showDeleteGoalDialog({
             });
 
             try {
-              await GoalService.instance.deleteGoal(
+              await SharedBudgetService.instance.deleteSharedBudget(
                 gubId: gubId,
-                goalId: goalId,
+                sharedBudgetId: sharedBudgetId,
               );
 
               if (!dialogContext.mounted) return;
@@ -73,7 +73,7 @@ Future<bool> showDeleteGoalDialog({
                   child: const Text("Cancel"),
                 ),
                 TextButton(
-                  onPressed: isDeleting ? null : deleteGoal,
+                  onPressed: isDeleting ? null : deleteSharedBudget,
                   style: TextButton.styleFrom(foregroundColor: Colors.red),
                   child: isDeleting
                       ? const SizedBox(

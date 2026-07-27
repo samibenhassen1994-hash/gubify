@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../../../widgets/gub_content_card.dart';
 import '../../../widgets/gub_screen_background.dart';
 import '../models/proposal_model.dart';
+import 'create_proposal_screen.dart';
 import '../services/proposal_service.dart';
 
 class ProposalDetailsScreen extends StatelessWidget {
@@ -101,7 +102,7 @@ class ProposalDetailsScreen extends StatelessWidget {
                 backgroundColor: Colors.transparent,
                 appBar: _proposalAppBar(),
                 body: SingleChildScrollView(
-                  padding: const EdgeInsets.all(20),
+                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 120),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -295,6 +296,25 @@ class ProposalDetailsScreen extends StatelessWidget {
                                     : () => submitVote('no'),
                                 icon: const Icon(Icons.thumb_down),
                                 label: const Text('Vote NO'),
+                              ),
+                            ),
+                            const SizedBox(height: 20),
+                            SizedBox(
+                              width: double.infinity,
+                              child: OutlinedButton.icon(
+                                onPressed: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => CreateProposalScreen(
+                                        gubId: p.gubId,
+                                        memberCount: p.memberCount,
+                                      ),
+                                    ),
+                                  );
+                                },
+                                icon: const Icon(Icons.add),
+                                label: const Text('Create Proposal'),
                               ),
                             ),
                           ],

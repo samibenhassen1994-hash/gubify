@@ -1,39 +1,40 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-import '../../../repositories/goal_member_repository.dart';
+import '../../../repositories/shared_budget_member_repository.dart';
 import '../../../repositories/user_repository.dart';
 import '../../notifications/services/notification_service.dart';
 
-class GoalMemberService {
-  GoalMemberService._();
+class SharedBudgetMemberService {
+  SharedBudgetMemberService._();
 
-  static final GoalMemberService instance = GoalMemberService._();
+  static final SharedBudgetMemberService instance =
+      SharedBudgetMemberService._();
 
   Stream<QuerySnapshot<Map<String, dynamic>>> membersStream({
     required String gubId,
-    required String goalId,
+    required String sharedBudgetId,
   }) {
-    return GoalMemberRepository.instance.membersStream(
+    return SharedBudgetMemberRepository.instance.membersStream(
       gubId: gubId,
-      goalId: goalId,
+      sharedBudgetId: sharedBudgetId,
     );
   }
 
   Stream<DocumentSnapshot<Map<String, dynamic>>> memberStream({
     required String gubId,
-    required String goalId,
+    required String sharedBudgetId,
     required String uid,
   }) {
-    return GoalMemberRepository.instance.memberStream(
+    return SharedBudgetMemberRepository.instance.memberStream(
       gubId: gubId,
-      goalId: goalId,
+      sharedBudgetId: sharedBudgetId,
       uid: uid,
     );
   }
 
   Future<void> submitContribution({
     required String gubId,
-    required String goalId,
+    required String sharedBudgetId,
     required String uid,
     required double amount,
   }) async {
@@ -45,13 +46,14 @@ class GoalMemberService {
       throw ArgumentError("Contribution must be greater than zero.");
     }
 
-    await GoalMemberRepository.instance.updateContribution(
+    await SharedBudgetMemberRepository.instance.updateContribution(
       gubId: gubId,
-      goalId: goalId,
+      sharedBudgetId: sharedBudgetId,
       uid: uid,
       amount: amount,
     );
 
+    // Legacy notification type and payload field are preserved.
     await NotificationService.instance.send(
       gubId: gubId,
       title: "Contribution submitted",
@@ -59,27 +61,28 @@ class GoalMemberService {
       type: "goal_submitted",
       senderId: uid,
       senderName: "System",
-      data: {"goalId": goalId, "memberId": uid},
+      data: {"goalId": sharedBudgetId, "memberId": uid},
     );
   }
 
   Future<void> confirmContribution({
     required String gubId,
-    required String goalId,
+    required String sharedBudgetId,
     required String uid,
     required String confirmedById,
   }) async {
     final owner = await UserRepository.instance.getUser(confirmedById);
     final ownerName = owner?["displayName"] ?? "Administrator";
 
-    final confirmedContribution = await GoalMemberRepository.instance
+    final confirmedContribution = await SharedBudgetMemberRepository.instance
         .confirmContribution(
           gubId: gubId,
-          goalId: goalId,
+          sharedBudgetId: sharedBudgetId,
           uid: uid,
           confirmedById: confirmedById,
         );
 
+    // Legacy notification type and payload field are preserved.
     await NotificationService.instance.send(
       gubId: gubId,
       title: "Shared Budget",
@@ -89,7 +92,7 @@ class GoalMemberService {
       type: "goal_confirmation",
       senderId: confirmedById,
       senderName: ownerName,
-      data: {"goalId": goalId, "memberId": uid},
+      data: {"goalId": sharedBudgetId, "memberId": uid},
     );
   }
 }

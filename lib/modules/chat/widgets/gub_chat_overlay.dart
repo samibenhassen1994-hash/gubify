@@ -19,6 +19,7 @@ class GubChatNavigatorObserver extends NavigatorObserver {
     super.didPush(route, previousRoute);
 
     if (route is PageRoute<dynamic>) {
+      _GubChatOverlayController.instance.updateActiveRoute(route);
       _GubChatOverlayController.instance.bringToFront();
     }
   }
@@ -28,6 +29,7 @@ class GubChatNavigatorObserver extends NavigatorObserver {
     super.didPop(route, previousRoute);
 
     if (route is PageRoute<dynamic>) {
+      _GubChatOverlayController.instance.updateActiveRoute(previousRoute);
       _GubChatOverlayController.instance.bringToFront();
     }
   }
@@ -37,9 +39,77 @@ class GubChatNavigatorObserver extends NavigatorObserver {
     super.didReplace(newRoute: newRoute, oldRoute: oldRoute);
 
     if (newRoute is PageRoute<dynamic> || oldRoute is PageRoute<dynamic>) {
+      _GubChatOverlayController.instance.updateActiveRoute(newRoute);
       _GubChatOverlayController.instance.bringToFront();
     }
   }
+}
+
+class ChatFloatingActionButtonRouteScope extends StatefulWidget {
+  final Widget child;
+  final double additionalBottomOffset;
+
+  const ChatFloatingActionButtonRouteScope({
+    super.key,
+    required this.child,
+    required this.additionalBottomOffset,
+  });
+
+  @override
+  State<ChatFloatingActionButtonRouteScope> createState() =>
+      _ChatFloatingActionButtonRouteScopeState();
+}
+
+class _ChatFloatingActionButtonRouteScopeState
+    extends State<ChatFloatingActionButtonRouteScope> {
+  Route<dynamic>? _route;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+
+    final route = ModalRoute.of(context);
+    if (identical(_route, route)) return;
+
+    final previousRoute = _route;
+    if (previousRoute != null) {
+      GubChatOverlay.unregisterFloatingActionButtonRoute(previousRoute);
+    }
+
+    _route = route;
+    if (route != null) {
+      GubChatOverlay.registerFloatingActionButtonRoute(
+        route: route,
+        additionalBottomOffset: widget.additionalBottomOffset,
+      );
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant ChatFloatingActionButtonRouteScope oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    final route = _route;
+    if (route != null &&
+        oldWidget.additionalBottomOffset != widget.additionalBottomOffset) {
+      GubChatOverlay.registerFloatingActionButtonRoute(
+        route: route,
+        additionalBottomOffset: widget.additionalBottomOffset,
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    final route = _route;
+    if (route != null) {
+      GubChatOverlay.unregisterFloatingActionButtonRoute(route);
+    }
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }
 
 class GubChatOverlay extends StatefulWidget {
@@ -68,6 +138,22 @@ class GubChatOverlay extends StatefulWidget {
     } finally {
       controller.resume();
     }
+  }
+
+  static void registerFloatingActionButtonRoute({
+    required Route<dynamic> route,
+    required double additionalBottomOffset,
+  }) {
+    _GubChatOverlayController.instance.registerFloatingActionButtonRoute(
+      route: route,
+      additionalBottomOffset: additionalBottomOffset,
+    );
+  }
+
+  static void unregisterFloatingActionButtonRoute(Route<dynamic> route) {
+    _GubChatOverlayController.instance.unregisterFloatingActionButtonRoute(
+      route,
+    );
   }
 
   @override
@@ -199,9 +285,13 @@ class _GubChatOverlayState extends State<GubChatOverlay> {
       return const SizedBox.shrink();
     }
 
+    final bottomOffset =
+        88 +
+        _GubChatOverlayController.instance.activeFloatingActionButtonOffset;
+
     return Positioned.fill(
       child: SafeArea(
-        minimum: const EdgeInsets.only(right: 20, bottom: 88),
+        minimum: EdgeInsets.only(right: 20, bottom: bottomOffset),
         child: Align(
           alignment: Alignment.bottomRight,
           child: ChatFloatingButton(
@@ -224,6 +314,12 @@ class _GubChatOverlayState extends State<GubChatOverlay> {
   void bringToFront() {
     if (!mounted || _isOverlaySuppressed) return;
     _scheduleOverlaySync(bringToFront: true);
+  }
+
+  void updateFloatingActionButtonOffset() {
+    if (mounted) {
+      _overlayEntry?.markNeedsBuild();
+    }
   }
 
   bool get _isOverlaySuppressed =>
@@ -377,8 +473,13 @@ class _GubChatOverlayController {
 
   _GubChatOverlayState? _activeOverlay;
   int _suspensionCount = 0;
+  final Map<Route<dynamic>, double> _floatingActionButtonRoutes = {};
+  double _activeFloatingActionButtonOffset = 0;
 
   bool get isSuspended => _suspensionCount > 0;
+
+  double get activeFloatingActionButtonOffset =>
+      _activeFloatingActionButtonOffset;
 
   void attach(_GubChatOverlayState overlay) {
     _activeOverlay = overlay;
@@ -392,6 +493,37 @@ class _GubChatOverlayController {
 
   void bringToFront() {
     _activeOverlay?.bringToFront();
+  }
+
+  void registerFloatingActionButtonRoute({
+    required Route<dynamic> route,
+    required double additionalBottomOffset,
+  }) {
+    _floatingActionButtonRoutes[route] = additionalBottomOffset;
+    if (route.isCurrent) {
+      _setActiveRoute(route);
+    }
+  }
+
+  void unregisterFloatingActionButtonRoute(Route<dynamic> route) {
+    _floatingActionButtonRoutes.remove(route);
+    if (route.isCurrent) {
+      _setActiveRoute(route);
+    }
+  }
+
+  void updateActiveRoute(Route<dynamic>? route) {
+    _setActiveRoute(route);
+  }
+
+  void _setActiveRoute(Route<dynamic>? route) {
+    final nextOffset = route == null
+        ? 0.0
+        : _floatingActionButtonRoutes[route] ?? 0.0;
+    if (_activeFloatingActionButtonOffset == nextOffset) return;
+
+    _activeFloatingActionButtonOffset = nextOffset;
+    _activeOverlay?.updateFloatingActionButtonOffset();
   }
 
   void suspend() {

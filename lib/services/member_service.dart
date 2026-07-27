@@ -1,5 +1,5 @@
 import '../repositories/member_repository.dart';
-import '../repositories/goal_repository.dart';
+import '../repositories/shared_budget_repository.dart';
 
 class MemberService {
   MemberService._();
@@ -24,7 +24,7 @@ class MemberService {
 
     // Rimuove il membro
     await MemberRepository.instance.removeMember(gubId: gubId, uid: uid);
-    await GoalRepository.instance.removeMemberFromAllGoals(
+    await SharedBudgetRepository.instance.removeMemberFromAllSharedBudgets(
       gubId: gubId,
       uid: uid,
     );

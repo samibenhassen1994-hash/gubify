@@ -16,16 +16,13 @@ class MemberSelector extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DropdownButtonFormField<String>(
-      value: selectedUserId,
+      initialValue: selectedUserId,
       decoration: const InputDecoration(
         labelText: "Assign to",
         border: OutlineInputBorder(),
       ),
       items: [
-        const DropdownMenuItem<String>(
-          value: null,
-          child: Text("Unassigned"),
-        ),
+        const DropdownMenuItem<String>(value: null, child: Text("Unassigned")),
         ...members.map(
           (member) => DropdownMenuItem<String>(
             value: member.userId,
@@ -39,9 +36,7 @@ class MemberSelector extends StatelessWidget {
           return;
         }
 
-        final member = members.firstWhere(
-          (m) => m.userId == value,
-        );
+        final member = members.firstWhere((m) => m.userId == value);
 
         onChanged(member);
       },

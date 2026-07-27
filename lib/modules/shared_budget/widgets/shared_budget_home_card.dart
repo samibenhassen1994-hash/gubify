@@ -1,19 +1,23 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
-import '../models/goal_model.dart';
-import '../screens/goal_members_screen.dart';
-import '../screens/goals_screen.dart';
-import '../services/goal_service.dart';
-import 'delete_goal_dialog.dart';
-import 'goal_empty_card.dart';
-import 'goal_progress_card.dart';
+import '../models/shared_budget_model.dart';
+import '../screens/shared_budget_members_screen.dart';
+import '../screens/shared_budget_screen.dart';
+import '../services/shared_budget_service.dart';
+import 'delete_shared_budget_dialog.dart';
+import 'shared_budget_empty_card.dart';
+import 'shared_budget_progress_card.dart';
 
-class GoalHomeCard extends StatelessWidget {
+class SharedBudgetHomeCard extends StatelessWidget {
   final String gubId;
   final String ownerId;
 
-  const GoalHomeCard({super.key, required this.gubId, required this.ownerId});
+  const SharedBudgetHomeCard({
+    super.key,
+    required this.gubId,
+    required this.ownerId,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -21,8 +25,8 @@ class GoalHomeCard extends StatelessWidget {
     final isOwner = currentUser != null && currentUser.uid == ownerId;
     final currentUserId = currentUser?.uid;
 
-    return StreamBuilder<List<GoalModel>>(
-      stream: GoalService.instance.activeGoalsStream(gubId),
+    return StreamBuilder<List<SharedBudgetModel>>(
+      stream: SharedBudgetService.instance.activeSharedBudgetsStream(gubId),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
           return _buildBudgetCard(
@@ -43,7 +47,7 @@ class GoalHomeCard extends StatelessWidget {
 
         if (activeBudgets.isEmpty) {
           return _buildBudgetCard(
-            child: GoalEmptyCard(isOwner: isOwner, gubId: gubId),
+            child: SharedBudgetEmptyCard(isOwner: isOwner, gubId: gubId),
           );
         }
 
@@ -65,10 +69,10 @@ class GoalHomeCard extends StatelessWidget {
                   ),
                   onSelected: (value) {
                     if (value == "delete") {
-                      showDeleteGoalDialog(
+                      showDeleteSharedBudgetDialog(
                         context: context,
                         gubId: gubId,
-                        goalId: latestBudget.goalId,
+                        sharedBudgetId: latestBudget.sharedBudgetId,
                       );
                     }
                   },
@@ -90,7 +94,7 @@ class GoalHomeCard extends StatelessWidget {
             Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (_) => GoalsScreen(
+                builder: (_) => SharedBudgetScreen(
                   gubId: gubId,
                   initialTab: SharedBudgetInitialTab.archive,
                   canCreateBudget: isOwner,
@@ -106,9 +110,9 @@ class GoalHomeCard extends StatelessWidget {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => GoalMembersScreen(
+                      builder: (_) => SharedBudgetMembersScreen(
                         gubId: gubId,
-                        goalId: latestBudget.goalId,
+                        sharedBudgetId: latestBudget.sharedBudgetId,
                         ownerId: ownerId,
                       ),
                     ),
@@ -116,8 +120,8 @@ class GoalHomeCard extends StatelessWidget {
                 },
                 child: SizedBox(
                   width: double.infinity,
-                  child: GoalProgressCard(
-                    goal: latestBudget,
+                  child: SharedBudgetProgressCard(
+                    sharedBudget: latestBudget,
                     compact: true,
                     showModuleLabel: false,
                     showFooterHint: false,
@@ -132,7 +136,7 @@ class GoalHomeCard extends StatelessWidget {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => GoalsScreen(
+                        builder: (_) => SharedBudgetScreen(
                           gubId: gubId,
                           initialTab: SharedBudgetInitialTab.active,
                           canCreateBudget: isOwner,

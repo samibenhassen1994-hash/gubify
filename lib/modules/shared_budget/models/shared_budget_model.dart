@@ -1,7 +1,10 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-class GoalModel {
-  final String goalId;
+class SharedBudgetModel {
+  /// Legacy Firestore field name kept for backward-compatible documents.
+  static const String legacyFirestoreIdField = "goalId";
+
+  final String sharedBudgetId;
   final String title;
   final String description;
 
@@ -22,8 +25,8 @@ class GoalModel {
   final Timestamp? deadline;
   final Timestamp? completedAt;
 
-  const GoalModel({
-    required this.goalId,
+  const SharedBudgetModel({
+    required this.sharedBudgetId,
     required this.title,
     required this.description,
     required this.targetAmount,
@@ -38,13 +41,13 @@ class GoalModel {
     this.completedAt,
   });
 
-  factory GoalModel.fromFirestore(Map<String, dynamic> json) {
+  factory SharedBudgetModel.fromFirestore(Map<String, dynamic> json) {
     final createdAt = json["createdAt"];
     final deadline = json["deadline"];
     final completedAt = json["completedAt"];
 
-    return GoalModel(
-      goalId: json["goalId"] ?? "",
+    return SharedBudgetModel(
+      sharedBudgetId: json[legacyFirestoreIdField] ?? "",
       title: json["title"] ?? "",
       description: json["description"] ?? "",
       targetAmount: (json["targetAmount"] ?? 0).toDouble(),
@@ -70,7 +73,7 @@ class GoalModel {
 
   Map<String, dynamic> toFirestore() {
     return {
-      "goalId": goalId,
+      legacyFirestoreIdField: sharedBudgetId,
       "title": title,
       "description": description,
       "targetAmount": targetAmount,
@@ -86,8 +89,8 @@ class GoalModel {
     };
   }
 
-  GoalModel copyWith({
-    String? goalId,
+  SharedBudgetModel copyWith({
+    String? sharedBudgetId,
     String? title,
     String? description,
     double? targetAmount,
@@ -101,8 +104,8 @@ class GoalModel {
     Timestamp? deadline,
     Timestamp? completedAt,
   }) {
-    return GoalModel(
-      goalId: goalId ?? this.goalId,
+    return SharedBudgetModel(
+      sharedBudgetId: sharedBudgetId ?? this.sharedBudgetId,
       title: title ?? this.title,
       description: description ?? this.description,
       targetAmount: targetAmount ?? this.targetAmount,

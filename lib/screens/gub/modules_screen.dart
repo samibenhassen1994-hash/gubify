@@ -2,7 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
-import '../../modules/goals/screens/goals_screen.dart';
+import '../../modules/shared_budget/screens/shared_budget_screen.dart';
 import '../../modules/gub_calendar/screens/gub_calendar_screen.dart';
 import '../../modules/proposals/screens/proposals_screen.dart';
 import '../../widgets/gub_content_card.dart';
@@ -113,7 +113,7 @@ class ModulesScreen extends StatelessWidget {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (_) => GoalsScreen(
+                              builder: (_) => SharedBudgetScreen(
                                 gubId: gubId,
                                 canCreateBudget: canCreateBudget,
                               ),

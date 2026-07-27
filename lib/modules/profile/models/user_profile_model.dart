@@ -1,6 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-import '../../goals/models/goal_model.dart';
+import '../../shared_budget/models/shared_budget_model.dart';
 import '../../gub_calendar/models/event_model.dart';
 import '../../proposals/models/proposal_model.dart';
 import '../../tasks/models/task_model.dart';
@@ -29,7 +29,7 @@ class PersonalGubModel {
   const PersonalGubModel({required this.gubId, required this.name, this.role});
 }
 
-enum UserActivityType { tasks, proposals, events, groupGoals, sharedBudget }
+enum UserActivityType { tasks, proposals, events, sharedBudget }
 
 enum UserActivityKind {
   taskCreated,
@@ -49,7 +49,7 @@ class UserActivityEntry {
   final TaskModel? task;
   final ProposalModel? proposal;
   final EventModel? event;
-  final GoalModel? goal;
+  final SharedBudgetModel? sharedBudget;
 
   const UserActivityEntry({
     required this.id,
@@ -60,6 +60,6 @@ class UserActivityEntry {
     this.task,
     this.proposal,
     this.event,
-    this.goal,
+    this.sharedBudget,
   });
 }

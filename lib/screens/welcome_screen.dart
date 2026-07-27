@@ -81,7 +81,9 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                           shape: BoxShape.circle,
                           boxShadow: [
                             BoxShadow(
-                              color: const Color(0xFF3B82F6).withOpacity(0.50),
+                              color: const Color(
+                                0xFF3B82F6,
+                              ).withValues(alpha: 0.50),
                               blurRadius: 150,
                               spreadRadius: 45,
                             ),
@@ -234,8 +236,8 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
       child: OutlinedButton(
         onPressed: onPressed,
         style: OutlinedButton.styleFrom(
-          backgroundColor: Colors.white.withOpacity(0.06),
-          side: BorderSide(color: Colors.white.withOpacity(0.15)),
+          backgroundColor: Colors.white.withValues(alpha: 0.06),
+          side: BorderSide(color: Colors.white.withValues(alpha: 0.15)),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(18),
           ),

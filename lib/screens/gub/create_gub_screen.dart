@@ -51,7 +51,7 @@ class _CreateGubScreenState extends State<CreateGubScreen> {
 
       final fieldContext = _nameFieldKey.currentContext;
 
-      if (fieldContext != null) {
+      if (fieldContext != null && fieldContext.mounted) {
         await Scrollable.ensureVisible(
           fieldContext,
           alignment: 0.65,

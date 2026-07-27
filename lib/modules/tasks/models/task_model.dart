@@ -19,7 +19,7 @@ class TaskModel {
   /// board
   /// shopping
   /// budget
-  /// goal
+  /// shared budget (legacy values may still use `goal`)
   final String sourceType;
 
   final String? sourceId;

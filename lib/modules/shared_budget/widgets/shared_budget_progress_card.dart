@@ -1,16 +1,16 @@
 import 'package:flutter/material.dart';
 
-import '../models/goal_model.dart';
+import '../models/shared_budget_model.dart';
 
-class GoalProgressCard extends StatelessWidget {
-  final GoalModel goal;
+class SharedBudgetProgressCard extends StatelessWidget {
+  final SharedBudgetModel sharedBudget;
   final bool compact;
   final bool showModuleLabel;
   final bool showFooterHint;
 
-  const GoalProgressCard({
+  const SharedBudgetProgressCard({
     super.key,
-    required this.goal,
+    required this.sharedBudget,
     this.compact = false,
     this.showModuleLabel = true,
     this.showFooterHint = true,
@@ -18,11 +18,14 @@ class GoalProgressCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final calculatedProgress = goal.targetAmount <= 0
+    final calculatedProgress = sharedBudget.targetAmount <= 0
         ? 0.0
-        : (goal.currentAmount / goal.targetAmount).clamp(0.0, 1.0);
-    final progress = goal.isCompleted ? 1.0 : calculatedProgress;
-    final accentColor = goal.isCompleted ? Colors.green : Colors.blue;
+        : (sharedBudget.currentAmount / sharedBudget.targetAmount).clamp(
+            0.0,
+            1.0,
+          );
+    final progress = sharedBudget.isCompleted ? 1.0 : calculatedProgress;
+    final accentColor = sharedBudget.isCompleted ? Colors.green : Colors.blue;
     final percentage = (progress * 100).round();
 
     return Column(
@@ -33,7 +36,7 @@ class GoalProgressCard extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               decoration: BoxDecoration(
-                color: goal.isCompleted
+                color: sharedBudget.isCompleted
                     ? Colors.green.shade50
                     : Colors.blue.shade50,
                 borderRadius: BorderRadius.circular(30),
@@ -42,14 +45,14 @@ class GoalProgressCard extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(
-                    goal.isCompleted
+                    sharedBudget.isCompleted
                         ? Icons.check_circle_rounded
                         : Icons.account_balance_wallet_rounded,
                     color: accentColor,
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    goal.isCompleted ? "Completed" : "Shared Budget",
+                    sharedBudget.isCompleted ? "Completed" : "Shared Budget",
                     style: TextStyle(
                       color: accentColor,
                       fontWeight: FontWeight.bold,
@@ -62,17 +65,17 @@ class GoalProgressCard extends StatelessWidget {
           SizedBox(height: compact ? 14 : 24),
         ],
         Text(
-          goal.title,
+          sharedBudget.title,
           textAlign: TextAlign.center,
           style: TextStyle(
             fontSize: compact ? 21 : 24,
             fontWeight: FontWeight.bold,
           ),
         ),
-        if (goal.description.isNotEmpty) ...[
+        if (sharedBudget.description.isNotEmpty) ...[
           SizedBox(height: compact ? 5 : 8),
           Text(
-            goal.description,
+            sharedBudget.description,
             textAlign: TextAlign.center,
             maxLines: compact ? 2 : null,
             overflow: compact ? TextOverflow.ellipsis : null,
@@ -82,7 +85,7 @@ class GoalProgressCard extends StatelessWidget {
             ),
           ),
         ],
-        if (goal.deadline != null) ...[
+        if (sharedBudget.deadline != null) ...[
           SizedBox(height: compact ? 11 : 18),
           Center(
             child: Container(
@@ -104,9 +107,9 @@ class GoalProgressCard extends StatelessWidget {
                   ),
                   const SizedBox(width: 6),
                   Text(
-                    "${goal.deadline!.toDate().day}/"
-                    "${goal.deadline!.toDate().month}/"
-                    "${goal.deadline!.toDate().year}",
+                    "${sharedBudget.deadline!.toDate().day}/"
+                    "${sharedBudget.deadline!.toDate().month}/"
+                    "${sharedBudget.deadline!.toDate().year}",
                     style: const TextStyle(fontWeight: FontWeight.w600),
                   ),
                 ],
@@ -128,7 +131,7 @@ class GoalProgressCard extends StatelessWidget {
         SizedBox(height: compact ? 3 : 6),
         Center(
           child: Text(
-            goal.isCompleted ? "Completed" : "In progress",
+            sharedBudget.isCompleted ? "Completed" : "In progress",
             style: const TextStyle(color: Colors.grey),
           ),
         ),
@@ -152,7 +155,7 @@ class GoalProgressCard extends StatelessWidget {
           child: Column(
             children: [
               Text(
-                "€${goal.currentAmount.toStringAsFixed(2)}",
+                "€${sharedBudget.currentAmount.toStringAsFixed(2)}",
                 style: TextStyle(
                   fontSize: compact ? 25 : 30,
                   fontWeight: FontWeight.bold,
@@ -160,7 +163,7 @@ class GoalProgressCard extends StatelessWidget {
               ),
               const SizedBox(height: 3),
               Text(
-                "of €${goal.targetAmount.toStringAsFixed(2)}",
+                "of €${sharedBudget.targetAmount.toStringAsFixed(2)}",
                 style: TextStyle(
                   color: Colors.grey.shade700,
                   fontWeight: FontWeight.w600,
@@ -197,8 +200,8 @@ class GoalProgressCard extends StatelessWidget {
                       style: TextStyle(fontWeight: FontWeight.bold),
                     ),
                     Text(
-                      "${goal.completedMembers} of "
-                      "${goal.totalMembers} confirmed",
+                      "${sharedBudget.completedMembers} of "
+                      "${sharedBudget.totalMembers} confirmed",
                       style: TextStyle(color: Colors.grey.shade600),
                     ),
                   ],

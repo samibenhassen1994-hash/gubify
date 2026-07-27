@@ -1,10 +1,9 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import '../../config/app_limits.dart';
 
-import '../../repositories/user_repository.dart';
 import '../../modules/notifications/services/notification_service.dart';
+import '../../services/post_service.dart';
 
 class CreatePostScreen extends StatefulWidget {
   final String gubId;
@@ -50,26 +49,11 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     setState(() => _loading = true);
 
     try {
+      final displayName = await PostService().createPost(
+        gubId: widget.gubId,
+        message: message,
+      );
       final user = FirebaseAuth.instance.currentUser!;
-
-      final userData = await UserRepository.instance.getUser(user.uid);
-
-      final displayName = userData?["displayName"] ?? "User";
-
-      await FirebaseFirestore.instance
-          .collection("gubs")
-          .doc(widget.gubId)
-          .collection("posts")
-          .add({
-            "authorId": user.uid,
-            "authorName": displayName,
-            "authorPhoto": user.photoURL,
-            "message": message,
-            "createdAt": FieldValue.serverTimestamp(),
-            "updatedAt": FieldValue.serverTimestamp(),
-            "likes": 0,
-            "comments": 0,
-          });
       await NotificationService.instance.send(
         gubId: widget.gubId,
         title: "New Board Post",

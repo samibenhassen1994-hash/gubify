@@ -12,7 +12,6 @@ class LocalStorageService {
 
     await prefs.setString(_userIdKey, userId);
     await prefs.setString(_displayNameKey, displayName);
-    print("Saved userId: ${prefs.getString(_userIdKey)}");
   }
 
   Future<String?> getUserId() async {

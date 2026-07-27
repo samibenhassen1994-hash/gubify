@@ -3,20 +3,21 @@ import 'package:flutter/material.dart';
 
 import '../../../widgets/gub_content_card.dart';
 import '../../../widgets/gub_screen_background.dart';
-import '../models/goal_model.dart';
-import '../services/goal_service.dart';
-import '../widgets/delete_goal_dialog.dart';
-import 'create_goal_screen.dart';
-import 'goal_members_screen.dart';
+import '../../chat/widgets/gub_chat_overlay.dart';
+import '../models/shared_budget_model.dart';
+import '../services/shared_budget_service.dart';
+import '../widgets/delete_shared_budget_dialog.dart';
+import 'create_shared_budget_screen.dart';
+import 'shared_budget_members_screen.dart';
 
 enum SharedBudgetInitialTab { active, archive }
 
-class GoalsScreen extends StatelessWidget {
+class SharedBudgetScreen extends StatelessWidget {
   final String gubId;
   final SharedBudgetInitialTab initialTab;
   final bool canCreateBudget;
 
-  const GoalsScreen({
+  const SharedBudgetScreen({
     super.key,
     required this.gubId,
     this.initialTab = SharedBudgetInitialTab.active,
@@ -28,81 +29,86 @@ class GoalsScreen extends StatelessWidget {
     final currentUserId = FirebaseAuth.instance.currentUser?.uid;
     final initialIndex = initialTab == SharedBudgetInitialTab.archive ? 1 : 0;
 
-    return GubScreenBackground(
-      variant: GubBackgroundAssignments.sharedBudget,
-      whiteOverlayOpacity: GubBackgroundAssignments.economicWhiteOverlayOpacity,
-      child: DefaultTabController(
-        length: 2,
-        initialIndex: initialIndex,
-        child: Scaffold(
-          backgroundColor: Colors.transparent,
-          appBar: AppBar(
-            title: const Text("Shared Budget"),
+    return ChatFloatingActionButtonRouteScope(
+      additionalBottomOffset: canCreateBudget ? kFloatingActionButtonMargin : 0,
+      child: GubScreenBackground(
+        variant: GubBackgroundAssignments.sharedBudget,
+        whiteOverlayOpacity:
+            GubBackgroundAssignments.economicWhiteOverlayOpacity,
+        child: DefaultTabController(
+          length: 2,
+          initialIndex: initialIndex,
+          child: Scaffold(
             backgroundColor: Colors.transparent,
-            surfaceTintColor: Colors.transparent,
-            elevation: 0,
-            scrolledUnderElevation: 0,
-            bottom: const TabBar(
-              tabs: [
-                Tab(text: "Active"),
-                Tab(text: "Archive"),
-              ],
-            ),
-          ),
-          floatingActionButton: canCreateBudget
-              ? FloatingActionButton.extended(
-                  icon: const Icon(Icons.add),
-                  label: const Text("New Shared Budget"),
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => CreateGoalScreen(gubId: gubId),
-                      ),
-                    );
-                  },
-                )
-              : null,
-          body: StreamBuilder<List<GoalModel>>(
-            stream: GoalService.instance.goalsStream(gubId),
-            builder: (context, snapshot) {
-              if (snapshot.hasError) {
-                return const Center(
-                  child: Text("Unable to load Shared Budgets."),
-                );
-              }
-
-              if (!snapshot.hasData) {
-                return const Center(child: CircularProgressIndicator());
-              }
-
-              final goals = snapshot.data!;
-              final activeBudgets = goals
-                  .where((goal) => !goal.isCompleted)
-                  .toList(growable: false);
-              final archivedBudgets = goals
-                  .where((goal) => goal.isCompleted)
-                  .toList(growable: false);
-
-              return TabBarView(
-                children: [
-                  _budgetList(
-                    context: context,
-                    budgets: activeBudgets,
-                    emptyMessage: "No active Shared Budgets.",
-                    currentUserId: currentUserId,
-                    allowDelete: true,
-                  ),
-                  _budgetList(
-                    context: context,
-                    budgets: archivedBudgets,
-                    emptyMessage: "No archived Shared Budgets.",
-                    currentUserId: currentUserId,
-                    allowDelete: false,
-                  ),
+            appBar: AppBar(
+              title: const Text("Shared Budget"),
+              backgroundColor: Colors.transparent,
+              surfaceTintColor: Colors.transparent,
+              elevation: 0,
+              scrolledUnderElevation: 0,
+              bottom: const TabBar(
+                tabs: [
+                  Tab(text: "Active"),
+                  Tab(text: "Archive"),
                 ],
-              );
-            },
+              ),
+            ),
+            floatingActionButton: canCreateBudget
+                ? FloatingActionButton.extended(
+                    icon: const Icon(Icons.add),
+                    label: const Text("New Shared Budget"),
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) =>
+                              CreateSharedBudgetScreen(gubId: gubId),
+                        ),
+                      );
+                    },
+                  )
+                : null,
+            body: StreamBuilder<List<SharedBudgetModel>>(
+              stream: SharedBudgetService.instance.sharedBudgetsStream(gubId),
+              builder: (context, snapshot) {
+                if (snapshot.hasError) {
+                  return const Center(
+                    child: Text("Unable to load Shared Budgets."),
+                  );
+                }
+
+                if (!snapshot.hasData) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+
+                final sharedBudgets = snapshot.data!;
+                final activeBudgets = sharedBudgets
+                    .where((sharedBudget) => !sharedBudget.isCompleted)
+                    .toList(growable: false);
+                final archivedBudgets = sharedBudgets
+                    .where((sharedBudget) => sharedBudget.isCompleted)
+                    .toList(growable: false);
+
+                return TabBarView(
+                  children: [
+                    _budgetList(
+                      context: context,
+                      budgets: activeBudgets,
+                      emptyMessage: "No active Shared Budgets.",
+                      currentUserId: currentUserId,
+                      allowDelete: true,
+                    ),
+                    _budgetList(
+                      context: context,
+                      budgets: archivedBudgets,
+                      emptyMessage: "No archived Shared Budgets.",
+                      currentUserId: currentUserId,
+                      allowDelete: false,
+                    ),
+                  ],
+                );
+              },
+            ),
           ),
         ),
       ),
@@ -111,7 +117,7 @@ class GoalsScreen extends StatelessWidget {
 
   Widget _budgetList({
     required BuildContext context,
-    required List<GoalModel> budgets,
+    required List<SharedBudgetModel> budgets,
     required String emptyMessage,
     required String? currentUserId,
     required bool allowDelete,
@@ -126,15 +132,15 @@ class GoalsScreen extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 18, 16, 100),
       children: [
-        for (final goal in budgets)
+        for (final sharedBudget in budgets)
           _budgetCard(
             context,
-            goal,
+            sharedBudget,
             canDelete:
                 allowDelete &&
                 currentUserId != null &&
-                currentUserId == goal.ownerId &&
-                !goal.isCompleted,
+                currentUserId == sharedBudget.ownerId &&
+                !sharedBudget.isCompleted,
           ),
       ],
     );
@@ -153,13 +159,16 @@ class GoalsScreen extends StatelessWidget {
 
   Widget _budgetCard(
     BuildContext context,
-    GoalModel goal, {
+    SharedBudgetModel sharedBudget, {
     required bool canDelete,
   }) {
-    final calculatedProgress = goal.targetAmount <= 0
+    final calculatedProgress = sharedBudget.targetAmount <= 0
         ? 0.0
-        : (goal.currentAmount / goal.targetAmount).clamp(0.0, 1.0);
-    final progress = goal.isCompleted ? 1.0 : calculatedProgress;
+        : (sharedBudget.currentAmount / sharedBudget.targetAmount).clamp(
+            0.0,
+            1.0,
+          );
+    final progress = sharedBudget.isCompleted ? 1.0 : calculatedProgress;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -169,10 +178,10 @@ class GoalsScreen extends StatelessWidget {
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (_) => GoalMembersScreen(
+              builder: (_) => SharedBudgetMembersScreen(
                 gubId: gubId,
-                goalId: goal.goalId,
-                ownerId: goal.ownerId,
+                sharedBudgetId: sharedBudget.sharedBudgetId,
+                ownerId: sharedBudget.ownerId,
               ),
             ),
           );
@@ -186,14 +195,14 @@ class GoalsScreen extends StatelessWidget {
                 children: [
                   Expanded(
                     child: Text(
-                      goal.title,
+                      sharedBudget.title,
                       style: const TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
                   ),
-                  if (goal.isCompleted) ...[
+                  if (sharedBudget.isCompleted) ...[
                     const SizedBox(width: 10),
                     Container(
                       padding: const EdgeInsets.symmetric(
@@ -219,10 +228,10 @@ class GoalsScreen extends StatelessWidget {
                       tooltip: "Shared Budget actions",
                       onSelected: (value) {
                         if (value == "delete") {
-                          showDeleteGoalDialog(
+                          showDeleteSharedBudgetDialog(
                             context: context,
                             gubId: gubId,
-                            goalId: goal.goalId,
+                            sharedBudgetId: sharedBudget.sharedBudgetId,
                           );
                         }
                       },
@@ -242,10 +251,10 @@ class GoalsScreen extends StatelessWidget {
                   ],
                 ],
               ),
-              if (goal.description.isNotEmpty) ...[
+              if (sharedBudget.description.isNotEmpty) ...[
                 const SizedBox(height: 7),
                 Text(
-                  goal.description,
+                  sharedBudget.description,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(color: Colors.grey.shade600),
@@ -253,8 +262,8 @@ class GoalsScreen extends StatelessWidget {
               ],
               const SizedBox(height: 16),
               Text(
-                "€${goal.currentAmount.toStringAsFixed(2)} of "
-                "€${goal.targetAmount.toStringAsFixed(2)}",
+                "€${sharedBudget.currentAmount.toStringAsFixed(2)} of "
+                "€${sharedBudget.targetAmount.toStringAsFixed(2)}",
                 style: const TextStyle(fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 9),
@@ -264,7 +273,7 @@ class GoalsScreen extends StatelessWidget {
                   value: progress,
                   minHeight: 9,
                   backgroundColor: Colors.grey.shade200,
-                  color: goal.isCompleted ? Colors.green : Colors.blue,
+                  color: sharedBudget.isCompleted ? Colors.green : Colors.blue,
                 ),
               ),
             ],
