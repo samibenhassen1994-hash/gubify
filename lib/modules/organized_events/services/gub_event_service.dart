@@ -1,0 +1,111 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import '../../notifications/services/notification_service.dart';
+import '../models/gub_event_model.dart';
+import '../repositories/gub_event_repository.dart';
+
+class GubEventService {
+  GubEventService._();
+  static final instance = GubEventService._();
+  final _db = FirebaseFirestore.instance;
+  Stream<List<GubEventModel>> stream(String gubId) =>
+      GubEventRepository.instance.stream(gubId);
+  Stream<GubEventModel?> eventStream(String gubId, String id) =>
+      GubEventRepository.instance.eventStream(gubId, id);
+  Future<List<Map<String, String>>> members(String gubId) async {
+    final s = await _db
+        .collection('gubs')
+        .doc(gubId)
+        .collection('members')
+        .get();
+    return s.docs.map((d) {
+      final v = d.data();
+      return {
+        'userId': v['uid'] as String? ?? d.id,
+        'userName': v['displayName'] as String? ?? 'User',
+      };
+    }).toList();
+  }
+
+  Future<void> create({
+    required String gubId,
+    required String title,
+    required String description,
+    required String location,
+    DateTime? scheduledAt,
+    required List<GubEventAssignment> assignments,
+  }) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      throw StateError('Sign in required.');
+    }
+    if (title.trim().isEmpty ||
+        assignments.isEmpty ||
+        assignments.any((a) => a.taskText.trim().isEmpty)) {
+      throw StateError('Add a title and a task for every selected member.');
+    }
+    final doc = _db
+        .collection('gubs')
+        .doc(gubId)
+        .collection('organizedEvents')
+        .doc();
+    final event = GubEventModel(
+      eventId: doc.id,
+      gubId: gubId,
+      title: title.trim(),
+      description: description.trim().isEmpty ? null : description.trim(),
+      location: location.trim().isEmpty ? null : location.trim(),
+      scheduledAt: scheduledAt == null ? null : Timestamp.fromDate(scheduledAt),
+      createdBy: user.uid,
+      createdByName: user.displayName,
+      createdAt: Timestamp.now(),
+      status: 'active',
+      assignments: assignments,
+    );
+    await GubEventRepository.instance.create(event);
+    for (final _ in assignments.where((item) => item.userId != user.uid)) {
+      await NotificationService.instance.send(
+        gubId: gubId,
+        title: 'New event',
+        body:
+            '${event.createdByName ?? 'A member'} assigned you a task for ${event.title}.',
+        type: 'organized_event_created',
+        senderId: user.uid,
+        senderName: event.createdByName ?? 'User',
+        data: {'eventId': event.eventId},
+      );
+    }
+  }
+
+  Future<void> setOwnCompletion({
+    required GubEventModel event,
+    required bool completed,
+  }) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      throw StateError('Sign in required.');
+    }
+    final becameCompleted = await GubEventRepository.instance.setOwnCompletion(
+      gubId: event.gubId,
+      eventId: event.eventId,
+      userId: user.uid,
+      completed: completed,
+    );
+    if (!becameCompleted) {
+      return;
+    }
+    for (final _ in event.assignments.where(
+      (item) => item.userId != user.uid,
+    )) {
+      await NotificationService.instance.send(
+        gubId: event.gubId,
+        title: 'Event completed',
+        body: 'All tasks are complete for ${event.title}.',
+        type: 'organized_event_completed',
+        senderId: user.uid,
+        senderName: user.displayName ?? 'User',
+        data: {'eventId': event.eventId},
+      );
+    }
+  }
+}

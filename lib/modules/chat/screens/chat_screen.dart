@@ -13,6 +13,8 @@ class ChatScreen extends StatefulWidget {
   final String gubId;
   final VoidCallback? onMessagesVisible;
   final ValueChanged<ChatMessageModel>? onConvertToTask;
+  final ValueChanged<ChatMessageModel>? onConvertToProposal;
+  final ValueChanged<ChatMessageModel>? onConvertToSharedBudget;
   final ValueChanged<String>? onOpenUserProfile;
   final String? initialMessageId;
 
@@ -21,6 +23,8 @@ class ChatScreen extends StatefulWidget {
     required this.gubId,
     this.onMessagesVisible,
     this.onConvertToTask,
+    this.onConvertToProposal,
+    this.onConvertToSharedBudget,
     this.onOpenUserProfile,
     this.initialMessageId,
   });
@@ -413,7 +417,12 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _showMessageActions(ChatMessageModel message) async {
-    if (_messageActionOpen || widget.onConvertToTask == null) return;
+    if (_messageActionOpen ||
+        (widget.onConvertToTask == null &&
+            widget.onConvertToProposal == null &&
+            widget.onConvertToSharedBudget == null)) {
+      return;
+    }
     _messageActionOpen = true;
 
     final conversion = await showModalBottomSheet<_MessageConversion>(
@@ -484,6 +493,16 @@ class _ChatScreenState extends State<ChatScreen> {
 
     if (conversion == _MessageConversion.task) {
       widget.onConvertToTask?.call(message);
+      return;
+    }
+
+    if (conversion == _MessageConversion.proposal) {
+      widget.onConvertToProposal?.call(message);
+      return;
+    }
+
+    if (conversion == _MessageConversion.sharedBudget) {
+      widget.onConvertToSharedBudget?.call(message);
       return;
     }
 
@@ -702,12 +721,6 @@ const List<_ConversionOption> _conversionOptions = [
     color: Color(0xFF2563EB),
   ),
   _ConversionOption(
-    conversion: _MessageConversion.event,
-    label: "Event",
-    icon: Icons.calendar_month_outlined,
-    color: Color(0xFF7C3AED),
-  ),
-  _ConversionOption(
     conversion: _MessageConversion.proposal,
     label: "Proposal",
     icon: Icons.how_to_vote_outlined,
@@ -718,6 +731,12 @@ const List<_ConversionOption> _conversionOptions = [
     label: "Shared Budget",
     icon: Icons.euro_outlined,
     color: Color(0xFF059669),
+  ),
+  _ConversionOption(
+    conversion: _MessageConversion.event,
+    label: "Event",
+    icon: Icons.calendar_month_outlined,
+    color: Color(0xFF7C3AED),
   ),
 ];
 

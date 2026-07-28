@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../repositories/user_repository.dart';
+import '../modules/community/screens/community_explorer_screen.dart';
 import '../widgets/gubify_background.dart';
 import '../widgets/gubify_logo.dart';
 import '../widgets/primary_button.dart';
@@ -52,6 +53,13 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     );
   }
 
+  void _goToCommunityExplorer() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const CommunityExplorerScreen()),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return GubifyBackground(
@@ -60,11 +68,12 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
           padding: const EdgeInsets.symmetric(horizontal: 20),
           child: Column(
             children: [
-              const UserHeader(
+              UserHeader(
                 darkMode: true,
                 personalProfileEnabled: true,
                 showCard: true,
                 darkCard: true,
+                onExploreCommunities: _goToCommunityExplorer,
               ),
 
               // Il logo resta centrato nella parte libera della schermata.
@@ -103,17 +112,9 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
 
               const SizedBox(height: 10),
 
-              const Text(
-                'Everything your group needs.\nOne app.',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 17,
-                  height: 1.45,
-                  color: Color(0xFFD1D5DB),
-                ),
-              ),
+              _CommunityExplorerPortal(onPressed: _goToCommunityExplorer),
 
-              const SizedBox(height: 10),
+              const SizedBox(height: 14),
 
               const Text(
                 'Create your Gub or join an existing one\nto collaborate with your group.',
@@ -258,6 +259,108 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _CommunityExplorerPortal extends StatelessWidget {
+  final VoidCallback onPressed;
+
+  const _CommunityExplorerPortal({required this.onPressed});
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: 'Explore communities',
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(20),
+        child: Ink(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                const Color(0xFF2563EB).withValues(alpha: 0.42),
+                const Color(0xFF06B6D4).withValues(alpha: 0.24),
+              ],
+            ),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.22)),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF0F172A).withValues(alpha: 0.22),
+                blurRadius: 16,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(20),
+            onTap: onPressed,
+            child: const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+              child: Row(
+                children: [
+                  _CommunityPortalIcon(),
+                  SizedBox(width: 13),
+                  Expanded(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Explore Communities',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        SizedBox(height: 3),
+                        Text(
+                          'Discover public Gubs by interests, language and people.',
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: Color(0xFFDCEBFF),
+                            fontSize: 12,
+                            height: 1.25,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  SizedBox(width: 8),
+                  Icon(Icons.arrow_forward_rounded, color: Colors.white),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CommunityPortalIcon extends StatelessWidget {
+  const _CommunityPortalIcon();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 42,
+      height: 42,
+      decoration: BoxDecoration(
+        color: const Color(0xFF93C5FD).withValues(alpha: 0.24),
+        shape: BoxShape.circle,
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF60A5FA).withValues(alpha: 0.36),
+            blurRadius: 14,
+          ),
+        ],
+      ),
+      child: const Icon(Icons.public_rounded, color: Colors.white),
     );
   }
 }

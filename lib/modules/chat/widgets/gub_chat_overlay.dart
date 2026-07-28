@@ -2,7 +2,10 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../../services/gub_service.dart';
 import '../../profile/screens/user_profile_screen.dart';
+import '../../proposals/screens/create_proposal_screen.dart';
+import '../../shared_budget/screens/create_shared_budget_screen.dart';
 import '../../tasks/screens/create_task_screen.dart';
 import '../models/chat_message_model.dart';
 import '../screens/chat_screen.dart';
@@ -167,6 +170,8 @@ class _GubChatOverlayState extends State<GubChatOverlay> {
 
   bool _isChatOpen = false;
   bool _isTaskConversionOpen = false;
+  bool _isProposalConversionOpen = false;
+  bool _isSharedBudgetConversionOpen = false;
   bool _isUserProfileOpen = false;
   bool _bringToFrontScheduled = false;
   int? _unreadCount;
@@ -325,6 +330,8 @@ class _GubChatOverlayState extends State<GubChatOverlay> {
   bool get _isOverlaySuppressed =>
       _isChatOpen ||
       _isTaskConversionOpen ||
+      _isProposalConversionOpen ||
+      _isSharedBudgetConversionOpen ||
       _isUserProfileOpen ||
       _GubChatOverlayController.instance.isSuspended;
 
@@ -333,6 +340,8 @@ class _GubChatOverlayState extends State<GubChatOverlay> {
 
     final chatGubId = widget.gubId;
     ChatMessageModel? taskSourceMessage;
+    ChatMessageModel? proposalSourceMessage;
+    ChatMessageModel? sharedBudgetSourceMessage;
     String? profileUserId;
     _isChatOpen = true;
     _unreadCount = 0;
@@ -355,6 +364,14 @@ class _GubChatOverlayState extends State<GubChatOverlay> {
               onMessagesVisible: () => _handleVisibleMessages(chatGubId),
               onConvertToTask: (message) {
                 taskSourceMessage = message;
+                Navigator.pop(sheetContext);
+              },
+              onConvertToProposal: (message) {
+                proposalSourceMessage = message;
+                Navigator.pop(sheetContext);
+              },
+              onConvertToSharedBudget: (message) {
+                sharedBudgetSourceMessage = message;
                 Navigator.pop(sheetContext);
               },
               onOpenUserProfile: (userId) {
@@ -415,6 +432,69 @@ class _GubChatOverlayState extends State<GubChatOverlay> {
       } finally {
         if (mounted) {
           _isTaskConversionOpen = false;
+          _insertOverlay();
+        }
+      }
+      return;
+    }
+
+    final proposalMessage = proposalSourceMessage;
+    if (proposalMessage != null) {
+      _isProposalConversionOpen = true;
+
+      try {
+        final memberCount = (await GubService().getMembers(chatGubId)).length;
+
+        if (!mounted) return;
+
+        await Navigator.of(context, rootNavigator: true).push<void>(
+          MaterialPageRoute(
+            builder: (_) => CreateProposalScreen(
+              gubId: chatGubId,
+              memberCount: memberCount,
+              sourceType: "chat",
+              sourceId: proposalMessage.messageId,
+              sourcePreview: proposalMessage.text,
+              originUserId: proposalMessage.senderId,
+              sourceAuthorName: proposalMessage.senderName,
+            ),
+          ),
+        );
+      } catch (_) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Unable to start the proposal.")),
+          );
+        }
+      } finally {
+        if (mounted) {
+          _isProposalConversionOpen = false;
+          _insertOverlay();
+        }
+      }
+      return;
+    }
+
+    final sharedBudgetMessage = sharedBudgetSourceMessage;
+    if (sharedBudgetMessage != null) {
+      _isSharedBudgetConversionOpen = true;
+
+      try {
+        await Navigator.of(context, rootNavigator: true).push<void>(
+          MaterialPageRoute(
+            builder: (_) => CreateSharedBudgetScreen(
+              gubId: chatGubId,
+              sourceType: "chat",
+              sourceId: sharedBudgetMessage.messageId,
+              sourcePreview: sharedBudgetMessage.text,
+              originUserId: sharedBudgetMessage.senderId,
+              sourceAuthorName: sharedBudgetMessage.senderName,
+            ),
+          ),
+        );
+      } finally {
+        if (mounted) {
+          _isSharedBudgetConversionOpen = false;
           _insertOverlay();
         }
       }

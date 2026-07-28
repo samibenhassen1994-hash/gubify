@@ -2,11 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../config/app_limits.dart';
+import '../../modules/community/models/community_model.dart';
+import '../../modules/community/screens/gub_community_home_screen.dart';
+import '../../modules/community/services/community_service.dart';
 import '../../services/gub_service.dart';
 import '../../widgets/gub_content_card.dart';
 import '../../widgets/gub_screen_background.dart';
 import '../../widgets/user_header.dart';
 import 'gub_screen.dart';
+import 'widgets/gub_type_selector.dart';
 
 class CreateGubScreen extends StatefulWidget {
   const CreateGubScreen({super.key});
@@ -17,6 +21,7 @@ class CreateGubScreen extends StatefulWidget {
 
 class _CreateGubScreenState extends State<CreateGubScreen> {
   final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _descriptionController = TextEditingController();
   final FocusNode _nameFocusNode = FocusNode();
   final ScrollController _scrollController = ScrollController();
   final GlobalKey _nameFieldKey = GlobalKey();
@@ -24,6 +29,10 @@ class _CreateGubScreenState extends State<CreateGubScreen> {
   double _largestViewportHeight = 0;
   bool _scrollScheduled = false;
   bool _loading = false;
+  bool _typeImagesPrecached = false;
+  GubType _selectedType = GubType.private;
+  String _selectedCommunityType = CommunityModel.defaultType;
+  String _selectedCommunityLanguage = CommunityModel.defaultLanguage;
 
   @override
   void initState() {
@@ -34,6 +43,19 @@ class _CreateGubScreenState extends State<CreateGubScreen> {
         _scheduleBringFieldIntoView();
       }
     });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_typeImagesPrecached) return;
+
+    _typeImagesPrecached = true;
+    precacheImage(const AssetImage(GubTypeSelector.privateAssetPath), context);
+    precacheImage(
+      const AssetImage(GubTypeSelector.communityAssetPath),
+      context,
+    );
   }
 
   void _scheduleBringFieldIntoView() {
@@ -69,6 +91,7 @@ class _CreateGubScreenState extends State<CreateGubScreen> {
   @override
   void dispose() {
     _nameController.dispose();
+    _descriptionController.dispose();
     _nameFocusNode.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -79,11 +102,15 @@ class _CreateGubScreenState extends State<CreateGubScreen> {
 
     final gubName = _nameController.text.trim();
 
+    final nameLabel = _selectedType == GubType.private
+        ? "Gub name"
+        : "Community name";
+
     if (gubName.length < AppLimits.gubNameMinLength) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            "Gub name must be at least "
+            "$nameLabel must be at least "
             "${AppLimits.gubNameMinLength} characters.",
           ),
         ),
@@ -95,7 +122,7 @@ class _CreateGubScreenState extends State<CreateGubScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            "Gub name cannot exceed "
+            "$nameLabel cannot exceed "
             "${AppLimits.gubNameMaxLength} characters.",
           ),
         ),
@@ -107,6 +134,28 @@ class _CreateGubScreenState extends State<CreateGubScreen> {
     setState(() => _loading = true);
 
     try {
+      if (_selectedType == GubType.community) {
+        final community = await CommunityService.instance.createCommunity(
+          name: gubName,
+          description: _descriptionController.text,
+          type: _selectedCommunityType,
+          language: _selectedCommunityLanguage,
+        );
+
+        if (!mounted) return;
+
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) => GubCommunityHomeScreen(
+              communityId: community.communityId,
+              initialCommunity: community,
+            ),
+          ),
+        );
+        return;
+      }
+
       final gubId = await GubService().createHub(name: gubName);
 
       if (!mounted) return;
@@ -136,6 +185,13 @@ class _CreateGubScreenState extends State<CreateGubScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isPrivate = _selectedType == GubType.private;
+    final fieldLabel = isPrivate ? "Gub name" : "Community name";
+    final fieldHint = isPrivate
+        ? "For example: My family"
+        : "For example: Photography lovers";
+    final buttonLabel = isPrivate ? "Create private Gub" : "Create community";
+
     return Scaffold(
       backgroundColor: Colors.transparent,
       resizeToAvoidBottomInset: true,
@@ -198,13 +254,15 @@ class _CreateGubScreenState extends State<CreateGubScreen> {
                         GubContentCard(
                           child: Column(
                             children: [
-                              const Icon(
-                                Icons.hub_outlined,
-                                size: 82,
-                                color: Color(0xFF2563EB),
+                              GubTypeSelector(
+                                selectedType: _selectedType,
+                                enabled: !_loading,
+                                onChanged: (type) {
+                                  setState(() => _selectedType = type);
+                                },
                               ),
 
-                              const SizedBox(height: 30),
+                              const SizedBox(height: 24),
 
                               const Text(
                                 "Create your Gub",
@@ -214,25 +272,14 @@ class _CreateGubScreenState extends State<CreateGubScreen> {
                                 ),
                               ),
 
-                              const SizedBox(height: 10),
-
-                              const Text(
-                                "Start by choosing a name for your Gub.",
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  color: Colors.grey,
-                                  height: 1.5,
-                                ),
-                              ),
-
-                              const SizedBox(height: 30),
+                              const SizedBox(height: 24),
 
                               Container(
                                 key: _nameFieldKey,
                                 child: TextField(
                                   controller: _nameController,
                                   focusNode: _nameFocusNode,
+                                  enabled: !_loading,
                                   maxLength: AppLimits.gubNameMaxLength,
                                   textInputAction: TextInputAction.done,
                                   onSubmitted: (_) => _continue(),
@@ -241,12 +288,83 @@ class _CreateGubScreenState extends State<CreateGubScreen> {
                                       RegExp(r"[a-zA-Z0-9À-ÿ '\-_]"),
                                     ),
                                   ],
-                                  decoration: const InputDecoration(
-                                    labelText: "Choose a name",
-                                    border: OutlineInputBorder(),
+                                  decoration: InputDecoration(
+                                    labelText: fieldLabel,
+                                    hintText: fieldHint,
+                                    border: const OutlineInputBorder(),
                                   ),
                                 ),
                               ),
+
+                              if (_selectedType == GubType.community) ...[
+                                const SizedBox(height: 16),
+                                TextField(
+                                  controller: _descriptionController,
+                                  enabled: !_loading,
+                                  minLines: 2,
+                                  maxLines: 4,
+                                  maxLength: 280,
+                                  textCapitalization:
+                                      TextCapitalization.sentences,
+                                  decoration: const InputDecoration(
+                                    labelText: "Description (optional)",
+                                    alignLabelWithHint: true,
+                                    border: OutlineInputBorder(),
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+                                DropdownButtonFormField<String>(
+                                  initialValue: _selectedCommunityType,
+                                  decoration: const InputDecoration(
+                                    labelText: "Type",
+                                    border: OutlineInputBorder(),
+                                  ),
+                                  items: CommunityModel.availableTypes
+                                      .map(
+                                        (type) => DropdownMenuItem(
+                                          value: type,
+                                          child: Text(type),
+                                        ),
+                                      )
+                                      .toList(growable: false),
+                                  onChanged: _loading
+                                      ? null
+                                      : (type) {
+                                          if (type != null) {
+                                            setState(
+                                              () =>
+                                                  _selectedCommunityType = type,
+                                            );
+                                          }
+                                        },
+                                ),
+                                const SizedBox(height: 16),
+                                DropdownButtonFormField<String>(
+                                  initialValue: _selectedCommunityLanguage,
+                                  decoration: const InputDecoration(
+                                    labelText: "Language",
+                                    border: OutlineInputBorder(),
+                                  ),
+                                  items: CommunityModel.availableLanguages
+                                      .map(
+                                        (language) => DropdownMenuItem(
+                                          value: language,
+                                          child: Text(language),
+                                        ),
+                                      )
+                                      .toList(growable: false),
+                                  onChanged: _loading
+                                      ? null
+                                      : (language) {
+                                          if (language != null) {
+                                            setState(
+                                              () => _selectedCommunityLanguage =
+                                                  language,
+                                            );
+                                          }
+                                        },
+                                ),
+                              ],
 
                               // Riduce la distanza quando la tastiera
                               // restringe la viewport.
@@ -269,7 +387,7 @@ class _CreateGubScreenState extends State<CreateGubScreen> {
                                             color: Colors.white,
                                           ),
                                         )
-                                      : const Text("Create Gub"),
+                                      : Text(buttonLabel),
                                 ),
                               ),
 

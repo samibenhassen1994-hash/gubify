@@ -41,6 +41,12 @@ class ProposalModel {
   final bool eventCreated;
   final bool tasksCreated;
 
+  final String? sourceType;
+  final String? sourceId;
+  final String? sourcePreview;
+  final String? originUserId;
+  final String? sourceAuthorName;
+
   const ProposalModel({
     required this.gubId,
     required this.proposalId,
@@ -68,6 +74,11 @@ class ProposalModel {
 
     required this.eventCreated,
     required this.tasksCreated,
+    this.sourceType,
+    this.sourceId,
+    this.sourcePreview,
+    this.originUserId,
+    this.sourceAuthorName,
   });
 
   factory ProposalModel.fromFirestore(Map<String, dynamic> json) {
@@ -102,6 +113,11 @@ class ProposalModel {
       eventCreated: json["eventCreated"] ?? false,
 
       tasksCreated: json["tasksCreated"] ?? false,
+      sourceType: json["sourceType"],
+      sourceId: json["sourceId"],
+      sourcePreview: json["sourcePreview"],
+      originUserId: json["originUserId"],
+      sourceAuthorName: json["sourceAuthorName"],
     );
   }
 
@@ -133,6 +149,11 @@ class ProposalModel {
 
       "eventCreated": eventCreated,
       "tasksCreated": tasksCreated,
+      "sourceType": sourceType,
+      "sourceId": sourceId,
+      "sourcePreview": sourcePreview,
+      "originUserId": originUserId,
+      "sourceAuthorName": sourceAuthorName,
     };
   }
 
@@ -144,6 +165,11 @@ class ProposalModel {
     bool? resultProcessed,
     bool? eventCreated,
     bool? tasksCreated,
+    String? sourceType,
+    String? sourceId,
+    String? sourcePreview,
+    String? originUserId,
+    String? sourceAuthorName,
   }) {
     return ProposalModel(
       gubId: gubId ?? this.gubId,
@@ -173,6 +199,11 @@ class ProposalModel {
       eventCreated: eventCreated ?? this.eventCreated,
 
       tasksCreated: tasksCreated ?? this.tasksCreated,
+      sourceType: sourceType ?? this.sourceType,
+      sourceId: sourceId ?? this.sourceId,
+      sourcePreview: sourcePreview ?? this.sourcePreview,
+      originUserId: originUserId ?? this.originUserId,
+      sourceAuthorName: sourceAuthorName ?? this.sourceAuthorName,
     );
   }
 }

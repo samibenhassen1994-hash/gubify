@@ -23,6 +23,11 @@ class SharedBudgetService {
     required String description,
     required double targetAmount,
     DateTime? deadline,
+    String? sourceType,
+    String? sourceId,
+    String? sourcePreview,
+    String? originUserId,
+    String? sourceAuthorName,
   }) async {
     final creator = await _requireAuthorizedCreator(gubId);
     final normalizedValues = _validate(title, description, targetAmount);
@@ -35,6 +40,11 @@ class SharedBudgetService {
       targetAmount: targetAmount,
       memberCount: members.length,
       deadline: deadline,
+      sourceType: sourceType,
+      sourceId: sourceId,
+      sourcePreview: sourcePreview,
+      originUserId: originUserId,
+      sourceAuthorName: sourceAuthorName,
     );
 
     await SharedBudgetRepository.instance.createSharedBudget(
@@ -220,6 +230,11 @@ class SharedBudgetService {
     required double targetAmount,
     required int memberCount,
     DateTime? deadline,
+    String? sourceType,
+    String? sourceId,
+    String? sourcePreview,
+    String? originUserId,
+    String? sourceAuthorName,
   }) {
     return SharedBudgetModel(
       sharedBudgetId: _generateSharedBudgetId(),
@@ -234,6 +249,11 @@ class SharedBudgetService {
       archived: false,
       createdAt: Timestamp.now(),
       deadline: deadline == null ? null : Timestamp.fromDate(deadline),
+      sourceType: sourceType,
+      sourceId: sourceId,
+      sourcePreview: sourcePreview,
+      originUserId: originUserId,
+      sourceAuthorName: sourceAuthorName,
     );
   }
 

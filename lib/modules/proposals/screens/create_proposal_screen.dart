@@ -12,12 +12,25 @@ import '../services/proposal_service.dart';
 class CreateProposalScreen extends StatefulWidget {
   final String gubId;
   final int memberCount;
+  final String? sourceType;
+  final String? sourceId;
+  final String? sourcePreview;
+  final String? originUserId;
+  final String? sourceAuthorName;
 
   const CreateProposalScreen({
     super.key,
     required this.gubId,
     required this.memberCount,
+    this.sourceType,
+    this.sourceId,
+    this.sourcePreview,
+    this.originUserId,
+    this.sourceAuthorName,
   });
+
+  bool get isChatConversion =>
+      sourceType == "chat" && sourceId != null && sourcePreview != null;
 
   @override
   State<CreateProposalScreen> createState() => _CreateProposalScreenState();
@@ -53,6 +66,10 @@ class _CreateProposalScreenState extends State<CreateProposalScreen> {
   @override
   void initState() {
     super.initState();
+
+    if (widget.isChatConversion) {
+      _titleController.text = widget.sourcePreview!;
+    }
 
     _titleFocusNode.addListener(() {
       if (_titleFocusNode.hasFocus) {
@@ -179,6 +196,52 @@ class _CreateProposalScreenState extends State<CreateProposalScreen> {
         ],
       ),
       child: child,
+    );
+  }
+
+  Widget _chatSourceCard() {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: _softBlueColor,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFBFDBFE)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.chat_bubble_outline_rounded, color: _primaryColor),
+              SizedBox(width: 8),
+              Text(
+                "From chat",
+                style: TextStyle(
+                  color: _primaryColor,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+          if (widget.sourceAuthorName?.trim().isNotEmpty == true) ...[
+            const SizedBox(height: 8),
+            Text(
+              widget.sourceAuthorName!.trim(),
+              style: const TextStyle(
+                color: _secondaryTextColor,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+          const SizedBox(height: 6),
+          Text(
+            '“${widget.sourcePreview}”',
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(color: _textColor, height: 1.35),
+          ),
+        ],
+      ),
     );
   }
 
@@ -377,6 +440,13 @@ class _CreateProposalScreenState extends State<CreateProposalScreen> {
       resultProcessed: false,
       eventCreated: false,
       tasksCreated: false,
+      sourceType: widget.isChatConversion ? "chat" : "manual",
+      sourceId: widget.isChatConversion ? widget.sourceId : null,
+      sourcePreview: widget.isChatConversion ? widget.sourcePreview : null,
+      originUserId: widget.isChatConversion ? widget.originUserId : null,
+      sourceAuthorName: widget.isChatConversion
+          ? widget.sourceAuthorName
+          : null,
     );
 
     await ProposalService.instance.createProposal(proposal: proposal);
@@ -480,6 +550,11 @@ class _CreateProposalScreenState extends State<CreateProposalScreen> {
                     height: 1.4,
                   ),
                 ),
+
+                if (widget.isChatConversion) ...[
+                  const SizedBox(height: 18),
+                  _chatSourceCard(),
+                ],
 
                 const SizedBox(height: 28),
 

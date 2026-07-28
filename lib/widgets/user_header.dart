@@ -15,6 +15,7 @@ class UserHeader extends StatelessWidget {
   final bool personalProfileEnabled;
   final bool showCard;
   final bool darkCard;
+  final VoidCallback? onExploreCommunities;
 
   const UserHeader({
     super.key,
@@ -23,6 +24,7 @@ class UserHeader extends StatelessWidget {
     this.personalProfileEnabled = false,
     this.showCard = false,
     this.darkCard = false,
+    this.onExploreCommunities,
   }) : assert(!darkCard || showCard, "darkCard requires showCard.");
 
   @override
@@ -172,6 +174,21 @@ class UserHeader extends StatelessWidget {
                     ),
                   );
                 },
+              ),
+
+            if (onExploreCommunities != null)
+              IconButton(
+                tooltip: "Explore communities",
+                onPressed: onExploreCommunities,
+                icon: Icon(
+                  Icons.public_rounded,
+                  size: 25,
+                  color: darkCard
+                      ? Colors.white
+                      : useLightForeground
+                      ? Colors.white70
+                      : const Color(0xFF2563EB),
+                ),
               ),
 
             IconButton(

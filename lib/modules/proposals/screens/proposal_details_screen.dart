@@ -3,14 +3,44 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../../widgets/gub_content_card.dart';
 import '../../../widgets/gub_screen_background.dart';
+import '../../chat/widgets/gub_chat_overlay.dart';
 import '../models/proposal_model.dart';
 import 'create_proposal_screen.dart';
 import '../services/proposal_service.dart';
 
-class ProposalDetailsScreen extends StatelessWidget {
+class ProposalDetailsScreen extends StatefulWidget {
   final ProposalModel proposal;
 
   const ProposalDetailsScreen({super.key, required this.proposal});
+
+  @override
+  State<ProposalDetailsScreen> createState() => _ProposalDetailsScreenState();
+}
+
+class _ProposalDetailsScreenState extends State<ProposalDetailsScreen> {
+  bool _openingOriginalMessage = false;
+
+  Future<void> _openOriginalMessage(ProposalModel proposal) async {
+    final messageId = proposal.sourceId;
+    if (_openingOriginalMessage || messageId == null || messageId.isEmpty) {
+      return;
+    }
+
+    setState(() => _openingOriginalMessage = true);
+    final opened = await GubChatOverlay.openChat(
+      gubId: proposal.gubId,
+      initialMessageId: messageId,
+    );
+
+    if (!mounted) return;
+    setState(() => _openingOriginalMessage = false);
+
+    if (!opened) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Unable to open the original message.")),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -20,8 +50,8 @@ class ProposalDetailsScreen extends StatelessWidget {
       variant: GubBackgroundAssignments.proposals,
       child: StreamBuilder<ProposalModel?>(
         stream: ProposalService.instance.proposalStream(
-          gubId: proposal.gubId,
-          proposalId: proposal.proposalId,
+          gubId: widget.proposal.gubId,
+          proposalId: widget.proposal.proposalId,
         ),
         builder: (context, proposalSnapshot) {
           if (proposalSnapshot.connectionState == ConnectionState.waiting) {
@@ -117,6 +147,18 @@ class ProposalDetailsScreen extends StatelessWidget {
                                 color: Colors.blue,
                               ),
                             ),
+                            if (p.sourceType == "chat" &&
+                                p.sourcePreview?.isNotEmpty == true) ...[
+                              const SizedBox(height: 20),
+                              _ProposalChatSourceCard(
+                                message: p.sourcePreview!,
+                                authorName: p.sourceAuthorName,
+                                opening: _openingOriginalMessage,
+                                onTap: p.sourceId?.isNotEmpty == true
+                                    ? () => _openOriginalMessage(p)
+                                    : null,
+                              ),
+                            ],
                             const SizedBox(height: 20),
                             Text(
                               p.title,
@@ -338,6 +380,73 @@ class ProposalDetailsScreen extends StatelessWidget {
       surfaceTintColor: Colors.transparent,
       elevation: 0,
       scrolledUnderElevation: 0,
+    );
+  }
+}
+
+class _ProposalChatSourceCard extends StatelessWidget {
+  final String message;
+  final String? authorName;
+  final bool opening;
+  final VoidCallback? onTap;
+
+  const _ProposalChatSourceCard({
+    required this.message,
+    required this.opening,
+    this.authorName,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GubContentCard(
+      child: InkWell(
+        onTap: opening ? null : onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.all(4),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Row(
+                children: [
+                  Icon(Icons.chat_bubble_outline_rounded, color: Colors.blue),
+                  SizedBox(width: 8),
+                  Text(
+                    "From chat",
+                    style: TextStyle(
+                      color: Colors.blue,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+              if (authorName?.trim().isNotEmpty == true) ...[
+                const SizedBox(height: 8),
+                Text(
+                  authorName!.trim(),
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ],
+              const SizedBox(height: 8),
+              Text('“$message”'),
+              if (onTap != null) ...[
+                const SizedBox(height: 12),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: Text(
+                    opening ? "Opening chat..." : "View original message",
+                    style: const TextStyle(
+                      color: Colors.blue,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

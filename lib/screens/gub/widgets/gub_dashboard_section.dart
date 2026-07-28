@@ -11,6 +11,7 @@ import '../../../modules/proposals/screens/create_proposal_screen.dart';
 import '../../../modules/proposals/screens/proposal_details_screen.dart';
 import '../../../modules/proposals/models/proposal_model.dart';
 import '../../../modules/tasks/screens/tasks_screen.dart';
+import '../../../modules/organized_events/screens/gub_events_screen.dart';
 import '../../../services/gub_dashboard_service.dart';
 
 class GubDashboardSection extends StatefulWidget {
@@ -78,7 +79,7 @@ class _GubDashboardSectionState extends State<GubDashboardSection> {
               onTasksTap: _openTasks,
               onProposalsTap: () => _openProposals(summary.activeProposal),
               onCalendarTap: _openCalendar,
-              onEventTap: _showEventsComingSoon,
+              onEventTap: _openEvents,
             ),
             const SizedBox(height: 12),
             _SharedBudgetSummaryCard(
@@ -170,6 +171,12 @@ class _GubDashboardSectionState extends State<GubDashboardSection> {
     );
   }
 
+  void _openEvents() {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => GubEventsScreen(gubId: widget.gubId)),
+    );
+  }
+
   void _openBudgets() {
     Navigator.of(context).push(
       MaterialPageRoute(
@@ -213,12 +220,6 @@ class _GubDashboardSectionState extends State<GubDashboardSection> {
         ),
       ),
     );
-  }
-
-  void _showEventsComingSoon() {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text("Events coming soon")));
   }
 }
 

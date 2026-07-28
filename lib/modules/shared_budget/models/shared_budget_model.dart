@@ -25,6 +25,12 @@ class SharedBudgetModel {
   final Timestamp? deadline;
   final Timestamp? completedAt;
 
+  final String? sourceType;
+  final String? sourceId;
+  final String? sourcePreview;
+  final String? originUserId;
+  final String? sourceAuthorName;
+
   const SharedBudgetModel({
     required this.sharedBudgetId,
     required this.title,
@@ -39,6 +45,11 @@ class SharedBudgetModel {
     required this.createdAt,
     this.deadline,
     this.completedAt,
+    this.sourceType,
+    this.sourceId,
+    this.sourcePreview,
+    this.originUserId,
+    this.sourceAuthorName,
   });
 
   factory SharedBudgetModel.fromFirestore(Map<String, dynamic> json) {
@@ -62,6 +73,11 @@ class SharedBudgetModel {
           : Timestamp.fromDate(DateTime.fromMillisecondsSinceEpoch(0)),
       deadline: deadline is Timestamp ? deadline : null,
       completedAt: completedAt is Timestamp ? completedAt : null,
+      sourceType: json["sourceType"],
+      sourceId: json["sourceId"],
+      sourcePreview: json["sourcePreview"],
+      originUserId: json["originUserId"],
+      sourceAuthorName: json["sourceAuthorName"],
     );
   }
 
@@ -86,6 +102,11 @@ class SharedBudgetModel {
       "createdAt": createdAt,
       "deadline": deadline,
       "completedAt": completedAt,
+      "sourceType": sourceType,
+      "sourceId": sourceId,
+      "sourcePreview": sourcePreview,
+      "originUserId": originUserId,
+      "sourceAuthorName": sourceAuthorName,
     };
   }
 
@@ -103,6 +124,11 @@ class SharedBudgetModel {
     Timestamp? createdAt,
     Timestamp? deadline,
     Timestamp? completedAt,
+    String? sourceType,
+    String? sourceId,
+    String? sourcePreview,
+    String? originUserId,
+    String? sourceAuthorName,
   }) {
     return SharedBudgetModel(
       sharedBudgetId: sharedBudgetId ?? this.sharedBudgetId,
@@ -118,6 +144,11 @@ class SharedBudgetModel {
       createdAt: createdAt ?? this.createdAt,
       deadline: deadline ?? this.deadline,
       completedAt: completedAt ?? this.completedAt,
+      sourceType: sourceType ?? this.sourceType,
+      sourceId: sourceId ?? this.sourceId,
+      sourcePreview: sourcePreview ?? this.sourcePreview,
+      originUserId: originUserId ?? this.originUserId,
+      sourceAuthorName: sourceAuthorName ?? this.sourceAuthorName,
     );
   }
 }
