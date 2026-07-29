@@ -9,7 +9,7 @@ import '../modules/profile/screens/user_profile_screen.dart';
 import '../repositories/user_repository.dart';
 import 'gub_content_card.dart';
 
-class UserHeader extends StatelessWidget {
+class UserHeader extends StatefulWidget {
   final String? gubId;
   final bool darkMode;
   final bool personalProfileEnabled;
@@ -28,19 +28,53 @@ class UserHeader extends StatelessWidget {
   }) : assert(!darkCard || showCard, "darkCard requires showCard.");
 
   @override
+  State<UserHeader> createState() => _UserHeaderState();
+}
+
+class _UserHeaderState extends State<UserHeader> {
+  String? _userId;
+  late Future<Map<String, dynamic>?> _userFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCurrentUser();
+  }
+
+  @override
+  void didUpdateWidget(covariant UserHeader oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final currentUserId = FirebaseAuth.instance.currentUser?.uid;
+    if (currentUserId != _userId) {
+      _loadCurrentUser();
+    }
+  }
+
+  void _loadCurrentUser() {
+    final currentUserId = FirebaseAuth.instance.currentUser?.uid;
+    _userId = currentUserId;
+    _userFuture = currentUserId == null
+        ? Future.value(null)
+        : UserRepository.instance.getUser(currentUserId);
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final user = FirebaseAuth.instance.currentUser!;
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null || user.uid != _userId) {
+      return _buildPlaceholder();
+    }
 
     return FutureBuilder<Map<String, dynamic>?>(
-      future: UserRepository.instance.getUser(user.uid),
+      future: _userFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           const placeholder = SizedBox(height: 44);
 
           return Padding(
-            padding: EdgeInsets.only(bottom: showCard ? 20 : 24),
-            child: showCard
-                ? _UserHeaderCard(dark: darkCard, child: placeholder)
+            padding: EdgeInsets.only(bottom: widget.showCard ? 20 : 24),
+            child: widget.showCard
+                ? _UserHeaderCard(dark: widget.darkCard, child: placeholder)
                 : placeholder,
           );
         }
@@ -53,17 +87,18 @@ class UserHeader extends StatelessWidget {
             : "User";
         final storedPhotoUrl = data?["photoUrl"] ?? data?["photoURL"];
         final photoUrl = storedPhotoUrl is String ? storedPhotoUrl : null;
-        final useLightForeground = darkCard || (darkMode && !showCard);
+        final useLightForeground =
+            widget.darkCard || (widget.darkMode && !widget.showCard);
 
         final headerContent = Row(
           children: [
             _CurrentUserAvatar(
-              gubId: gubId,
+              gubId: widget.gubId,
               userId: user.uid,
               displayName: displayName,
-              photoUrl: darkCard ? null : photoUrl,
-              personalProfileEnabled: personalProfileEnabled,
-              backgroundColor: darkCard ? const Color(0xFF2563EB) : null,
+              photoUrl: widget.darkCard ? null : photoUrl,
+              personalProfileEnabled: widget.personalProfileEnabled,
+              backgroundColor: widget.darkCard ? const Color(0xFF2563EB) : null,
             ),
 
             const SizedBox(width: 12),
@@ -79,11 +114,11 @@ class UserHeader extends StatelessWidget {
               ),
             ),
 
-            if (gubId != null)
+            if (widget.gubId != null)
               StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
                 stream: FirebaseFirestore.instance
                     .collection("gubs")
-                    .doc(gubId)
+                    .doc(widget.gubId)
                     .collection("notifications")
                     .snapshots(),
                 builder: (context, snapshot) {
@@ -126,7 +161,7 @@ class UserHeader extends StatelessWidget {
                             context,
                             MaterialPageRoute(
                               builder: (_) =>
-                                  NotificationsScreen(gubId: gubId!),
+                                  NotificationsScreen(gubId: widget.gubId!),
                             ),
                           );
                         },
@@ -137,7 +172,7 @@ class UserHeader extends StatelessWidget {
                             Icon(
                               Icons.notifications_outlined,
                               size: 26,
-                              color: darkCard
+                              color: widget.darkCard
                                   ? Colors.white
                                   : useLightForeground
                                   ? Colors.white70
@@ -176,14 +211,14 @@ class UserHeader extends StatelessWidget {
                 },
               ),
 
-            if (onExploreCommunities != null)
+            if (widget.onExploreCommunities != null)
               IconButton(
                 tooltip: "Explore communities",
-                onPressed: onExploreCommunities,
+                onPressed: widget.onExploreCommunities,
                 icon: Icon(
                   Icons.public_rounded,
                   size: 25,
-                  color: darkCard
+                  color: widget.darkCard
                       ? Colors.white
                       : useLightForeground
                       ? Colors.white70
@@ -198,7 +233,7 @@ class UserHeader extends StatelessWidget {
               icon: Icon(
                 Icons.settings_outlined,
                 size: 26,
-                color: darkCard
+                color: widget.darkCard
                     ? Colors.white
                     : useLightForeground
                     ? Colors.white70
@@ -210,11 +245,21 @@ class UserHeader extends StatelessWidget {
 
         return Padding(
           padding: const EdgeInsets.only(bottom: 20),
-          child: showCard
-              ? _UserHeaderCard(dark: darkCard, child: headerContent)
+          child: widget.showCard
+              ? _UserHeaderCard(dark: widget.darkCard, child: headerContent)
               : headerContent,
         );
       },
+    );
+  }
+
+  Widget _buildPlaceholder() {
+    const placeholder = SizedBox(height: 44);
+    return Padding(
+      padding: EdgeInsets.only(bottom: widget.showCard ? 20 : 24),
+      child: widget.showCard
+          ? _UserHeaderCard(dark: widget.darkCard, child: placeholder)
+          : placeholder,
     );
   }
 }

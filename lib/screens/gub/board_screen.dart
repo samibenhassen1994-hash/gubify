@@ -97,7 +97,7 @@ class _BoardScreenState extends State<BoardScreen> {
         variant: GubBackgroundAssignments.board,
         child: Scaffold(
           backgroundColor: Colors.transparent,
-          appBar: AppBar(title: const Text('Bacheca')),
+          appBar: AppBar(title: const Text('Board')),
           floatingActionButton: FloatingActionButton.extended(
             onPressed: () {
               Navigator.push(
@@ -108,7 +108,8 @@ class _BoardScreenState extends State<BoardScreen> {
               );
             },
             icon: const Icon(Icons.add),
-            label: const Text('Pubblica'),
+            label: const Text('Create post'),
+            tooltip: 'Create post',
           ),
           body: Padding(
             padding: const EdgeInsets.all(16),
@@ -117,7 +118,7 @@ class _BoardScreenState extends State<BoardScreen> {
                 const Align(
                   alignment: Alignment.centerLeft,
                   child: Text(
-                    'Bacheca',
+                    'Board',
                     style: TextStyle(fontSize: 30, fontWeight: FontWeight.bold),
                   ),
                 ),
@@ -125,7 +126,7 @@ class _BoardScreenState extends State<BoardScreen> {
                 const Align(
                   alignment: Alignment.centerLeft,
                   child: Text(
-                    'Condividi aggiornamenti con il tuo Hub.',
+                    'Share updates with your Gub.',
                     style: TextStyle(color: Colors.grey, fontSize: 16),
                   ),
                 ),
@@ -157,7 +158,7 @@ class _BoardScreenState extends State<BoardScreen> {
                                   Icon(Icons.campaign_outlined, size: 50),
                                   SizedBox(height: 12),
                                   Text(
-                                    'Nessun post',
+                                    'No posts yet',
                                     style: TextStyle(
                                       fontSize: 20,
                                       fontWeight: FontWeight.bold,
@@ -165,7 +166,7 @@ class _BoardScreenState extends State<BoardScreen> {
                                   ),
                                   SizedBox(height: 8),
                                   Text(
-                                    "Premi 'Pubblica' per creare il primo post.",
+                                    "Select 'Create post' to publish the first update.",
                                     textAlign: TextAlign.center,
                                   ),
                                 ],

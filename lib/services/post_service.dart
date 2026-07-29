@@ -15,7 +15,7 @@ class PostService {
     final user = _auth.currentUser;
 
     if (user == null) {
-      throw Exception("Utente non autenticato");
+      throw Exception("You must be signed in to create a Board post.");
     }
 
     final userDoc = await _firestore.collection("users").doc(user.uid).get();

@@ -56,7 +56,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
       final user = FirebaseAuth.instance.currentUser!;
       await NotificationService.instance.send(
         gubId: widget.gubId,
-        title: "New Board Post",
+        title: "New Board post",
         body: "$displayName published a new post.",
         type: "board_post",
         senderId: user.uid,
@@ -67,12 +67,14 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
       if (mounted) {
         Navigator.pop(context);
       }
-    } catch (e) {
+    } catch (_) {
       if (!mounted) return;
 
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(e.toString())));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Unable to publish the post. Please try again."),
+        ),
+      );
     } finally {
       if (mounted) {
         setState(() => _loading = false);
@@ -83,7 +85,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("New Post")),
+      appBar: AppBar(title: const Text("New post")),
       body: Padding(
         padding: const EdgeInsets.all(20),
         child: Column(

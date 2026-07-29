@@ -11,12 +11,14 @@ class UserActivityScreen extends StatefulWidget {
   final String gubId;
   final String userId;
   final UserActivityType type;
+  final UserProfileModel? initialProfile;
 
   const UserActivityScreen({
     super.key,
     required this.gubId,
     required this.userId,
     required this.type,
+    this.initialProfile,
   });
 
   @override
@@ -24,14 +26,37 @@ class UserActivityScreen extends StatefulWidget {
 }
 
 class _UserActivityScreenState extends State<UserActivityScreen> {
-  late final Future<UserProfileModel?> _profileFuture;
+  Future<UserProfileModel?>? _profileFuture;
+  late Stream<List<UserActivityEntry>> _activityStream;
 
   @override
   void initState() {
     super.initState();
-    _profileFuture = UserProfileService.instance.loadProfile(
+    _initializeLoads();
+  }
+
+  @override
+  void didUpdateWidget(covariant UserActivityScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.gubId != widget.gubId ||
+        oldWidget.userId != widget.userId ||
+        oldWidget.type != widget.type ||
+        oldWidget.initialProfile != widget.initialProfile) {
+      _initializeLoads();
+    }
+  }
+
+  void _initializeLoads() {
+    _profileFuture = widget.initialProfile == null
+        ? UserProfileService.instance.loadProfile(
+            gubId: widget.gubId,
+            userId: widget.userId,
+          )
+        : null;
+    _activityStream = UserProfileService.instance.activityStream(
       gubId: widget.gubId,
       userId: widget.userId,
+      type: widget.type,
     );
   }
 
@@ -52,64 +77,65 @@ class _UserActivityScreenState extends State<UserActivityScreen> {
         ),
         body: SafeArea(
           top: false,
-          child: FutureBuilder<UserProfileModel?>(
-            future: _profileFuture,
-            builder: (context, profileSnapshot) {
-              if (profileSnapshot.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator());
-              }
-              if (profileSnapshot.hasError || profileSnapshot.data == null) {
-                return const _ActivityMessage(
-                  icon: Icons.lock_outline_rounded,
-                  message: "Unable to load this activity.",
-                );
-              }
-
-              return StreamBuilder<List<UserActivityEntry>>(
-                stream: UserProfileService.instance.activityStream(
-                  gubId: widget.gubId,
-                  userId: widget.userId,
-                  type: widget.type,
-                ),
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
-                  if (snapshot.hasError) {
-                    return const _ActivityMessage(
-                      icon: Icons.error_outline_rounded,
-                      message: "Unable to load this activity.",
-                    );
-                  }
-
-                  final activities = snapshot.data ?? const [];
-                  if (activities.isEmpty) {
-                    return const _ActivityMessage(
-                      icon: Icons.inbox_outlined,
-                      message: "No activity available yet",
-                    );
-                  }
-
-                  return ListView.separated(
-                    padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
-                    itemCount: activities.length,
-                    separatorBuilder: (_, _) => const SizedBox(height: 10),
-                    itemBuilder: (context, index) {
-                      final activity = activities[index];
-                      return _ActivityCard(
-                        activity: activity,
-                        onTap: _canOpen(activity)
-                            ? () => _openActivity(activity)
-                            : null,
+          child: widget.initialProfile != null
+              ? _buildActivity()
+              : FutureBuilder<UserProfileModel?>(
+                  future: _profileFuture,
+                  builder: (context, profileSnapshot) {
+                    if (profileSnapshot.connectionState ==
+                        ConnectionState.waiting) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+                    if (profileSnapshot.hasError ||
+                        profileSnapshot.data == null) {
+                      return const _ActivityMessage(
+                        icon: Icons.lock_outline_rounded,
+                        message: "Unable to load this activity.",
                       );
-                    },
-                  );
-                },
-              );
-            },
-          ),
+                    }
+                    return _buildActivity();
+                  },
+                ),
         ),
       ),
+    );
+  }
+
+  Widget _buildActivity() {
+    return StreamBuilder<List<UserActivityEntry>>(
+      stream: _activityStream,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError) {
+          return const _ActivityMessage(
+            icon: Icons.error_outline_rounded,
+            message: "Unable to load this activity.",
+          );
+        }
+
+        final activities = snapshot.data ?? const [];
+        if (activities.isEmpty) {
+          return const _ActivityMessage(
+            icon: Icons.inbox_outlined,
+            message: "No activity available yet",
+          );
+        }
+
+        return ListView.separated(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
+          itemCount: activities.length,
+          separatorBuilder: (_, _) => const SizedBox(height: 10),
+          itemBuilder: (context, index) {
+            final activity = activities[index];
+            return _ActivityCard(
+              activity: activity,
+              onTap: _canOpen(activity) ? () => _openActivity(activity) : null,
+            );
+          },
+        );
+      },
     );
   }
 

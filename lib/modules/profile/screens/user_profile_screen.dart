@@ -89,6 +89,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                             gubId: widget.gubId,
                             userId: widget.userId,
                             type: category.type,
+                            initialProfile: profile,
                           ),
                         ),
                       ),

@@ -90,34 +90,47 @@ class UserProfileService {
       throw StateError("You must be signed in to view profiles.");
     }
 
-    final memberships = await Future.wait<Map<String, dynamic>?>([
-      MemberRepository.instance.getMember(gubId: gubId, uid: currentUserId),
-      MemberRepository.instance.getMember(gubId: gubId, uid: userId),
-    ]);
+    final Map<String, dynamic>? currentMembership;
+    final Map<String, dynamic>? targetMembership;
+    if (currentUserId == userId) {
+      currentMembership = await MemberRepository.instance.getMember(
+        gubId: gubId,
+        uid: currentUserId,
+      );
+      targetMembership = currentMembership;
+    } else {
+      final memberships = await Future.wait<Map<String, dynamic>?>([
+        MemberRepository.instance.getMember(gubId: gubId, uid: currentUserId),
+        MemberRepository.instance.getMember(gubId: gubId, uid: userId),
+      ]);
+      currentMembership = memberships.first;
+      targetMembership = memberships.last;
+    }
 
-    if (memberships.first == null) {
+    if (currentMembership == null) {
       throw StateError("You no longer have access to this Gub.");
     }
 
-    final targetMembership = memberships.last;
     if (targetMembership == null) return null;
 
-    Map<String, dynamic>? userData;
-    try {
-      userData = await UserRepository.instance.getUser(userId);
-    } catch (_) {
-      // Membership data remains a safe fallback if user documents are private.
-    }
-
-    final displayName = _firstNonEmptyString([
-      userData?["displayName"],
-      targetMembership["displayName"],
-    ]);
-    final photoUrl = _firstNonEmptyString([
-      userData?["photoUrl"],
-      userData?["photoURL"],
+    var displayName = _asNonEmptyString(targetMembership["displayName"]);
+    var photoUrl = _firstNonEmptyString([
       targetMembership["photoUrl"],
+      targetMembership["photoURL"],
     ]);
+    Map<String, dynamic>? userData;
+    if (displayName == null || photoUrl == null) {
+      try {
+        userData = await UserRepository.instance.getUser(userId);
+      } catch (_) {
+        // Membership data remains a safe fallback if user documents are private.
+      }
+      displayName ??= _asNonEmptyString(userData?["displayName"]);
+      photoUrl ??= _firstNonEmptyString([
+        userData?["photoUrl"],
+        userData?["photoURL"],
+      ]);
+    }
 
     return UserProfileModel(
       userId: userId,

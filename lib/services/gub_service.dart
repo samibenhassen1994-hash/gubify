@@ -75,6 +75,7 @@ class GubService {
         "inviteCode": inviteCode,
         "memberCount": 1,
         "ownerId": user.uid,
+        "role": "owner",
         "joinedAt": FieldValue.serverTimestamp(),
       },
     );
@@ -164,6 +165,7 @@ class GubService {
         "inviteCode": hubDoc["inviteCode"],
         "memberCount": (hubDoc["memberCount"] ?? 1) + 1,
         "ownerId": hubDoc["ownerId"],
+        "role": "member",
         "joinedAt": FieldValue.serverTimestamp(),
       },
     );

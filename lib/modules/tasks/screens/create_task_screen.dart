@@ -23,6 +23,7 @@ class CreateTaskScreen extends StatefulWidget {
   final String? sourcePreview;
   final String? originUserId;
   final String? sourceAuthorName;
+  final String? initialWhatToDo;
 
   const CreateTaskScreen({
     super.key,
@@ -32,6 +33,7 @@ class CreateTaskScreen extends StatefulWidget {
     this.sourcePreview,
     this.originUserId,
     this.sourceAuthorName,
+    this.initialWhatToDo,
   });
 
   bool get isChatConversion =>
@@ -49,6 +51,15 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
   bool _loading = false;
   Timestamp? _dueDate;
   MemberOption? _selectedMember;
+
+  @override
+  void initState() {
+    super.initState();
+    final initialWhatToDo = widget.initialWhatToDo;
+    if (initialWhatToDo != null) {
+      _textController.text = initialWhatToDo;
+    }
+  }
 
   @override
   void dispose() {

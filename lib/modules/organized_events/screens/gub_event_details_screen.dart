@@ -236,28 +236,47 @@ class _TasksHeader extends StatelessWidget {
   const _TasksHeader();
 
   @override
-  Widget build(BuildContext context) => const Row(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Icon(Icons.groups_2_outlined, color: Color(0xFF2563EB)),
-      SizedBox(width: 10),
-      Expanded(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Event tasks',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
-            ),
-            SizedBox(height: 2),
-            Text(
-              'Complete every assignment to finish the event',
-              style: TextStyle(color: Color(0xFF475569)),
-            ),
-          ],
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(16),
+    decoration: BoxDecoration(
+      color: Colors.white.withValues(alpha: 0.96),
+      borderRadius: BorderRadius.circular(18),
+      border: Border.all(color: const Color(0xFFE2E8F0)),
+      boxShadow: [
+        BoxShadow(
+          color: const Color(0xFF0F172A).withValues(alpha: 0.05),
+          blurRadius: 14,
+          offset: const Offset(0, 5),
         ),
-      ),
-    ],
+      ],
+    ),
+    child: const Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(Icons.groups_2_outlined, color: Color(0xFF2563EB)),
+        SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Event tasks',
+                style: TextStyle(
+                  color: Color(0xFF0F172A),
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              SizedBox(height: 3),
+              Text(
+                'Complete every assignment to finish the event',
+                style: TextStyle(color: Color(0xFF475569), height: 1.3),
+              ),
+            ],
+          ),
+        ),
+      ],
+    ),
   );
 }
 

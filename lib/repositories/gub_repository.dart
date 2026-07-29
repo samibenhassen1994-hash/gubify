@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class GubRepository {
@@ -9,6 +11,7 @@ class GubRepository {
 
   /// Cache in memoria degli Hub
   final Map<String, Map<String, dynamic>> _hubCache = {};
+  final Set<String> _roleBackfillAttempts = {};
 
   /// Restituisce i dati dell'Hub.
   /// Se sono già in memoria, non interroga Firestore.
@@ -36,111 +39,232 @@ class GubRepository {
   }
 
   Stream<List<Map<String, dynamic>>> userGubsStream(String userId) {
-    return _firestore
+    final userGubs = _firestore
         .collection("users")
         .doc(userId)
-        .collection("gubs")
-        .snapshots()
-        .asyncMap((userGubsSnapshot) async {
-          if (userGubsSnapshot.docs.isEmpty) {
-            return const <Map<String, dynamic>>[];
-          }
+        .collection("gubs");
+    StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? subscription;
+    late final StreamController<List<Map<String, dynamic>>> controller;
+    var generation = 0;
+    var cancelled = false;
 
-          final userGubById = <String, Map<String, dynamic>>{};
-          for (final document in userGubsSnapshot.docs) {
-            final data = document.data();
-            final storedId = data["gubId"];
-            final gubId = storedId is String && storedId.trim().isNotEmpty
-                ? storedId.trim()
-                : document.id;
-            if (gubId.isNotEmpty) userGubById[gubId] = data;
-          }
+    controller = StreamController<List<Map<String, dynamic>>>(
+      onListen: () {
+        subscription = userGubs.snapshots().listen(
+          (snapshot) {
+            if (cancelled || controller.isClosed) return;
+            final snapshotGeneration = ++generation;
+            final copies = _userGubCopies(snapshot);
+            controller.add(_immediateUserGubs(copies, userId));
+            if (copies.isEmpty) return;
 
-          final gubIds = userGubById.keys.toList(growable: false);
-          if (gubIds.isEmpty) return const <Map<String, dynamic>>[];
+            unawaited(
+              _enrichUserGubs(copies, userId)
+                  .then((enrichment) {
+                    if (cancelled ||
+                        controller.isClosed ||
+                        snapshotGeneration != generation) {
+                      return;
+                    }
+                    controller.add(enrichment.items);
+                    for (final entry in enrichment.roleBackfills.entries) {
+                      unawaited(
+                        _backfillUserGubRole(
+                          userId: userId,
+                          gubId: entry.key,
+                          role: entry.value,
+                        ),
+                      );
+                    }
+                  })
+                  .catchError((Object _) {
+                    // Secondary enrichment must not replace already visible data.
+                  }),
+            );
+          },
+          onError: (Object error, StackTrace stackTrace) {
+            if (!cancelled && !controller.isClosed) {
+              controller.addError(error, stackTrace);
+            }
+          },
+          onDone: () {
+            if (!controller.isClosed) {
+              unawaited(controller.close());
+            }
+          },
+        );
+      },
+      onCancel: () async {
+        cancelled = true;
+        generation++;
+        await subscription?.cancel();
+        if (!controller.isClosed) {
+          unawaited(controller.close());
+        }
+      },
+    );
 
-          final existingGubs = <QueryDocumentSnapshot<Map<String, dynamic>>>[];
-          for (var start = 0; start < gubIds.length; start += 30) {
-            final end = (start + 30).clamp(0, gubIds.length);
-            final snapshot = await _firestore
-                .collection("gubs")
-                .where(
-                  FieldPath.documentId,
-                  whereIn: gubIds.sublist(start, end),
-                )
-                .get();
-            existingGubs.addAll(snapshot.docs);
-          }
+    return controller.stream;
+  }
 
-          final memberDetails = await Future.wait(
-            existingGubs.map((gubDocument) async {
-              final userGub = userGubById[gubDocument.id]!;
-              final gub = gubDocument.data();
-              final isFounder = gub["ownerId"] == userId;
-              final storedRole = userGub["role"];
-              final hasStoredRole =
-                  storedRole is String && storedRole.trim().isNotEmpty;
-              final needsMemberDocument =
-                  !isFounder &&
-                  (!hasStoredRole || userGub["joinedAt"] is! Timestamp);
-              if (!needsMemberDocument) {
-                return MapEntry(gubDocument.id, const <String, dynamic>{});
-              }
-              final member = await gubDocument.reference
-                  .collection("members")
-                  .doc(userId)
-                  .get();
-              return MapEntry(
-                gubDocument.id,
-                member.data() ?? const <String, dynamic>{},
-              );
-            }),
-          );
-          final memberDetailsById = Map.fromEntries(memberDetails);
+  Map<String, Map<String, dynamic>> _userGubCopies(
+    QuerySnapshot<Map<String, dynamic>> snapshot,
+  ) {
+    final copies = <String, Map<String, dynamic>>{};
+    for (final document in snapshot.docs) {
+      final data = document.data();
+      final storedId = _nonEmptyString(data["gubId"]);
+      final gubId = storedId ?? document.id;
+      if (gubId.isNotEmpty) copies[gubId] = data;
+    }
+    return copies;
+  }
 
-          final results = <Map<String, dynamic>>[];
-          for (final gubDocument in existingGubs) {
-            final userGub = userGubById[gubDocument.id]!;
-            final gub = gubDocument.data();
-            final member = memberDetailsById[gubDocument.id]!;
-            final isFounder = gub["ownerId"] == userId;
-            final storedRole = userGub["role"];
-            final role = storedRole is String && storedRole.trim().isNotEmpty
-                ? storedRole.trim()
-                : isFounder
-                ? "owner"
-                : member["role"] is String &&
-                      (member["role"] as String).trim().isNotEmpty
-                ? (member["role"] as String).trim()
-                : "member";
-            final joinedAt =
-                _timestampValue(userGub["joinedAt"]) ??
-                _timestampValue(member["joinedAt"]) ??
-                (isFounder ? _timestampValue(gub["createdAt"]) : null);
+  List<Map<String, dynamic>> _immediateUserGubs(
+    Map<String, Map<String, dynamic>> copies,
+    String userId,
+  ) {
+    final items = [
+      for (final entry in copies.entries)
+        _userGubItem(
+          gubId: entry.key,
+          userGub: entry.value,
+          gub: const <String, dynamic>{},
+          member: const <String, dynamic>{},
+          userId: userId,
+        ),
+    ];
+    _sortUserGubs(items);
+    return items;
+  }
 
-            results.add({
-              ...userGub,
-              ...gub,
-              "gubId": gubDocument.id,
-              "role": role,
-              "joinedAt": joinedAt,
-              "joinedAtDate": joinedAt?.toDate(),
-              "isFounder": isFounder,
-            });
-          }
-          results.sort((first, second) {
-            final firstJoinedAt = first["joinedAt"];
-            final secondJoinedAt = second["joinedAt"];
-            final firstMillis = firstJoinedAt is Timestamp
-                ? firstJoinedAt.millisecondsSinceEpoch
-                : 0;
-            final secondMillis = secondJoinedAt is Timestamp
-                ? secondJoinedAt.millisecondsSinceEpoch
-                : 0;
-            return secondMillis.compareTo(firstMillis);
-          });
-          return results;
-        });
+  Future<
+    ({List<Map<String, dynamic>> items, Map<String, String> roleBackfills})
+  >
+  _enrichUserGubs(
+    Map<String, Map<String, dynamic>> copies,
+    String userId,
+  ) async {
+    final ids = copies.keys.toList(growable: false);
+    final queryFutures = <Future<QuerySnapshot<Map<String, dynamic>>>>[];
+    for (var start = 0; start < ids.length; start += 30) {
+      final end = (start + 30).clamp(0, ids.length);
+      queryFutures.add(
+        _firestore
+            .collection("gubs")
+            .where(FieldPath.documentId, whereIn: ids.sublist(start, end))
+            .get(),
+      );
+    }
+    final querySnapshots = await Future.wait(queryFutures);
+    final documents = [for (final snapshot in querySnapshots) ...snapshot.docs];
+
+    final memberEntries = await Future.wait(
+      documents.map((document) async {
+        final userGub = copies[document.id]!;
+        final isFounder = document.data()["ownerId"] == userId;
+        if (isFounder || _nonEmptyString(userGub["role"]) != null) {
+          return MapEntry(document.id, const <String, dynamic>{});
+        }
+        final member = await document.reference
+            .collection("members")
+            .doc(userId)
+            .get();
+        return MapEntry(
+          document.id,
+          member.data() ?? const <String, dynamic>{},
+        );
+      }),
+    );
+    final membersById = Map.fromEntries(memberEntries);
+    final roleBackfills = <String, String>{};
+    final items = <Map<String, dynamic>>[];
+
+    for (final document in documents) {
+      final userGub = copies[document.id]!;
+      final gub = document.data();
+      final member = membersById[document.id]!;
+      final item = _userGubItem(
+        gubId: document.id,
+        userGub: userGub,
+        gub: gub,
+        member: member,
+        userId: userId,
+      );
+      items.add(item);
+      if (_nonEmptyString(userGub["role"]) == null) {
+        final authoritativeRole = gub["ownerId"] == userId
+            ? "owner"
+            : _nonEmptyString(member["role"]);
+        if (authoritativeRole != null) {
+          roleBackfills[document.id] = authoritativeRole;
+        }
+      }
+    }
+    _sortUserGubs(items);
+    return (items: items, roleBackfills: roleBackfills);
+  }
+
+  Map<String, dynamic> _userGubItem({
+    required String gubId,
+    required Map<String, dynamic> userGub,
+    required Map<String, dynamic> gub,
+    required Map<String, dynamic> member,
+    required String userId,
+  }) {
+    final ownerId =
+        _nonEmptyString(gub["ownerId"]) ?? _nonEmptyString(userGub["ownerId"]);
+    final isFounder = ownerId == userId;
+    final role =
+        _nonEmptyString(userGub["role"]) ??
+        (isFounder ? "owner" : _nonEmptyString(member["role"]) ?? "member");
+    final joinedAt =
+        _timestampValue(userGub["joinedAt"]) ??
+        _timestampValue(member["joinedAt"]) ??
+        (isFounder ? _timestampValue(gub["createdAt"]) : null);
+
+    return {
+      ...userGub,
+      ...gub,
+      "gubId": gubId,
+      "role": role,
+      "joinedAt": joinedAt,
+      "joinedAtDate": joinedAt?.toDate(),
+      "isFounder": isFounder,
+    };
+  }
+
+  void _sortUserGubs(List<Map<String, dynamic>> items) {
+    items.sort((first, second) {
+      final firstJoinedAt = first["joinedAt"];
+      final secondJoinedAt = second["joinedAt"];
+      final firstMillis = firstJoinedAt is Timestamp
+          ? firstJoinedAt.millisecondsSinceEpoch
+          : 0;
+      final secondMillis = secondJoinedAt is Timestamp
+          ? secondJoinedAt.millisecondsSinceEpoch
+          : 0;
+      return secondMillis.compareTo(firstMillis);
+    });
+  }
+
+  Future<void> _backfillUserGubRole({
+    required String userId,
+    required String gubId,
+    required String role,
+  }) async {
+    final attemptKey = "$userId/$gubId";
+    if (!_roleBackfillAttempts.add(attemptKey)) return;
+    try {
+      await _firestore
+          .collection("users")
+          .doc(userId)
+          .collection("gubs")
+          .doc(gubId)
+          .set({"role": role}, SetOptions(merge: true));
+    } catch (_) {
+      // The authoritative membership remains the fallback if writes are denied.
+    }
   }
 
   Future<bool> isMember({required String gubId, required String userId}) async {
@@ -182,5 +306,11 @@ class GubRepository {
 
   Timestamp? _timestampValue(Object? value) {
     return value is Timestamp ? value : null;
+  }
+
+  String? _nonEmptyString(Object? value) {
+    if (value is! String) return null;
+    final normalized = value.trim();
+    return normalized.isEmpty ? null : normalized;
   }
 }

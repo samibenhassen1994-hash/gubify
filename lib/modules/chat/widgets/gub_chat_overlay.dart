@@ -434,6 +434,7 @@ class _GubChatOverlayState extends State<GubChatOverlay> {
               sourcePreview: sourceMessage.text,
               originUserId: sourceMessage.senderId,
               sourceAuthorName: sourceMessage.senderName,
+              initialWhatToDo: sourceMessage.text,
             ),
           ),
         );

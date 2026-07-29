@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
@@ -10,6 +12,7 @@ class CommunityRepository {
 
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
+  final Set<String> _roleBackfillAttempts = {};
 
   static const int _batchSize = 400;
   static const int _membershipCleanupPageSize = 200;
@@ -98,6 +101,7 @@ class CommunityRepository {
         "ownerId": ownerId,
         "memberCount": 1,
         "visibility": CommunityModel.publicVisibility,
+        "role": "owner",
         "joinedAt": FieldValue.serverTimestamp(),
       });
       transaction.set(ownershipReference, {
@@ -416,103 +420,240 @@ class CommunityRepository {
   Stream<List<CommunityMembershipModel>> userCommunityMembershipsStream(
     String userId,
   ) {
-    return _firestore
+    final userCommunities = _firestore
         .collection("users")
         .doc(userId)
-        .collection("communities")
-        .snapshots()
-        .asyncMap((userCommunitiesSnapshot) async {
-          if (userCommunitiesSnapshot.docs.isEmpty) {
-            return const <CommunityMembershipModel>[];
-          }
+        .collection("communities");
+    StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? subscription;
+    late final StreamController<List<CommunityMembershipModel>> controller;
+    var generation = 0;
+    var cancelled = false;
 
-          final userCommunityById = <String, Map<String, dynamic>>{};
-          for (final document in userCommunitiesSnapshot.docs) {
-            final data = document.data();
-            final storedId = data["communityId"];
-            final communityId = storedId is String && storedId.trim().isNotEmpty
-                ? storedId.trim()
-                : document.id;
-            if (communityId.isNotEmpty) {
-              userCommunityById[communityId] = data;
+    controller = StreamController<List<CommunityMembershipModel>>(
+      onListen: () {
+        subscription = userCommunities.snapshots().listen(
+          (snapshot) {
+            if (cancelled || controller.isClosed) return;
+            final snapshotGeneration = ++generation;
+            final copies = _userCommunityCopies(snapshot);
+            controller.add(_immediateCommunityMemberships(copies, userId));
+            if (copies.isEmpty) return;
+
+            unawaited(
+              _enrichCommunityMemberships(copies, userId)
+                  .then((enrichment) {
+                    if (cancelled ||
+                        controller.isClosed ||
+                        snapshotGeneration != generation) {
+                      return;
+                    }
+                    controller.add(enrichment.items);
+                    for (final entry in enrichment.roleBackfills.entries) {
+                      unawaited(
+                        _backfillUserCommunityRole(
+                          userId: userId,
+                          communityId: entry.key,
+                          role: entry.value,
+                        ),
+                      );
+                    }
+                  })
+                  .catchError((Object _) {
+                    // Secondary enrichment must not replace already visible data.
+                  }),
+            );
+          },
+          onError: (Object error, StackTrace stackTrace) {
+            if (!cancelled && !controller.isClosed) {
+              controller.addError(error, stackTrace);
             }
-          }
+          },
+          onDone: () {
+            if (!controller.isClosed) {
+              unawaited(controller.close());
+            }
+          },
+        );
+      },
+      onCancel: () async {
+        cancelled = true;
+        generation++;
+        await subscription?.cancel();
+        if (!controller.isClosed) {
+          unawaited(controller.close());
+        }
+      },
+    );
 
-          final communityIds = userCommunityById.keys.toList(growable: false);
-          final documents = <QueryDocumentSnapshot<Map<String, dynamic>>>[];
-          for (var start = 0; start < communityIds.length; start += 30) {
-            final end = (start + 30).clamp(0, communityIds.length);
-            final snapshot = await _communities
-                .where(
-                  FieldPath.documentId,
-                  whereIn: communityIds.sublist(start, end),
-                )
-                .get();
-            documents.addAll(snapshot.docs);
-          }
+    return controller.stream;
+  }
 
-          final memberDetails = await Future.wait(
-            documents.map((document) async {
-              final community = CommunityModel.fromFirestore(document);
-              final userCopy = userCommunityById[community.communityId]!;
-              final storedRole = userCopy["role"];
-              final hasStoredRole =
-                  storedRole is String && storedRole.trim().isNotEmpty;
-              final needsMemberDocument =
-                  community.ownerId != userId && !hasStoredRole;
-              if (!needsMemberDocument) {
-                return MapEntry(
-                  community.communityId,
-                  const <String, dynamic>{},
-                );
-              }
-              final member = await document.reference
-                  .collection("members")
-                  .doc(userId)
-                  .get();
-              return MapEntry(
-                community.communityId,
-                member.data() ?? const <String, dynamic>{},
-              );
-            }),
-          );
-          final memberDetailsById = Map.fromEntries(memberDetails);
+  Map<String, Map<String, dynamic>> _userCommunityCopies(
+    QuerySnapshot<Map<String, dynamic>> snapshot,
+  ) {
+    final copies = <String, Map<String, dynamic>>{};
+    for (final document in snapshot.docs) {
+      final data = document.data();
+      final communityId = _nonEmptyString(data["communityId"]) ?? document.id;
+      if (communityId.isNotEmpty) copies[communityId] = data;
+    }
+    return copies;
+  }
 
-          final memberships = documents
-              .map((document) {
-                final community = CommunityModel.fromFirestore(document);
-                final userCopy = userCommunityById[community.communityId]!;
-                final member = memberDetailsById[community.communityId]!;
-                final role = community.ownerId == userId
-                    ? "owner"
-                    : _nonEmptyString(userCopy["role"]) ??
-                          _nonEmptyString(member["role"]) ??
-                          "member";
-                final joinedAt =
-                    _timestampValue(userCopy["joinedAt"]) ??
-                    _timestampValue(member["joinedAt"]) ??
-                    (community.ownerId == userId ? community.createdAt : null);
-                return CommunityMembershipModel(
-                  community: community,
-                  role: role,
-                  joinedAt: joinedAt,
-                );
-              })
-              .toList(growable: false);
+  List<CommunityMembershipModel> _immediateCommunityMemberships(
+    Map<String, Map<String, dynamic>> copies,
+    String userId,
+  ) {
+    final memberships = [
+      for (final entry in copies.entries)
+        _communityMembershipFromCopy(
+          communityId: entry.key,
+          data: entry.value,
+          userId: userId,
+        ),
+    ];
+    _sortCommunityMemberships(memberships);
+    return memberships;
+  }
 
-          memberships.sort((first, second) {
-            final firstMillis =
-                first.joinedAt?.millisecondsSinceEpoch ??
-                first.community.createdAt?.millisecondsSinceEpoch ??
-                0;
-            final secondMillis =
-                second.joinedAt?.millisecondsSinceEpoch ??
-                second.community.createdAt?.millisecondsSinceEpoch ??
-                0;
-            return secondMillis.compareTo(firstMillis);
-          });
-          return memberships;
-        });
+  Future<
+    ({List<CommunityMembershipModel> items, Map<String, String> roleBackfills})
+  >
+  _enrichCommunityMemberships(
+    Map<String, Map<String, dynamic>> copies,
+    String userId,
+  ) async {
+    final ids = copies.keys.toList(growable: false);
+    final queryFutures = <Future<QuerySnapshot<Map<String, dynamic>>>>[];
+    for (var start = 0; start < ids.length; start += 30) {
+      final end = (start + 30).clamp(0, ids.length);
+      queryFutures.add(
+        _communities
+            .where(FieldPath.documentId, whereIn: ids.sublist(start, end))
+            .get(),
+      );
+    }
+    final querySnapshots = await Future.wait(queryFutures);
+    final documents = [for (final snapshot in querySnapshots) ...snapshot.docs];
+
+    final memberEntries = await Future.wait(
+      documents.map((document) async {
+        final community = CommunityModel.fromFirestore(document);
+        final userCopy = copies[community.communityId]!;
+        if (community.ownerId == userId ||
+            _nonEmptyString(userCopy["role"]) != null) {
+          return MapEntry(community.communityId, const <String, dynamic>{});
+        }
+        final member = await document.reference
+            .collection("members")
+            .doc(userId)
+            .get();
+        return MapEntry(
+          community.communityId,
+          member.data() ?? const <String, dynamic>{},
+        );
+      }),
+    );
+    final membersById = Map.fromEntries(memberEntries);
+    final roleBackfills = <String, String>{};
+    final memberships = <CommunityMembershipModel>[];
+
+    for (final document in documents) {
+      final community = CommunityModel.fromFirestore(document);
+      final userCopy = copies[community.communityId]!;
+      final member = membersById[community.communityId]!;
+      final role = community.ownerId == userId
+          ? "owner"
+          : _nonEmptyString(userCopy["role"]) ??
+                _nonEmptyString(member["role"]) ??
+                "member";
+      final joinedAt =
+          _timestampValue(userCopy["joinedAt"]) ??
+          _timestampValue(member["joinedAt"]) ??
+          (community.ownerId == userId ? community.createdAt : null);
+      memberships.add(
+        CommunityMembershipModel(
+          community: community,
+          role: role,
+          joinedAt: joinedAt,
+        ),
+      );
+      if (_nonEmptyString(userCopy["role"]) == null) {
+        final authoritativeRole = community.ownerId == userId
+            ? "owner"
+            : _nonEmptyString(member["role"]);
+        if (authoritativeRole != null) {
+          roleBackfills[community.communityId] = authoritativeRole;
+        }
+      }
+    }
+    _sortCommunityMemberships(memberships);
+    return (items: memberships, roleBackfills: roleBackfills);
+  }
+
+  CommunityMembershipModel _communityMembershipFromCopy({
+    required String communityId,
+    required Map<String, dynamic> data,
+    required String userId,
+  }) {
+    final ownerId = _nonEmptyString(data["ownerId"]) ?? "";
+    final community = CommunityModel(
+      communityId: communityId,
+      name: _nonEmptyString(data["name"]) ?? "",
+      ownerId: ownerId,
+      memberCount: data["memberCount"] is num
+          ? (data["memberCount"] as num).toInt()
+          : 0,
+      visibility:
+          _nonEmptyString(data["visibility"]) ??
+          CommunityModel.publicVisibility,
+      createdAt: _timestampValue(data["createdAt"]),
+      type: CommunityModel.normalizeType(_nonEmptyString(data["type"])),
+      language: CommunityModel.normalizeLanguage(
+        _nonEmptyString(data["language"]),
+      ),
+      description: _nonEmptyString(data["description"]) ?? "",
+    );
+    return CommunityMembershipModel(
+      community: community,
+      role:
+          _nonEmptyString(data["role"]) ??
+          (ownerId == userId ? "owner" : "member"),
+      joinedAt: _timestampValue(data["joinedAt"]),
+    );
+  }
+
+  void _sortCommunityMemberships(List<CommunityMembershipModel> memberships) {
+    memberships.sort((first, second) {
+      final firstMillis =
+          first.joinedAt?.millisecondsSinceEpoch ??
+          first.community.createdAt?.millisecondsSinceEpoch ??
+          0;
+      final secondMillis =
+          second.joinedAt?.millisecondsSinceEpoch ??
+          second.community.createdAt?.millisecondsSinceEpoch ??
+          0;
+      return secondMillis.compareTo(firstMillis);
+    });
+  }
+
+  Future<void> _backfillUserCommunityRole({
+    required String userId,
+    required String communityId,
+    required String role,
+  }) async {
+    final attemptKey = "$userId/$communityId";
+    if (!_roleBackfillAttempts.add(attemptKey)) return;
+    try {
+      await _firestore
+          .collection("users")
+          .doc(userId)
+          .collection("communities")
+          .doc(communityId)
+          .set({"role": role}, SetOptions(merge: true));
+    } catch (_) {
+      // The authoritative membership remains the fallback if writes are denied.
+    }
   }
 
   Future<CommunityModel> joinCommunity({
@@ -567,6 +708,7 @@ class CommunityRepository {
         "ownerId": community.ownerId,
         "memberCount": updatedMemberCount,
         "visibility": CommunityModel.publicVisibility,
+        "role": "member",
         "joinedAt": FieldValue.serverTimestamp(),
       });
 

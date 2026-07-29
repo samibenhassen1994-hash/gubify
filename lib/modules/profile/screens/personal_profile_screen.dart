@@ -21,14 +21,34 @@ class PersonalProfileScreen extends StatefulWidget {
 }
 
 class _PersonalProfileScreenState extends State<PersonalProfileScreen> {
-  late final Future<UserProfileModel> _profileFuture;
+  late Future<UserProfileModel> _profileFuture;
+  late Stream<List<PersonalGubModel>> _gubsStream;
+  late Stream<List<CommunityMembershipModel>> _communitiesStream;
   Object? _lastLoggedGubsError;
   MembershipWindow _selectedWindow = MembershipWindow.privateGubs;
 
   @override
   void initState() {
     super.initState();
+    _initializeLoads();
+  }
+
+  @override
+  void didUpdateWidget(covariant PersonalProfileScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.userId != widget.userId) {
+      _initializeLoads();
+    }
+  }
+
+  void _initializeLoads() {
     _profileFuture = UserProfileService.instance.loadPersonalProfile(
+      userId: widget.userId,
+    );
+    _gubsStream = UserProfileService.instance.personalGubsStream(
+      userId: widget.userId,
+    );
+    _communitiesStream = UserProfileService.instance.personalCommunitiesStream(
       userId: widget.userId,
     );
   }
@@ -62,17 +82,14 @@ class _PersonalProfileScreenState extends State<PersonalProfileScreen> {
               }
 
               return StreamBuilder<List<PersonalGubModel>>(
-                stream: UserProfileService.instance.personalGubsStream(
-                  userId: widget.userId,
-                ),
+                stream: _gubsStream,
                 builder: (context, gubsSnapshot) {
                   if (gubsSnapshot.hasError) {
                     _logGubsError(gubsSnapshot.error);
                   }
 
                   return StreamBuilder<List<CommunityMembershipModel>>(
-                    stream: UserProfileService.instance
-                        .personalCommunitiesStream(userId: widget.userId),
+                    stream: _communitiesStream,
                     builder: (context, communitiesSnapshot) {
                       return ListView(
                         padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
