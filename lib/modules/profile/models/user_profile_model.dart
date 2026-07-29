@@ -25,8 +25,16 @@ class PersonalGubModel {
   final String gubId;
   final String name;
   final String? role;
+  final bool isFounder;
+  final DateTime? joinedAt;
 
-  const PersonalGubModel({required this.gubId, required this.name, this.role});
+  const PersonalGubModel({
+    required this.gubId,
+    required this.name,
+    this.role,
+    required this.isFounder,
+    required this.joinedAt,
+  });
 }
 
 enum UserActivityType { tasks, proposals, events, sharedBudget }

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../../services/gub_service.dart';
 import '../../profile/screens/user_profile_screen.dart';
+import '../../organized_events/screens/create_gub_event_screen.dart';
 import '../../proposals/screens/create_proposal_screen.dart';
 import '../../shared_budget/screens/create_shared_budget_screen.dart';
 import '../../tasks/screens/create_task_screen.dart';
@@ -172,6 +173,7 @@ class _GubChatOverlayState extends State<GubChatOverlay> {
   bool _isTaskConversionOpen = false;
   bool _isProposalConversionOpen = false;
   bool _isSharedBudgetConversionOpen = false;
+  bool _isEventConversionOpen = false;
   bool _isUserProfileOpen = false;
   bool _bringToFrontScheduled = false;
   int? _unreadCount;
@@ -332,6 +334,7 @@ class _GubChatOverlayState extends State<GubChatOverlay> {
       _isTaskConversionOpen ||
       _isProposalConversionOpen ||
       _isSharedBudgetConversionOpen ||
+      _isEventConversionOpen ||
       _isUserProfileOpen ||
       _GubChatOverlayController.instance.isSuspended;
 
@@ -342,6 +345,7 @@ class _GubChatOverlayState extends State<GubChatOverlay> {
     ChatMessageModel? taskSourceMessage;
     ChatMessageModel? proposalSourceMessage;
     ChatMessageModel? sharedBudgetSourceMessage;
+    ChatMessageModel? eventSourceMessage;
     String? profileUserId;
     _isChatOpen = true;
     _unreadCount = 0;
@@ -372,6 +376,10 @@ class _GubChatOverlayState extends State<GubChatOverlay> {
               },
               onConvertToSharedBudget: (message) {
                 sharedBudgetSourceMessage = message;
+                Navigator.pop(sheetContext);
+              },
+              onConvertToEvent: (message) {
+                eventSourceMessage = message;
                 Navigator.pop(sheetContext);
               },
               onOpenUserProfile: (userId) {
@@ -495,6 +503,32 @@ class _GubChatOverlayState extends State<GubChatOverlay> {
       } finally {
         if (mounted) {
           _isSharedBudgetConversionOpen = false;
+          _insertOverlay();
+        }
+      }
+      return;
+    }
+
+    final eventMessage = eventSourceMessage;
+    if (eventMessage != null) {
+      _isEventConversionOpen = true;
+
+      try {
+        await Navigator.of(context, rootNavigator: true).push<void>(
+          MaterialPageRoute(
+            builder: (_) => CreateGubEventScreen(
+              gubId: chatGubId,
+              sourceType: 'chat',
+              sourceId: eventMessage.messageId,
+              sourcePreview: eventMessage.text,
+              originUserId: eventMessage.senderId,
+              sourceAuthorName: eventMessage.senderName,
+            ),
+          ),
+        );
+      } finally {
+        if (mounted) {
+          _isEventConversionOpen = false;
           _insertOverlay();
         }
       }

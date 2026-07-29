@@ -26,7 +26,10 @@ class CommunityChatRepository {
     required String senderName,
     required String text,
   }) async {
-    final messageReference = messagesCollection(communityId).doc();
+    final communityReference = _firestore
+        .collection("communities")
+        .doc(communityId);
+    final messageReference = communityReference.collection("messages").doc();
     final message = CommunityChatMessageModel(
       messageId: messageReference.id,
       communityId: communityId,
@@ -38,7 +41,14 @@ class CommunityChatRepository {
     final data = message.toFirestore()
       ..["createdAt"] = FieldValue.serverTimestamp();
 
-    await messageReference.set(data);
+    await _firestore.runTransaction((transaction) async {
+      final community = await transaction.get(communityReference);
+      if (!community.exists ||
+          community.data()?["deletionStatus"] == "deleting") {
+        throw StateError("This Community is being deleted.");
+      }
+      transaction.set(messageReference, data);
+    });
   }
 
   Stream<List<CommunityChatMessageModel>> messagesStream(String communityId) {

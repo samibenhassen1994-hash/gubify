@@ -2,7 +2,11 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
 import '../../../widgets/gub_screen_background.dart';
+import '../../../widgets/membership_details.dart';
+import '../../../widgets/membership_window_selector.dart';
 import '../../chat/widgets/chat_user_avatar.dart';
+import '../../community/models/community_model.dart';
+import '../../community/screens/gub_community_home_screen.dart';
 import '../models/user_profile_model.dart';
 import '../services/user_profile_service.dart';
 import 'user_profile_screen.dart';
@@ -19,6 +23,7 @@ class PersonalProfileScreen extends StatefulWidget {
 class _PersonalProfileScreenState extends State<PersonalProfileScreen> {
   late final Future<UserProfileModel> _profileFuture;
   Object? _lastLoggedGubsError;
+  MembershipWindow _selectedWindow = MembershipWindow.privateGubs;
 
   @override
   void initState() {
@@ -65,48 +70,33 @@ class _PersonalProfileScreenState extends State<PersonalProfileScreen> {
                     _logGubsError(gubsSnapshot.error);
                   }
 
-                  return ListView(
-                    padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
-                    children: [
-                      _PersonalProfileHeader(profile: profileSnapshot.data!),
-                      const SizedBox(height: 30),
-                      Text(
-                        "Your Gubs",
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(height: 14),
-                      if (gubsSnapshot.connectionState ==
-                          ConnectionState.waiting)
-                        const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 32),
-                          child: Center(child: CircularProgressIndicator()),
-                        )
-                      else if (gubsSnapshot.hasError)
-                        const _PersonalProfileMessage(
-                          icon: Icons.error_outline_rounded,
-                          message: "Unable to load your Gubs.",
-                        )
-                      else if (gubsSnapshot.data?.isEmpty ?? true)
-                        const _PersonalProfileMessage(
-                          icon: Icons.hub_outlined,
-                          message: "No Gubs yet",
-                        )
-                      else
-                        for (final gub in gubsSnapshot.data!)
-                          _PersonalGubCard(
-                            gub: gub,
-                            onTap: () => Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => UserProfileScreen(
-                                  gubId: gub.gubId,
-                                  userId: widget.userId,
-                                ),
-                              ),
-                            ),
+                  return StreamBuilder<List<CommunityMembershipModel>>(
+                    stream: UserProfileService.instance
+                        .personalCommunitiesStream(userId: widget.userId),
+                    builder: (context, communitiesSnapshot) {
+                      return ListView(
+                        padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
+                        children: [
+                          _PersonalProfileHeader(
+                            profile: profileSnapshot.data!,
                           ),
-                    ],
+                          const SizedBox(height: 26),
+                          MembershipWindowSelector(
+                            selectedWindow: _selectedWindow,
+                            privateCount: gubsSnapshot.data?.length,
+                            communityCount: communitiesSnapshot.data?.length,
+                            onSelected: (window) {
+                              setState(() => _selectedWindow = window);
+                            },
+                          ),
+                          const SizedBox(height: 14),
+                          if (_selectedWindow == MembershipWindow.privateGubs)
+                            ..._privateGubContent(gubsSnapshot)
+                          else
+                            ..._communityContent(communitiesSnapshot),
+                        ],
+                      );
+                    },
                   );
                 },
               );
@@ -115,6 +105,92 @@ class _PersonalProfileScreenState extends State<PersonalProfileScreen> {
         ),
       ),
     );
+  }
+
+  List<Widget> _privateGubContent(
+    AsyncSnapshot<List<PersonalGubModel>> snapshot,
+  ) {
+    if (snapshot.connectionState == ConnectionState.waiting) {
+      return const [
+        Padding(
+          padding: EdgeInsets.symmetric(vertical: 32),
+          child: Center(child: CircularProgressIndicator()),
+        ),
+      ];
+    }
+    if (snapshot.hasError) {
+      return const [
+        _PersonalProfileMessage(
+          icon: Icons.error_outline_rounded,
+          message: "Unable to load your Gubs.",
+        ),
+      ];
+    }
+    final gubs = snapshot.data ?? const [];
+    if (gubs.isEmpty) {
+      return const [
+        _PersonalProfileMessage(
+          icon: Icons.hub_outlined,
+          message: "No private Gubs yet",
+        ),
+      ];
+    }
+    return [
+      for (final gub in gubs)
+        _PersonalGubCard(
+          gub: gub,
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) =>
+                  UserProfileScreen(gubId: gub.gubId, userId: widget.userId),
+            ),
+          ),
+        ),
+    ];
+  }
+
+  List<Widget> _communityContent(
+    AsyncSnapshot<List<CommunityMembershipModel>> snapshot,
+  ) {
+    if (snapshot.connectionState == ConnectionState.waiting) {
+      return const [
+        Padding(
+          padding: EdgeInsets.symmetric(vertical: 32),
+          child: Center(child: CircularProgressIndicator()),
+        ),
+      ];
+    }
+    if (snapshot.hasError) {
+      return const [
+        _PersonalProfileMessage(
+          icon: Icons.error_outline_rounded,
+          message: "Unable to load your Communities.",
+        ),
+      ];
+    }
+    final memberships = snapshot.data ?? const [];
+    if (memberships.isEmpty) {
+      return const [
+        _PersonalProfileMessage(
+          icon: Icons.public_rounded,
+          message: "No Communities yet",
+        ),
+      ];
+    }
+    return [
+      for (final membership in memberships)
+        _PersonalCommunityCard(
+          membership: membership,
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => GubCommunityHomeScreen(
+                communityId: membership.community.communityId,
+                initialCommunity: membership.community,
+              ),
+            ),
+          ),
+        ),
+    ];
   }
 
   void _logGubsError(Object? error) {
@@ -216,16 +292,12 @@ class _PersonalGubCard extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(fontWeight: FontWeight.w700),
                     ),
-                    const SizedBox(height: 3),
-                    Text(
-                      gub.role == null
-                          ? "View your Gub activity"
-                          : "${_roleLabel(gub.role!)} - View your Gub activity",
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: const Color(0xFF64748B),
-                      ),
+                    const SizedBox(height: 6),
+                    MembershipDetails(
+                      role: gub.isFounder
+                          ? 'Founder'
+                          : formatRoleLabel(gub.role, fallback: 'Member'),
+                      joinedAt: gub.joinedAt,
                     ),
                   ],
                 ),
@@ -245,11 +317,66 @@ class _PersonalGubCard extends StatelessWidget {
         ? "?"
         : String.fromCharCode(normalized.runes.first).toUpperCase();
   }
+}
 
-  String _roleLabel(String role) {
-    final normalized = role.trim();
-    if (normalized.isEmpty) return "Member";
-    return "${normalized[0].toUpperCase()}${normalized.substring(1)}";
+class _PersonalCommunityCard extends StatelessWidget {
+  final CommunityMembershipModel membership;
+  final VoidCallback onTap;
+
+  const _PersonalCommunityCard({required this.membership, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 10),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            children: [
+              CircleAvatar(
+                radius: 22,
+                backgroundColor: const Color(
+                  0xFF0EA5E9,
+                ).withValues(alpha: 0.12),
+                child: const Icon(
+                  Icons.public_rounded,
+                  color: Color(0xFF0284C7),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      membership.community.name,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    const SizedBox(height: 6),
+                    MembershipDetails(
+                      role: membership.role == 'owner'
+                          ? 'Owner'
+                          : formatRoleLabel(
+                              membership.role,
+                              fallback: 'Member',
+                            ),
+                      joinedAt: membership.joinedAtDate,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              const Icon(Icons.chevron_right_rounded, color: Color(0xFF94A3B8)),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 

@@ -5,6 +5,7 @@ import '../../config/app_limits.dart';
 import '../../modules/community/models/community_model.dart';
 import '../../modules/community/screens/gub_community_home_screen.dart';
 import '../../modules/community/services/community_service.dart';
+import '../../modules/community/widgets/community_search_picker.dart';
 import '../../services/gub_service.dart';
 import '../../widgets/gub_content_card.dart';
 import '../../widgets/gub_screen_background.dart';
@@ -25,11 +26,16 @@ class _CreateGubScreenState extends State<CreateGubScreen> {
   final FocusNode _nameFocusNode = FocusNode();
   final ScrollController _scrollController = ScrollController();
   final GlobalKey _nameFieldKey = GlobalKey();
+  final GlobalKey _formCardKey = GlobalKey();
 
   double _largestViewportHeight = 0;
   bool _scrollScheduled = false;
+  bool _typeScrollScheduled = false;
+  bool _typeScrollPending = false;
   bool _loading = false;
+  bool _checkingCommunityOwnership = false;
   bool _typeImagesPrecached = false;
+  int _typeSelectionRequest = 0;
   GubType _selectedType = GubType.private;
   String _selectedCommunityType = CommunityModel.defaultType;
   String _selectedCommunityLanguage = CommunityModel.defaultLanguage;
@@ -38,9 +44,147 @@ class _CreateGubScreenState extends State<CreateGubScreen> {
   void initState() {
     super.initState();
 
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _positionFormForInitialView();
+    });
+
     _nameFocusNode.addListener(() {
       if (_nameFocusNode.hasFocus) {
         _scheduleBringFieldIntoView();
+      }
+    });
+  }
+
+  void _positionFormForInitialView() {
+    if (!mounted || !_scrollController.hasClients) return;
+
+    final formContext = _formCardKey.currentContext;
+    if (formContext == null || !formContext.mounted) return;
+
+    Scrollable.ensureVisible(
+      formContext,
+      alignment: 0.02,
+      duration: Duration.zero,
+    );
+  }
+
+  Future<void> _selectCommunityType() async {
+    final type = await showCommunitySearchPicker(
+      context: context,
+      title: 'Select Community type',
+      options: CommunityModel.availableTypes,
+      selectedValue: _selectedCommunityType,
+    );
+    if (!mounted || type == null) return;
+    setState(() => _selectedCommunityType = type);
+  }
+
+  Future<void> _selectCommunityLanguage() async {
+    final language = await showCommunitySearchPicker(
+      context: context,
+      title: 'Select Community language',
+      options: CommunityModel.availableLanguages,
+      selectedValue: _selectedCommunityLanguage,
+    );
+    if (!mounted || language == null) return;
+    setState(() => _selectedCommunityLanguage = language);
+  }
+
+  Future<void> _changeType(GubType type) async {
+    if (_loading ||
+        type == _selectedType && !_checkingCommunityOwnership ||
+        type == GubType.community && _checkingCommunityOwnership) {
+      return;
+    }
+
+    final request = ++_typeSelectionRequest;
+    if (type == GubType.private) {
+      setState(() {
+        _selectedType = GubType.private;
+        _checkingCommunityOwnership = false;
+      });
+      _scheduleScrollToUpdatedFormBottom();
+      return;
+    }
+
+    setState(() => _checkingCommunityOwnership = true);
+    try {
+      final ownsCommunity = await CommunityService.instance
+          .currentUserOwnsCommunity();
+      if (!mounted || request != _typeSelectionRequest) return;
+
+      if (ownsCommunity) {
+        setState(() {
+          _selectedType = GubType.private;
+          _checkingCommunityOwnership = false;
+        });
+        await showDialog<void>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: const Text('Community limit reached'),
+            content: const Text(
+              'You can create only one Community. You can still join other Communities.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('Got it'),
+              ),
+            ],
+          ),
+        );
+        if (!mounted || request != _typeSelectionRequest) return;
+        _scheduleScrollToUpdatedFormBottom();
+        return;
+      }
+
+      setState(() {
+        _selectedType = GubType.community;
+        _checkingCommunityOwnership = false;
+      });
+      _scheduleScrollToUpdatedFormBottom();
+    } catch (_) {
+      if (!mounted || request != _typeSelectionRequest) return;
+      setState(() {
+        _selectedType = GubType.private;
+        _checkingCommunityOwnership = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Unable to verify Community ownership. Please try again.',
+          ),
+        ),
+      );
+    }
+  }
+
+  void _scheduleScrollToUpdatedFormBottom() {
+    if (_typeScrollScheduled) {
+      _typeScrollPending = true;
+      return;
+    }
+    _typeScrollScheduled = true;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted || !_scrollController.hasClients) {
+        _typeScrollScheduled = false;
+        return;
+      }
+
+      try {
+        await _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOutCubic,
+        );
+      } catch (_) {
+        // The controller can detach if the route closes during the animation.
+      }
+      _typeScrollScheduled = false;
+      if (_typeScrollPending && mounted) {
+        _typeScrollPending = false;
+        _scheduleScrollToUpdatedFormBottom();
       }
     });
   }
@@ -98,7 +242,7 @@ class _CreateGubScreenState extends State<CreateGubScreen> {
   }
 
   Future<void> _continue() async {
-    if (_loading) return;
+    if (_loading || _checkingCommunityOwnership) return;
 
     final gubName = _nameController.text.trim();
 
@@ -249,18 +393,22 @@ class _CreateGubScreenState extends State<CreateGubScreen> {
 
                         const UserHeader(showCard: true),
 
-                        const SizedBox(height: 10),
+                        const SizedBox(height: 18),
 
                         GubContentCard(
+                          key: _formCardKey,
                           child: Column(
                             children: [
                               GubTypeSelector(
                                 selectedType: _selectedType,
                                 enabled: !_loading,
-                                onChanged: (type) {
-                                  setState(() => _selectedType = type);
-                                },
+                                onChanged: _changeType,
                               ),
+
+                              if (_checkingCommunityOwnership) ...[
+                                const SizedBox(height: 12),
+                                const LinearProgressIndicator(),
+                              ],
 
                               const SizedBox(height: 24),
 
@@ -313,56 +461,18 @@ class _CreateGubScreenState extends State<CreateGubScreen> {
                                   ),
                                 ),
                                 const SizedBox(height: 16),
-                                DropdownButtonFormField<String>(
-                                  initialValue: _selectedCommunityType,
-                                  decoration: const InputDecoration(
-                                    labelText: "Type",
-                                    border: OutlineInputBorder(),
-                                  ),
-                                  items: CommunityModel.availableTypes
-                                      .map(
-                                        (type) => DropdownMenuItem(
-                                          value: type,
-                                          child: Text(type),
-                                        ),
-                                      )
-                                      .toList(growable: false),
-                                  onChanged: _loading
-                                      ? null
-                                      : (type) {
-                                          if (type != null) {
-                                            setState(
-                                              () =>
-                                                  _selectedCommunityType = type,
-                                            );
-                                          }
-                                        },
+                                CommunityPickerField(
+                                  label: 'Type',
+                                  value: _selectedCommunityType,
+                                  enabled: !_loading,
+                                  onTap: _selectCommunityType,
                                 ),
                                 const SizedBox(height: 16),
-                                DropdownButtonFormField<String>(
-                                  initialValue: _selectedCommunityLanguage,
-                                  decoration: const InputDecoration(
-                                    labelText: "Language",
-                                    border: OutlineInputBorder(),
-                                  ),
-                                  items: CommunityModel.availableLanguages
-                                      .map(
-                                        (language) => DropdownMenuItem(
-                                          value: language,
-                                          child: Text(language),
-                                        ),
-                                      )
-                                      .toList(growable: false),
-                                  onChanged: _loading
-                                      ? null
-                                      : (language) {
-                                          if (language != null) {
-                                            setState(
-                                              () => _selectedCommunityLanguage =
-                                                  language,
-                                            );
-                                          }
-                                        },
+                                CommunityPickerField(
+                                  label: 'Language',
+                                  value: _selectedCommunityLanguage,
+                                  enabled: !_loading,
+                                  onTap: _selectCommunityLanguage,
                                 ),
                               ],
 
@@ -377,7 +487,10 @@ class _CreateGubScreenState extends State<CreateGubScreen> {
                                 width: double.infinity,
                                 height: 55,
                                 child: FilledButton(
-                                  onPressed: _loading ? null : _continue,
+                                  onPressed:
+                                      _loading || _checkingCommunityOwnership
+                                      ? null
+                                      : _continue,
                                   child: _loading
                                       ? const SizedBox(
                                           width: 24,

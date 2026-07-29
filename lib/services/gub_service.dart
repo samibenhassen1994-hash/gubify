@@ -173,51 +173,15 @@ class GubService {
     return gubId;
   }
 
-  /// Deletes a Hub.
+  /// Client-side recursive deletion is intentionally unsupported.
   ///
-  /// Current implementation:
-  /// - deletes the Hub document
-  /// - removes the owner's Hub reference
-  ///
-  /// Future versions will also delete:
-  /// - members
-  /// - goals
-  /// - board
-  /// - tasks
-  /// - shopping
-  /// - expenses
+  /// A Gub has nested data and member-owned references that cannot be safely
+  /// enumerated and removed by the Firestore client SDK. Use a server-side
+  /// cleanup operation before enabling deletion.
   Future<void> deleteHub({required String gubId}) async {
-    final user = _auth.currentUser;
-
-    if (user == null) {
-      throw Exception("User not authenticated.");
-    }
-
-    final hubDoc = await _firestore.collection("gubs").doc(gubId).get();
-
-    if (!hubDoc.exists) {
-      throw Exception("Hub not found.");
-    }
-
-    final data = hubDoc.data()!;
-
-    if (data["ownerId"] != user.uid) {
-      throw Exception("Only the owner can delete this Hub.");
-    }
-
-    final batch = _firestore.batch();
-
-    batch.delete(_firestore.collection("gubs").doc(gubId));
-
-    batch.delete(
-      _firestore
-          .collection("users")
-          .doc(user.uid)
-          .collection("gubs")
-          .doc(gubId),
+    throw UnsupportedError(
+      "Secure deletion requires server-side cleanup for the full Gub data tree.",
     );
-
-    await batch.commit();
   }
 
   Stream<List<MemberOption>> membersStream(String gubId) {

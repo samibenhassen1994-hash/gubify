@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/community_model.dart';
+import 'community_search_picker.dart';
 
 class CommunityExplorerFilters {
   final String? type;
@@ -31,6 +32,30 @@ class _CommunityFiltersSheetState extends State<CommunityFiltersSheet> {
     _language = widget.initialFilters.language;
   }
 
+  Future<void> _selectType() async {
+    const allTypes = 'All types';
+    final selection = await showCommunitySearchPicker(
+      context: context,
+      title: 'Filter by type',
+      options: const [allTypes, ...CommunityModel.availableTypes],
+      selectedValue: _type ?? allTypes,
+    );
+    if (!mounted || selection == null) return;
+    setState(() => _type = selection == allTypes ? null : selection);
+  }
+
+  Future<void> _selectLanguage() async {
+    const allLanguages = 'All languages';
+    final selection = await showCommunitySearchPicker(
+      context: context,
+      title: 'Filter by language',
+      options: const [allLanguages, ...CommunityModel.availableLanguages],
+      selectedValue: _language ?? allLanguages,
+    );
+    if (!mounted || selection == null) return;
+    setState(() => _language = selection == allLanguages ? null : selection);
+  }
+
   @override
   Widget build(BuildContext context) {
     return SafeArea(
@@ -46,44 +71,18 @@ class _CommunityFiltersSheetState extends State<CommunityFiltersSheet> {
               style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 20),
-            DropdownButtonFormField<String?>(
-              initialValue: _type,
-              decoration: const InputDecoration(
-                labelText: "Type",
-                border: OutlineInputBorder(),
-              ),
-              items: [
-                const DropdownMenuItem<String?>(
-                  value: null,
-                  child: Text("All types"),
-                ),
-                ...CommunityModel.availableTypes.map(
-                  (type) =>
-                      DropdownMenuItem<String?>(value: type, child: Text(type)),
-                ),
-              ],
-              onChanged: (type) => setState(() => _type = type),
+            CommunityPickerField(
+              label: 'Type',
+              value: _type ?? 'All types',
+              enabled: true,
+              onTap: _selectType,
             ),
             const SizedBox(height: 16),
-            DropdownButtonFormField<String?>(
-              initialValue: _language,
-              decoration: const InputDecoration(
-                labelText: "Language",
-                border: OutlineInputBorder(),
-              ),
-              items: [
-                const DropdownMenuItem<String?>(
-                  value: null,
-                  child: Text("All languages"),
-                ),
-                ...CommunityModel.availableLanguages.map(
-                  (language) => DropdownMenuItem<String?>(
-                    value: language,
-                    child: Text(language),
-                  ),
-                ),
-              ],
-              onChanged: (language) => setState(() => _language = language),
+            CommunityPickerField(
+              label: 'Language',
+              value: _language ?? 'All languages',
+              enabled: true,
+              onTap: _selectLanguage,
             ),
             const SizedBox(height: 20),
             Row(

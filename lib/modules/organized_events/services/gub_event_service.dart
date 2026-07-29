@@ -10,6 +10,9 @@ class GubEventService {
   final _db = FirebaseFirestore.instance;
   Stream<List<GubEventModel>> stream(String gubId) =>
       GubEventRepository.instance.stream(gubId);
+  Stream<int> activeCountStream(String gubId) => stream(
+    gubId,
+  ).map((events) => events.where((event) => event.status == 'active').length);
   Stream<GubEventModel?> eventStream(String gubId, String id) =>
       GubEventRepository.instance.eventStream(gubId, id);
   Future<List<Map<String, String>>> members(String gubId) async {
@@ -34,6 +37,11 @@ class GubEventService {
     required String location,
     DateTime? scheduledAt,
     required List<GubEventAssignment> assignments,
+    String sourceType = 'manual',
+    String? sourceId,
+    String? sourcePreview,
+    String? originUserId,
+    String? sourceAuthorName,
   }) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
@@ -61,6 +69,11 @@ class GubEventService {
       createdAt: Timestamp.now(),
       status: 'active',
       assignments: assignments,
+      sourceType: sourceType,
+      sourceId: sourceId,
+      sourcePreview: sourcePreview,
+      originUserId: originUserId,
+      sourceAuthorName: sourceAuthorName,
     );
     await GubEventRepository.instance.create(event);
     for (final _ in assignments.where((item) => item.userId != user.uid)) {

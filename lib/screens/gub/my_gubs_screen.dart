@@ -1,19 +1,70 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import '../../modules/community/models/community_model.dart';
+import '../../modules/community/screens/community_explorer_screen.dart';
+import '../../modules/community/screens/gub_community_home_screen.dart';
+import '../../services/my_gubs_service.dart';
 import '../../widgets/gub_access_guard.dart';
+import '../../widgets/gub_content_card.dart';
 import '../../widgets/gub_page_header.dart';
 import '../../widgets/gub_screen_background.dart';
+import '../../widgets/membership_details.dart';
+import '../../widgets/membership_window_selector.dart';
 import 'gub_screen.dart';
 
-class MyGubsScreen extends StatelessWidget {
+class MyGubsScreen extends StatefulWidget {
   const MyGubsScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final uid = FirebaseAuth.instance.currentUser!.uid;
+  State<MyGubsScreen> createState() => _MyGubsScreenState();
+}
 
+class _MyGubsScreenState extends State<MyGubsScreen> {
+  late Stream<List<Map<String, dynamic>>> _privateGubsStream;
+  late Stream<List<CommunityMembershipModel>> _communitiesStream;
+  MembershipWindow _selectedWindow = MembershipWindow.privateGubs;
+
+  @override
+  void initState() {
+    super.initState();
+    _reload();
+  }
+
+  void _reload() {
+    _privateGubsStream = MyGubsService.instance.privateGubsStream();
+    _communitiesStream = MyGubsService.instance.communitiesStream();
+  }
+
+  Future<void> _openPrivateGub(Map<String, dynamic> gub) async {
+    final gubId = gub['gubId'] as String?;
+    if (gubId == null || gubId.isEmpty) return;
+
+    final isMember = await MyGubsService.instance.isCurrentUserMember(gubId);
+    if (!mounted) return;
+    if (!isMember) {
+      await MyGubsService.instance.removeStalePrivateGubReference(gubId);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('You are no longer a member of this Gub.'),
+        ),
+      );
+      return;
+    }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => GubAccessGuard(
+          gubId: gubId,
+          child: GubScreen(gubId: gubId),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return GubScreenBackground(
       variant: GubBackgroundAssignments.myGubs,
       child: Scaffold(
@@ -21,127 +72,62 @@ class MyGubsScreen extends StatelessWidget {
         body: Column(
           children: [
             const GubPageHeader(
-              title: "My Gubs",
+              title: 'My Gubs',
               personalProfileEnabled: true,
               userHeaderInCard: true,
             ),
-
             Expanded(
-              child: FutureBuilder<QuerySnapshot>(
-                future: FirebaseFirestore.instance
-                    .collection("users")
-                    .doc(uid)
-                    .collection("gubs")
-                    .orderBy("joinedAt", descending: true)
-                    .get(),
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
-
-                  if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                    return const Center(
-                      child: Text(
-                        "You haven't joined any Gub yet.",
-                        style: TextStyle(fontSize: 16, color: Colors.black54),
-                      ),
-                    );
-                  }
-
-                  final hubs = snapshot.data!.docs;
-
-                  return ListView.builder(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: hubs.length,
-                    itemBuilder: (context, index) {
-                      final hub = hubs[index].data() as Map<String, dynamic>;
-
-                      final gubId = hub["gubId"];
-
-                      return Card(
-                        margin: const EdgeInsets.only(bottom: 14),
-                        child: ListTile(
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 18,
-                            vertical: 10,
-                          ),
-                          leading: CircleAvatar(
-                            radius: 26,
-                            backgroundColor: const Color(
-                              0xFF2563EB,
-                            ).withValues(alpha: .12),
-                            child: const Icon(
-                              Icons.hub_outlined,
-                              color: Color(0xFF2563EB),
+              child: StreamBuilder<List<Map<String, dynamic>>>(
+                stream: _privateGubsStream,
+                builder: (context, privateSnapshot) {
+                  return StreamBuilder<List<CommunityMembershipModel>>(
+                    stream: _communitiesStream,
+                    builder: (context, communitySnapshot) {
+                      return Column(
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 4, 16, 14),
+                            child: MembershipWindowSelector(
+                              selectedWindow: _selectedWindow,
+                              privateCount: privateSnapshot.data?.length,
+                              communityCount: communitySnapshot.data?.length,
+                              onSelected: (window) {
+                                setState(() => _selectedWindow = window);
+                              },
                             ),
                           ),
-                          title: Text(
-                            hub["name"] ?? "Gub",
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 17,
-                            ),
-                          ),
-                          subtitle: const Padding(
-                            padding: EdgeInsets.only(top: 4),
-                            child: Text(
-                              "Open Gub",
-                              style: TextStyle(color: Colors.grey),
-                            ),
-                          ),
-                          trailing: const Icon(
-                            Icons.chevron_right_rounded,
-                            size: 22,
-                          ),
-                          onTap: () async {
-                            final memberDoc = await FirebaseFirestore.instance
-                                .collection("gubs")
-                                .doc(gubId)
-                                .collection("members")
-                                .doc(uid)
-                                .get();
-
-                            if (!memberDoc.exists) {
-                              await FirebaseFirestore.instance
-                                  .collection("users")
-                                  .doc(uid)
-                                  .collection("gubs")
-                                  .doc(gubId)
-                                  .delete();
-
-                              if (!context.mounted) return;
-
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text(
-                                    "You are no longer a member of this Gub.",
+                          Expanded(
+                            child:
+                                _selectedWindow == MembershipWindow.privateGubs
+                                ? _PrivateGubsWindow(
+                                    snapshot: privateSnapshot,
+                                    onRetry: () => setState(_reload),
+                                    onOpen: _openPrivateGub,
+                                  )
+                                : _CommunitiesWindow(
+                                    snapshot: communitySnapshot,
+                                    onRetry: () => setState(_reload),
+                                    onExplore: () => Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) =>
+                                            const CommunityExplorerScreen(),
+                                      ),
+                                    ),
+                                    onOpen: (membership) => Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => GubCommunityHomeScreen(
+                                          communityId:
+                                              membership.community.communityId,
+                                          initialCommunity:
+                                              membership.community,
+                                        ),
+                                      ),
+                                    ),
                                   ),
-                                ),
-                              );
-
-                              Navigator.pushReplacement(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => const MyGubsScreen(),
-                                ),
-                              );
-
-                              return;
-                            }
-
-                            if (!context.mounted) return;
-
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => GubAccessGuard(
-                                  gubId: gubId,
-                                  child: GubScreen(gubId: gubId),
-                                ),
-                              ),
-                            );
-                          },
-                        ),
+                          ),
+                        ],
                       );
                     },
                   );
@@ -153,4 +139,234 @@ class MyGubsScreen extends StatelessWidget {
       ),
     );
   }
+}
+
+class _PrivateGubsWindow extends StatelessWidget {
+  final AsyncSnapshot<List<Map<String, dynamic>>> snapshot;
+  final VoidCallback onRetry;
+  final ValueChanged<Map<String, dynamic>> onOpen;
+
+  const _PrivateGubsWindow({
+    required this.snapshot,
+    required this.onRetry,
+    required this.onOpen,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (snapshot.connectionState == ConnectionState.waiting) {
+      return const _SectionLoading();
+    }
+    if (snapshot.hasError) {
+      return ListView(
+        padding: const EdgeInsets.fromLTRB(16, 4, 16, 28),
+        children: [_SectionError(onRetry: onRetry)],
+      );
+    }
+
+    final gubs = snapshot.data ?? const [];
+    if (gubs.isEmpty) {
+      return ListView(
+        padding: const EdgeInsets.fromLTRB(16, 4, 16, 28),
+        children: const [_PrivateGubsEmptyState()],
+      );
+    }
+
+    return ListView.separated(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 28),
+      itemCount: gubs.length,
+      separatorBuilder: (_, _) => const SizedBox(height: 12),
+      itemBuilder: (context, index) {
+        final gub = gubs[index];
+        return _PrivateGubCard(gub: gub, onTap: () => onOpen(gub));
+      },
+    );
+  }
+}
+
+class _CommunitiesWindow extends StatelessWidget {
+  final AsyncSnapshot<List<CommunityMembershipModel>> snapshot;
+  final VoidCallback onRetry;
+  final VoidCallback onExplore;
+  final ValueChanged<CommunityMembershipModel> onOpen;
+
+  const _CommunitiesWindow({
+    required this.snapshot,
+    required this.onRetry,
+    required this.onExplore,
+    required this.onOpen,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (snapshot.connectionState == ConnectionState.waiting) {
+      return const _SectionLoading();
+    }
+    if (snapshot.hasError) {
+      return ListView(
+        padding: const EdgeInsets.fromLTRB(16, 4, 16, 28),
+        children: [_SectionError(onRetry: onRetry)],
+      );
+    }
+
+    final communities = snapshot.data ?? const [];
+    if (communities.isEmpty) {
+      return ListView(
+        padding: const EdgeInsets.fromLTRB(16, 4, 16, 28),
+        children: [_CommunitiesEmptyState(onExplore: onExplore)],
+      );
+    }
+
+    return ListView.separated(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 28),
+      itemCount: communities.length,
+      separatorBuilder: (_, _) => const SizedBox(height: 12),
+      itemBuilder: (context, index) {
+        final membership = communities[index];
+        return _CommunityCard(
+          membership: membership,
+          onTap: () => onOpen(membership),
+        );
+      },
+    );
+  }
+}
+
+class _SectionLoading extends StatelessWidget {
+  const _SectionLoading();
+
+  @override
+  Widget build(BuildContext context) => const Padding(
+    padding: EdgeInsets.symmetric(vertical: 20),
+    child: Center(child: CircularProgressIndicator()),
+  );
+}
+
+class _SectionError extends StatelessWidget {
+  final VoidCallback onRetry;
+
+  const _SectionError({required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) => GubContentCard(
+    child: Column(
+      children: [
+        const Text('Unable to load this section.'),
+        const SizedBox(height: 8),
+        TextButton.icon(
+          onPressed: onRetry,
+          icon: const Icon(Icons.refresh_rounded),
+          label: const Text('Try again'),
+        ),
+      ],
+    ),
+  );
+}
+
+class _PrivateGubsEmptyState extends StatelessWidget {
+  const _PrivateGubsEmptyState();
+
+  @override
+  Widget build(BuildContext context) => const GubContentCard(
+    child: Text(
+      "You haven't joined any private Gubs yet.",
+      textAlign: TextAlign.center,
+      style: TextStyle(fontSize: 16, color: Colors.black54),
+    ),
+  );
+}
+
+class _CommunitiesEmptyState extends StatelessWidget {
+  final VoidCallback onExplore;
+
+  const _CommunitiesEmptyState({required this.onExplore});
+
+  @override
+  Widget build(BuildContext context) => GubContentCard(
+    child: Column(
+      children: [
+        const Text(
+          'You have not joined any communities yet.',
+          textAlign: TextAlign.center,
+          style: TextStyle(fontSize: 16, color: Colors.black54),
+        ),
+        const SizedBox(height: 10),
+        OutlinedButton.icon(
+          onPressed: onExplore,
+          icon: const Icon(Icons.public_rounded),
+          label: const Text('Explore Communities'),
+        ),
+      ],
+    ),
+  );
+}
+
+class _PrivateGubCard extends StatelessWidget {
+  final Map<String, dynamic> gub;
+  final VoidCallback onTap;
+
+  const _PrivateGubCard({required this.gub, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) => GubContentCard(
+    padding: EdgeInsets.zero,
+    child: ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+      leading: CircleAvatar(
+        radius: 26,
+        backgroundColor: const Color(0xFF2563EB).withValues(alpha: .12),
+        child: const Icon(Icons.hub_outlined, color: Color(0xFF2563EB)),
+      ),
+      title: Text(
+        gub['name'] as String? ?? 'Gub',
+        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
+      ),
+      subtitle: Padding(
+        padding: const EdgeInsets.only(top: 6),
+        child: MembershipDetails(
+          role: gub['isFounder'] == true
+              ? 'Founder'
+              : formatRoleLabel(gub['role'] as String?, fallback: 'Member'),
+          joinedAt: gub['joinedAtDate'] as DateTime?,
+        ),
+      ),
+      trailing: const Icon(Icons.chevron_right_rounded, size: 22),
+      onTap: onTap,
+    ),
+  );
+}
+
+class _CommunityCard extends StatelessWidget {
+  final CommunityMembershipModel membership;
+  final VoidCallback onTap;
+
+  const _CommunityCard({required this.membership, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) => GubContentCard(
+    padding: EdgeInsets.zero,
+    child: ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+      leading: CircleAvatar(
+        radius: 26,
+        backgroundColor: const Color(0xFF0EA5E9).withValues(alpha: .12),
+        child: const Icon(Icons.public_rounded, color: Color(0xFF0284C7)),
+      ),
+      title: Text(
+        membership.community.name,
+        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
+      ),
+      subtitle: Padding(
+        padding: const EdgeInsets.only(top: 6),
+        child: MembershipDetails(
+          role: membership.role == 'owner'
+              ? 'Owner'
+              : formatRoleLabel(membership.role, fallback: 'Member'),
+          joinedAt: membership.joinedAtDate,
+        ),
+      ),
+      trailing: const Icon(Icons.chevron_right_rounded, size: 22),
+      onTap: onTap,
+    ),
+  );
 }

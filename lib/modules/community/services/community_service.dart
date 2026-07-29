@@ -58,7 +58,7 @@ class CommunityService {
           ? storedPhotoUrl.trim()
           : user.photoURL;
 
-      return await CommunityRepository.instance.createCommunity(
+      final community = await CommunityRepository.instance.createCommunity(
         name: normalizedName,
         ownerId: user.uid,
         displayName: displayName,
@@ -67,6 +67,10 @@ class CommunityService {
         language: normalizedLanguage,
         description: normalizedDescription,
       );
+      if (community == null) {
+        throw const CommunityCreationLimitException();
+      }
+      return community;
     } on FirebaseException catch (error) {
       throw Exception(_firebaseErrorMessage(error));
     }
@@ -102,6 +106,70 @@ class CommunityService {
     }
 
     return CommunityRepository.instance.userCommunityIdsStream(user.uid);
+  }
+
+  Stream<List<CommunityModel>> myCommunitiesStream() {
+    final user = _auth.currentUser;
+    if (user == null) {
+      return Stream.error(
+        StateError("You must be signed in to view your communities."),
+      );
+    }
+
+    return CommunityRepository.instance.userCommunitiesStream(user.uid);
+  }
+
+  Stream<List<CommunityMembershipModel>> myCommunityMembershipsStream() {
+    final user = _auth.currentUser;
+    if (user == null) {
+      return Stream.error(
+        StateError("You must be signed in to view your communities."),
+      );
+    }
+    return CommunityRepository.instance.userCommunityMembershipsStream(
+      user.uid,
+    );
+  }
+
+  Future<bool> currentUserOwnsCommunity() async {
+    final user = _auth.currentUser;
+    if (user == null) {
+      throw StateError("You must be signed in to create a community.");
+    }
+    try {
+      return await CommunityRepository.instance.ownsCommunity(user.uid);
+    } on FirebaseException catch (error) {
+      throw Exception(_firebaseErrorMessage(error));
+    }
+  }
+
+  bool isCurrentUserOwner(CommunityModel community) {
+    return _auth.currentUser?.uid == community.ownerId;
+  }
+
+  Future<String> currentUserRole(String communityId) async {
+    final user = _auth.currentUser;
+    if (user == null) {
+      throw StateError("You must be signed in to view Community settings.");
+    }
+    return CommunityRepository.instance.getMemberRole(
+      communityId: communityId,
+      userId: user.uid,
+    );
+  }
+
+  Future<void> deleteCommunity({
+    required String communityId,
+    required String confirmationName,
+  }) async {
+    final user = _auth.currentUser;
+    if (user == null) {
+      throw const CommunityDeletionException("Please sign in again.");
+    }
+    await CommunityRepository.instance.deleteCommunityClientSide(
+      communityId: communityId,
+      confirmationName: confirmationName,
+    );
   }
 
   Future<CommunityModel> joinCommunity({required String communityId}) async {
@@ -151,4 +219,11 @@ class CommunityService {
       _ => error.message ?? "Unable to complete the community request.",
     };
   }
+}
+
+class CommunityCreationLimitException implements Exception {
+  const CommunityCreationLimitException();
+
+  @override
+  String toString() => "You can create only one Community.";
 }

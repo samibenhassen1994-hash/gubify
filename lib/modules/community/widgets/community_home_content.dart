@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../widgets/gub_content_card.dart';
 import '../models/community_model.dart';
+import '../services/community_service.dart';
 import 'community_chat_view.dart';
 
 class CommunityHomeContent extends StatelessWidget {
@@ -12,6 +13,7 @@ class CommunityHomeContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final memberLabel = community.memberCount == 1 ? "member" : "members";
+    final isOwner = CommunityService.instance.isCurrentUserOwner(community);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -51,9 +53,9 @@ class CommunityHomeContent extends StatelessWidget {
                       icon: Icons.people_outline,
                       label: "${community.memberCount} $memberLabel",
                     ),
-                    const _CommunityChip(
+                    _CommunityChip(
                       icon: Icons.workspace_premium_outlined,
-                      label: "Owner",
+                      label: isOwner ? "Owner" : "Member",
                     ),
                   ],
                 ),

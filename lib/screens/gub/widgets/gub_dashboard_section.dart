@@ -12,6 +12,7 @@ import '../../../modules/proposals/screens/proposal_details_screen.dart';
 import '../../../modules/proposals/models/proposal_model.dart';
 import '../../../modules/tasks/screens/tasks_screen.dart';
 import '../../../modules/organized_events/screens/gub_events_screen.dart';
+import '../../../modules/organized_events/services/gub_event_service.dart';
 import '../../../services/gub_dashboard_service.dart';
 
 class GubDashboardSection extends StatefulWidget {
@@ -72,14 +73,18 @@ class _GubDashboardSectionState extends State<GubDashboardSection> {
               onCalendarTap: _openCalendar,
             ),
             const SizedBox(height: 12),
-            _ModuleGrid(
-              taskText: _taskText(summary, compact: true),
-              proposalText: _proposalText(summary, compact: true),
-              calendarText: _calendarText(summary),
-              onTasksTap: _openTasks,
-              onProposalsTap: () => _openProposals(summary.activeProposal),
-              onCalendarTap: _openCalendar,
-              onEventTap: _openEvents,
+            StreamBuilder<int>(
+              stream: GubEventService.instance.activeCountStream(widget.gubId),
+              builder: (context, eventSnapshot) => _ModuleGrid(
+                taskText: _taskText(summary, compact: true),
+                proposalText: _proposalText(summary, compact: true),
+                calendarText: _calendarText(summary),
+                eventText: _activeEventText(eventSnapshot.data ?? 0),
+                onTasksTap: _openTasks,
+                onProposalsTap: () => _openProposals(summary.activeProposal),
+                onCalendarTap: _openCalendar,
+                onEventTap: _openEvents,
+              ),
             ),
             const SizedBox(height: 12),
             _SharedBudgetSummaryCard(
@@ -141,6 +146,11 @@ class _GubDashboardSectionState extends State<GubDashboardSection> {
     final count = summary.upcomingEventCount;
     if (count == 0) return "No upcoming events";
     return "$count upcoming";
+  }
+
+  String _activeEventText(int count) {
+    if (count == 0) return 'No active events';
+    return '$count active event${count == 1 ? '' : 's'}';
   }
 
   void _openTasks() {
@@ -348,6 +358,7 @@ class _ModuleGrid extends StatelessWidget {
   final String taskText;
   final String calendarText;
   final String proposalText;
+  final String eventText;
   final VoidCallback onTasksTap;
   final VoidCallback onCalendarTap;
   final VoidCallback onProposalsTap;
@@ -357,6 +368,7 @@ class _ModuleGrid extends StatelessWidget {
     required this.taskText,
     required this.calendarText,
     required this.proposalText,
+    required this.eventText,
     required this.onTasksTap,
     required this.onCalendarTap,
     required this.onProposalsTap,
@@ -395,7 +407,7 @@ class _ModuleGrid extends StatelessWidget {
         iconColor: const Color(0xFFEA580C),
         iconBackground: const Color(0xFFFFEDD5),
         title: "Event",
-        subtitle: "Coming soon",
+        subtitle: eventText,
         onTap: onEventTap,
       ),
     ];

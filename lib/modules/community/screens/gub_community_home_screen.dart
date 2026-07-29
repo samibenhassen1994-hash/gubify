@@ -4,6 +4,7 @@ import '../../../widgets/gub_screen_background.dart';
 import '../models/community_model.dart';
 import '../services/community_service.dart';
 import '../widgets/community_home_content.dart';
+import 'community_settings_screen.dart';
 
 class GubCommunityHomeScreen extends StatefulWidget {
   final String communityId;
@@ -62,7 +63,42 @@ class _GubCommunityHomeScreenState extends State<GubCommunityHomeScreen> {
                     );
                   }
 
-                  return CommunityHomeContent(community: community);
+                  return Stack(
+                    children: [
+                      CommunityHomeContent(community: community),
+                      Positioned(
+                        top: 12,
+                        right: 20,
+                        child: Semantics(
+                          button: true,
+                          label: 'Community settings',
+                          child: Material(
+                            color: Colors.white.withValues(alpha: 0.84),
+                            shape: const CircleBorder(),
+                            child: InkWell(
+                              customBorder: const CircleBorder(),
+                              onTap: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => CommunitySettingsScreen(
+                                    community: community,
+                                  ),
+                                ),
+                              ),
+                              child: const SizedBox(
+                                width: 48,
+                                height: 48,
+                                child: Icon(
+                                  Icons.settings_rounded,
+                                  color: Color(0xFF0F172A),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  );
                 },
               ),
               Positioned(

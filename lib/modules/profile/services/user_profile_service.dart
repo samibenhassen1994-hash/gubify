@@ -4,6 +4,8 @@ import '../../../repositories/member_repository.dart';
 import '../../../repositories/shared_budget_repository.dart';
 import '../../../repositories/gub_repository.dart';
 import '../../../repositories/user_repository.dart';
+import '../../community/models/community_model.dart';
+import '../../community/services/community_service.dart';
 import '../../gub_calendar/repositories/event_repository.dart';
 import '../../proposals/repositories/proposal_repository.dart';
 import '../../tasks/repositories/task_repository.dart';
@@ -58,9 +60,25 @@ class UserProfileService {
                 gubId: _asNonEmptyString(gub["gubId"]) ?? "",
                 name: _asNonEmptyString(gub["name"]) ?? "Unnamed Gub",
                 role: _asNonEmptyString(gub["role"]),
+                isFounder: gub["isFounder"] == true,
+                joinedAt: gub["joinedAtDate"] is DateTime
+                    ? gub["joinedAtDate"] as DateTime
+                    : null,
               ),
           ].where((gub) => gub.gubId.isNotEmpty).toList(growable: false),
         );
+  }
+
+  Stream<List<CommunityMembershipModel>> personalCommunitiesStream({
+    required String userId,
+  }) {
+    final currentUserId = _auth.currentUser?.uid;
+    if (currentUserId == null || currentUserId != userId) {
+      return Stream.error(
+        StateError("You must be signed in to view your Communities."),
+      );
+    }
+    return CommunityService.instance.myCommunityMembershipsStream();
   }
 
   Future<UserProfileModel?> loadProfile({

@@ -72,22 +72,60 @@ class GubRepository {
             existingGubs.addAll(snapshot.docs);
           }
 
+          final memberDetails = await Future.wait(
+            existingGubs.map((gubDocument) async {
+              final userGub = userGubById[gubDocument.id]!;
+              final gub = gubDocument.data();
+              final isFounder = gub["ownerId"] == userId;
+              final storedRole = userGub["role"];
+              final hasStoredRole =
+                  storedRole is String && storedRole.trim().isNotEmpty;
+              final needsMemberDocument =
+                  !isFounder &&
+                  (!hasStoredRole || userGub["joinedAt"] is! Timestamp);
+              if (!needsMemberDocument) {
+                return MapEntry(gubDocument.id, const <String, dynamic>{});
+              }
+              final member = await gubDocument.reference
+                  .collection("members")
+                  .doc(userId)
+                  .get();
+              return MapEntry(
+                gubDocument.id,
+                member.data() ?? const <String, dynamic>{},
+              );
+            }),
+          );
+          final memberDetailsById = Map.fromEntries(memberDetails);
+
           final results = <Map<String, dynamic>>[];
           for (final gubDocument in existingGubs) {
             final userGub = userGubById[gubDocument.id]!;
             final gub = gubDocument.data();
+            final member = memberDetailsById[gubDocument.id]!;
+            final isFounder = gub["ownerId"] == userId;
             final storedRole = userGub["role"];
             final role = storedRole is String && storedRole.trim().isNotEmpty
                 ? storedRole.trim()
-                : gub["ownerId"] == userId
+                : isFounder
                 ? "owner"
+                : member["role"] is String &&
+                      (member["role"] as String).trim().isNotEmpty
+                ? (member["role"] as String).trim()
                 : "member";
+            final joinedAt =
+                _timestampValue(userGub["joinedAt"]) ??
+                _timestampValue(member["joinedAt"]) ??
+                (isFounder ? _timestampValue(gub["createdAt"]) : null);
 
             results.add({
               ...userGub,
               ...gub,
               "gubId": gubDocument.id,
               "role": role,
+              "joinedAt": joinedAt,
+              "joinedAtDate": joinedAt?.toDate(),
+              "isFounder": isFounder,
             });
           }
           results.sort((first, second) {
@@ -105,6 +143,28 @@ class GubRepository {
         });
   }
 
+  Future<bool> isMember({required String gubId, required String userId}) async {
+    final member = await _firestore
+        .collection("gubs")
+        .doc(gubId)
+        .collection("members")
+        .doc(userId)
+        .get();
+    return member.exists;
+  }
+
+  Future<void> removeUserGubReference({
+    required String gubId,
+    required String userId,
+  }) {
+    return _firestore
+        .collection("users")
+        .doc(userId)
+        .collection("gubs")
+        .doc(gubId)
+        .delete();
+  }
+
   /// Aggiorna la cache dopo una modifica
   void updateHub(String gubId, Map<String, dynamic> data) {
     _hubCache[gubId] = data;
@@ -118,5 +178,9 @@ class GubRepository {
   /// Svuota completamente la cache
   void clearCache() {
     _hubCache.clear();
+  }
+
+  Timestamp? _timestampValue(Object? value) {
+    return value is Timestamp ? value : null;
   }
 }

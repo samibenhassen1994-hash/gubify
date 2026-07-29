@@ -3,23 +3,50 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 class CommunityModel {
   static const String publicVisibility = "public";
   static const String defaultType = "General";
-  static const String defaultLanguage = "Italian";
+  static const String defaultLanguage = "English";
 
+  /// Options available when creating or filtering communities.
   static const List<String> availableTypes = [
     "General",
-    "Friends",
     "Gaming",
     "Sport",
     "Music",
     "Study",
     "Travel",
-    "Local",
+    "Show",
+    "Work",
+    "Social",
+    "Events",
+    "Hobbies & Interests",
+    "Technology",
+    "Art & Creativity",
+    "Movies & TV",
+    "Books & Reading",
+    "Food & Cooking",
+    "Fitness & Wellness",
     "Other",
   ];
+
+  /// Kept only so existing documents remain readable in the Explorer.
+  static const List<String> _legacyTypes = ["Friends", "Local"];
+
   static const List<String> availableLanguages = [
-    "Italian",
     "English",
-    "Other",
+    "Mandarin Chinese",
+    "Hindi",
+    "Spanish",
+    "French",
+    "Arabic",
+    "Bengali",
+    "Portuguese",
+    "Russian",
+    "Urdu",
+    "Indonesian",
+    "German",
+    "Japanese",
+    "Italian",
+    "Turkish",
+    "Korean",
   ];
 
   final String communityId;
@@ -61,7 +88,7 @@ class CommunityModel {
       visibility:
           data["visibility"] as String? ?? CommunityModel.publicVisibility,
       createdAt: data["createdAt"] as Timestamp?,
-      type: _normalizedOption(data["type"], availableTypes, defaultType),
+      type: _normalizedStoredType(data["type"]),
       language: _normalizedOption(
         data["language"],
         availableLanguages,
@@ -105,6 +132,14 @@ class CommunityModel {
   static String normalizeLanguage(String? value) =>
       _normalizedOption(value, availableLanguages, defaultLanguage);
 
+  static String _normalizedStoredType(Object? value) {
+    final normalized = value is String ? value.trim() : "";
+    return availableTypes.contains(normalized) ||
+            _legacyTypes.contains(normalized)
+        ? normalized
+        : defaultType;
+  }
+
   static String _normalizedOption(
     Object? value,
     List<String> availableValues,
@@ -113,4 +148,18 @@ class CommunityModel {
     final normalized = value is String ? value.trim() : "";
     return availableValues.contains(normalized) ? normalized : fallback;
   }
+}
+
+class CommunityMembershipModel {
+  final CommunityModel community;
+  final String role;
+  final Timestamp? joinedAt;
+
+  const CommunityMembershipModel({
+    required this.community,
+    required this.role,
+    required this.joinedAt,
+  });
+
+  DateTime? get joinedAtDate => joinedAt?.toDate();
 }

@@ -15,6 +15,7 @@ class ChatScreen extends StatefulWidget {
   final ValueChanged<ChatMessageModel>? onConvertToTask;
   final ValueChanged<ChatMessageModel>? onConvertToProposal;
   final ValueChanged<ChatMessageModel>? onConvertToSharedBudget;
+  final ValueChanged<ChatMessageModel>? onConvertToEvent;
   final ValueChanged<String>? onOpenUserProfile;
   final String? initialMessageId;
 
@@ -25,6 +26,7 @@ class ChatScreen extends StatefulWidget {
     this.onConvertToTask,
     this.onConvertToProposal,
     this.onConvertToSharedBudget,
+    this.onConvertToEvent,
     this.onOpenUserProfile,
     this.initialMessageId,
   });
@@ -420,7 +422,8 @@ class _ChatScreenState extends State<ChatScreen> {
     if (_messageActionOpen ||
         (widget.onConvertToTask == null &&
             widget.onConvertToProposal == null &&
-            widget.onConvertToSharedBudget == null)) {
+            widget.onConvertToSharedBudget == null &&
+            widget.onConvertToEvent == null)) {
       return;
     }
     _messageActionOpen = true;
@@ -506,10 +509,10 @@ class _ChatScreenState extends State<ChatScreen> {
       return;
     }
 
-    _messageActionOpen = false;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text("Coming soon")));
+    if (conversion == _MessageConversion.event) {
+      widget.onConvertToEvent?.call(message);
+      return;
+    }
   }
 
   void _openUserProfile(String userId) {
