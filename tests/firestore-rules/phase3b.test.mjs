@@ -39,6 +39,7 @@ let env;
 const db = (userId) => env.authenticatedContext(userId).firestore();
 const anonymousDb = () => env.unauthenticatedContext().firestore();
 const timestamp = () => new Date('2026-01-01T00:00:00Z');
+const inviteTokenId = 'PHA3B2Q7';
 
 const profile = (userId) => ({
   displayName: userId,
@@ -58,7 +59,7 @@ const root = (overrides = {}) => ({
   gubId: 'g1',
   name: 'Phase 3B Gub',
   ownerId: uid.ownerGub,
-  inviteCode: 'PHA-3000',
+  inviteTokenId,
   memberCount: members.length,
   createdAt: timestamp(),
   ...overrides,
@@ -66,8 +67,6 @@ const root = (overrides = {}) => ({
 const copy = (userId, role) => ({
   gubId: 'g1',
   name: 'Phase 3B Gub',
-  inviteCode: 'PHA-3000',
-  memberCount: members.length,
   ownerId: uid.ownerGub,
   role,
   joinedAt: timestamp(),
@@ -240,6 +239,10 @@ beforeEach(async () => {
       batch.set(doc(seedDb, 'users', userId), profile(userId));
     }
     batch.set(doc(seedDb, 'gubs', 'g1'), root());
+    batch.set(doc(seedDb, 'inviteTokens', inviteTokenId), {
+      gubId: 'g1', ownerId: uid.ownerGub, gubName: 'Phase 3B Gub',
+      active: true, createdAt: timestamp(),
+    });
     for (const userId of members) {
       const role = userId === uid.ownerGub ? 'owner' : 'member';
       batch.set(doc(seedDb, 'gubs', 'g1', 'members', userId), member(userId, role));
@@ -262,6 +265,9 @@ async function markDeleting() {
       deletionStartedAt: timestamp(),
       deletionUpdatedAt: timestamp(),
       deletionPhase: 'preparing',
+    });
+    await updateDoc(doc(context.firestore(), 'inviteTokens', inviteTokenId), {
+      active: false,
     });
   });
 }

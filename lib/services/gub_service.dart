@@ -1,15 +1,18 @@
-import 'dart:math';
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import '../core/models/member_option.dart';
+
 import '../config/app_limits.dart';
-import '../repositories/user_repository.dart';
+import '../core/invites/invite_code.dart';
+import '../core/models/member_option.dart';
+import '../repositories/gub_invite_repository.dart';
 import '../repositories/member_repository.dart';
+import '../repositories/user_repository.dart';
 
 class GubService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
+  final GubInviteRepository _inviteRepository = GubInviteRepository();
+  final InviteCodeGenerator _inviteCodeGenerator = InviteCodeGenerator.secure();
 
   Future<String> createHub({required String name}) async {
     final user = _auth.currentUser;
@@ -34,56 +37,21 @@ class GubService {
 
     final displayName = userData?["displayName"] ?? "User";
 
-    final hubRef = _firestore.collection("gubs").doc();
-
-    final random = Random();
-
-    final prefix = name
-        .trim()
-        .substring(0, min(3, name.trim().length))
-        .toUpperCase();
-
-    final inviteCode = "$prefix-${1000 + random.nextInt(9000)}";
-
-    final batch = _firestore.batch();
-
-    batch.set(hubRef, {
-      "gubId": hubRef.id,
-      "name": name.trim(),
-      "ownerId": user.uid,
-      "inviteCode": inviteCode,
-      "memberCount": 1,
-      "createdAt": FieldValue.serverTimestamp(),
-    });
-
-    batch.set(hubRef.collection("members").doc(user.uid), {
-      "uid": user.uid,
-      "displayName": displayName,
-      "photoUrl": user.photoURL,
-      "role": "owner",
-      "joinedAt": FieldValue.serverTimestamp(),
-    });
-
-    batch.set(
-      _firestore
-          .collection("users")
-          .doc(user.uid)
-          .collection("gubs")
-          .doc(hubRef.id),
-      {
-        "gubId": hubRef.id,
-        "name": name.trim(),
-        "inviteCode": inviteCode,
-        "memberCount": 1,
-        "ownerId": user.uid,
-        "role": "owner",
-        "joinedAt": FieldValue.serverTimestamp(),
+    final gubId = _inviteRepository.newGubId();
+    return reserveUniqueInviteCode<String>(
+      generator: _inviteCodeGenerator,
+      tryReserve: (candidate) async {
+        final created = await _inviteRepository.tryCreateGubWithToken(
+          gubId: gubId,
+          name: name.trim(),
+          ownerId: user.uid,
+          displayName: displayName,
+          photoUrl: user.photoURL,
+          canonicalCode: candidate,
+        );
+        return created ? gubId : null;
       },
     );
-
-    await batch.commit();
-
-    return hubRef.id;
   }
 
   Future<String> joinHub({required String inviteCode}) async {
@@ -97,14 +65,17 @@ class GubService {
 
     final displayName = userData?["displayName"] ?? "User";
 
-    QuerySnapshot<Map<String, dynamic>> query;
+    late final String canonicalCode;
+    try {
+      canonicalCode = InviteCode.normalize(inviteCode);
+    } on InvalidInviteCodeException {
+      throw const InvalidInviteCodeException();
+    }
+
+    InviteTokenData? token;
 
     try {
-      query = await _firestore
-          .collection("gubs")
-          .where("inviteCode", isEqualTo: inviteCode.trim().toUpperCase())
-          .limit(1)
-          .get();
+      token = await _inviteRepository.getToken(canonicalCode);
     } on FirebaseException catch (e) {
       switch (e.code) {
         case "unavailable":
@@ -113,7 +84,7 @@ class GubService {
           );
 
         case "permission-denied":
-          throw Exception("You don't have permission to access Gubify.");
+          throw const InvalidInviteCodeException();
 
         case "deadline-exceeded":
           throw Exception("The connection timed out. Please try again.");
@@ -123,60 +94,70 @@ class GubService {
       }
     }
 
-    if (query.docs.isEmpty) {
-      throw Exception("Invalid Hub code.");
+    if (token == null || !token.isUsable) {
+      throw const InvalidInviteCodeException();
     }
 
-    final hubDoc = query.docs.first;
-    final gubId = hubDoc.id;
-    if (hubDoc.data()["deletionStatus"] == "deleting") {
-      throw Exception("This Gub is no longer available.");
-    }
-
-    final memberRef = _firestore
-        .collection("gubs")
-        .doc(gubId)
-        .collection("members")
-        .doc(user.uid);
-
-    if ((await memberRef.get()).exists) {
-      return gubId;
-    }
-
-    final batch = _firestore.batch();
-
-    batch.set(memberRef, {
-      "uid": user.uid,
-      "displayName": displayName,
-      "photoUrl": user.photoURL,
-      "role": "member",
-      "joinedAt": FieldValue.serverTimestamp(),
-    });
-
-    batch.update(_firestore.collection("gubs").doc(gubId), {
-      "memberCount": FieldValue.increment(1),
-    });
-
-    batch.set(
-      _firestore
-          .collection("users")
-          .doc(user.uid)
-          .collection("gubs")
-          .doc(gubId),
-      {
-        "gubId": gubId,
-        "name": hubDoc["name"],
-        "inviteCode": hubDoc["inviteCode"],
-        "memberCount": (hubDoc["memberCount"] ?? 1) + 1,
-        "ownerId": hubDoc["ownerId"],
-        "role": "member",
-        "joinedAt": FieldValue.serverTimestamp(),
-      },
+    final existingMembership = await _inviteRepository.getOwnMembership(
+      gubId: token.gubId,
+      userId: user.uid,
     );
+    if (existingMembership != null) {
+      return _existingMembershipResult(
+        token: token,
+        userId: user.uid,
+        membership: existingMembership,
+      );
+    }
 
-    await batch.commit();
+    try {
+      await _inviteRepository.joinWithToken(
+        token: token,
+        userId: user.uid,
+        displayName: displayName,
+        photoUrl: user.photoURL,
+      );
+      return token.gubId;
+    } on FirebaseException catch (error) {
+      if (error.code == 'permission-denied') {
+        final racedMembership = await _inviteRepository.getOwnMembership(
+          gubId: token.gubId,
+          userId: user.uid,
+        );
+        if (racedMembership != null) {
+          return _existingMembershipResult(
+            token: token,
+            userId: user.uid,
+            membership: racedMembership,
+          );
+        }
+        throw const InvalidInviteCodeException();
+      }
+      rethrow;
+    }
+  }
 
-    return gubId;
+  Future<String> _existingMembershipResult({
+    required InviteTokenData token,
+    required String userId,
+    required Map<String, dynamic> membership,
+  }) async {
+    final role = membership['role'];
+    if (membership['uid'] != userId || (role != 'owner' && role != 'member')) {
+      throw StateError(
+        'Your Gub membership is invalid. Please contact support.',
+      );
+    }
+    final copy = await _inviteRepository.getOwnCopy(
+      gubId: token.gubId,
+      userId: userId,
+    );
+    if (copy == null || copy['gubId'] != token.gubId || copy['role'] != role) {
+      throw StateError(
+        'Your Gub membership needs recovery. Please contact support.',
+      );
+    }
+    return token.gubId;
   }
 
   Stream<List<MemberOption>> membersStream(String gubId) {

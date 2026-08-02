@@ -29,10 +29,11 @@ const uid = {
 const now = () => new Date('2026-01-01T00:00:00Z');
 let env;
 const db = (userId) => env.authenticatedContext(userId).firestore();
+const tokenId = (id) => id === 'g1' ? 'QUE3D2Q7' : id === 'g2' ? 'QUE3D2Q8' : 'QUE3D2Q9';
 
 const profile = (userId) => ({ displayName: userId, createdAt: now(), updatedAt: now(), activeHub: null, avatar: null });
 const member = (userId, role = 'member') => ({ uid: userId, displayName: userId, photoUrl: null, role, joinedAt: now() });
-const root = (id, ownerId, count = 1, overrides = {}) => ({ gubId: id, name: id, ownerId, inviteCode: `${id}-CODE`, memberCount: count, createdAt: now(), ...overrides });
+const root = (id, ownerId, count = 1, overrides = {}) => ({ gubId: id, name: id, ownerId, inviteTokenId: tokenId(id), memberCount: count, createdAt: now(), ...overrides });
 const task = (gubId, id = 'task1', overrides = {}) => ({
   gubId, taskId: id, title: 'Task', description: '', creatorId: uid.member, creatorName: uid.member,
   assignedUserId: null, assignedUserName: null, sourceType: 'manual', sourceId: null,
@@ -64,15 +65,18 @@ beforeEach(async () => {
     const batch = writeBatch(d);
     for (const userId of Object.values(uid)) batch.set(doc(d, 'users', userId), profile(userId));
     batch.set(doc(d, 'gubs', 'g1'), root('g1', uid.owner, 3));
+    batch.set(doc(d, 'inviteTokens', tokenId('g1')), { gubId: 'g1', ownerId: uid.owner, gubName: 'g1', active: true, createdAt: now() });
     for (const userId of [uid.owner, uid.member, uid.second]) {
       const role = userId === uid.owner ? 'owner' : 'member';
       batch.set(doc(d, 'gubs', 'g1', 'members', userId), member(userId, role));
-      batch.set(doc(d, 'users', userId, 'gubs', 'g1'), { gubId: 'g1', name: 'g1', inviteCode: 'g1-CODE', memberCount: 3, ownerId: uid.owner, role, joinedAt: now() });
+      batch.set(doc(d, 'users', userId, 'gubs', 'g1'), { gubId: 'g1', name: 'g1', ownerId: uid.owner, role, joinedAt: now() });
     }
     batch.set(doc(d, 'gubs', 'g2'), root('g2', uid.otherOwner, 2));
+    batch.set(doc(d, 'inviteTokens', tokenId('g2')), { gubId: 'g2', ownerId: uid.otherOwner, gubName: 'g2', active: true, createdAt: now() });
     for (const userId of [uid.otherOwner, uid.member]) batch.set(doc(d, 'gubs', 'g2', 'members', userId), member(userId, userId === uid.otherOwner ? 'owner' : 'member'));
-    batch.set(doc(d, 'users', uid.member, 'gubs', 'g2'), { gubId: 'g2', name: 'g2', inviteCode: 'g2-CODE', memberCount: 2, ownerId: uid.otherOwner, role: 'member', joinedAt: now() });
+    batch.set(doc(d, 'users', uid.member, 'gubs', 'g2'), { gubId: 'g2', name: 'g2', ownerId: uid.otherOwner, role: 'member', joinedAt: now() });
     batch.set(doc(d, 'gubs', 'g3'), root('g3', uid.outsider));
+    batch.set(doc(d, 'inviteTokens', tokenId('g3')), { gubId: 'g3', ownerId: uid.outsider, gubName: 'g3', active: true, createdAt: now() });
     batch.set(doc(d, 'gubs', 'g3', 'members', uid.outsider), member(uid.outsider, 'owner'));
 
     batch.set(doc(d, 'communities', 'c1'), { communityId: 'c1', name: 'Public', ownerId: uid.communityOwner, memberCount: 2, visibility: 'public', createdAt: now(), type: 'General', language: 'English', description: '' });
@@ -109,8 +113,8 @@ describe('real query compatibility', () => {
     await assertSucceeds(getDocs(query(collection(db(uid.member), 'gubs'), where(documentId(), 'in', ['g1', 'g2']))));
     await assertFails(getDocs(query(collection(db(uid.member), 'gubs'), where(documentId(), 'in', ['g1', 'g3']))));
   });
-  test('private inviteCode discovery remains denied to a non-member', async () => {
-    await assertFails(getDocs(query(collection(db(uid.outsider), 'gubs'), where('inviteCode', '==', 'g1-CODE'), limit(1))));
+  test('private inviteTokenId discovery remains denied to a non-member', async () => {
+    await assertFails(getDocs(query(collection(db(uid.outsider), 'gubs'), where('inviteTokenId', '==', tokenId('g1')), limit(1))));
   });
   test('Community public discovery and owner queries work, while an unconstrained mixed query fails', async () => {
     await assertSucceeds(getDocs(query(collection(db(uid.outsider), 'communities'), where('visibility', '==', 'public'))));

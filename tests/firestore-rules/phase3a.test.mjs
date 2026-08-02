@@ -33,6 +33,7 @@ const ids = {
 let env;
 const db = (uid) => env.authenticatedContext(uid).firestore();
 const anonymousDb = () => env.unauthenticatedContext().firestore();
+const inviteTokenId = 'TES3A2Q7';
 
 const profile = (uid) => ({
   displayName: uid,
@@ -45,7 +46,7 @@ const gubRoot = (id = 'g1', ownerId = ids.ownerGub, overrides = {}) => ({
   gubId: id,
   name: 'Test Gub',
   ownerId,
-  inviteCode: 'TES-1234',
+  inviteTokenId,
   memberCount: 1,
   createdAt: new Date('2026-01-01T00:00:00Z'),
   ...overrides,
@@ -61,11 +62,17 @@ const gubMember = (uid, role = 'member', overrides = {}) => ({
 const gubCopy = (id, uid, role = 'member', overrides = {}) => ({
   gubId: id,
   name: 'Test Gub',
-  inviteCode: 'TES-1234',
-  memberCount: role === 'owner' ? 1 : 2,
   ownerId: ids.ownerGub,
   role,
   joinedAt: new Date('2026-01-01T00:00:00Z'),
+  ...overrides,
+});
+const inviteToken = (id = 'g1', ownerId = ids.ownerGub, overrides = {}) => ({
+  gubId: id,
+  ownerId,
+  gubName: 'Test Gub',
+  active: true,
+  createdAt: new Date('2026-01-01T00:00:00Z'),
   ...overrides,
 });
 const communityRoot = (
@@ -166,12 +173,16 @@ async function seedGub({
           : {}),
       }),
     );
+    batch.set(
+      doc(seedDb, 'inviteTokens', inviteTokenId),
+      inviteToken(id, ids.ownerGub, { active: status != 'deleting' }),
+    );
     for (const uid of members) {
       const role = uid === ids.ownerGub ? 'owner' : 'member';
       batch.set(doc(seedDb, 'gubs', id, 'members', uid), gubMember(uid, role));
       batch.set(
         doc(seedDb, 'users', uid, 'gubs', id),
-        gubCopy(id, uid, role, { memberCount: members.length }),
+        gubCopy(id, uid, role),
       );
     }
     await batch.commit();
@@ -230,6 +241,7 @@ function createGubBatch({
   id = 'new-gub',
   ownerId = actor,
   rootOverrides = {},
+  tokenOverrides = {},
   memberUid = actor,
   memberOverrides = {},
   copyUid = actor,
@@ -237,11 +249,22 @@ function createGubBatch({
   includeRoot = true,
   includeMember = true,
   includeCopy = true,
+  includeToken = true,
   extraWrite = false,
 } = {}) {
   const clientDb = db(actor);
   const batch = writeBatch(clientDb);
   const rootData = gubRoot(id, ownerId, rootOverrides);
+  if (includeToken) {
+    batch.set(
+      doc(clientDb, 'inviteTokens', rootData.inviteTokenId),
+      inviteToken(id, ownerId, {
+        gubName: rootData.name,
+        createdAt: serverTimestamp(),
+        ...tokenOverrides,
+      }),
+    );
+  }
   if (includeRoot) batch.set(doc(clientDb, 'gubs', id), rootData);
   if (includeMember) {
     batch.set(
@@ -255,7 +278,6 @@ function createGubBatch({
       gubCopy(id, copyUid, 'owner', {
         ownerId,
         name: rootData.name,
-        inviteCode: rootData.inviteCode,
         ...copyOverrides,
       }),
     );
@@ -289,16 +311,16 @@ function joinGubBatch({
   if (includeMember) {
     batch.set(
       doc(clientDb, 'gubs', id, 'members', memberUid),
-      gubMember(memberUid, memberRole, memberOverrides),
+      gubMember(memberUid, memberRole, {
+        joinedViaInviteToken: inviteTokenId,
+        ...memberOverrides,
+      }),
     );
   }
   if (includeCopy) {
     batch.set(
       doc(clientDb, 'users', copyUid, 'gubs', id),
-      gubCopy(id, copyUid, memberRole, {
-        memberCount: 3 + increment,
-        ...copyOverrides,
-      }),
+      gubCopy(id, copyUid, memberRole, copyOverrides),
     );
   }
   return batch.commit();
@@ -452,7 +474,7 @@ describe('create Gub batch', () => {
   test('rejects owner role assigned to another UID', () => assertFails(createGubBatch({ memberUid: ids.secondMember, copyUid: ids.secondMember })));
   test('rejects an incoherent gubId in the root', () => assertFails(createGubBatch({ rootOverrides: { gubId: 'other' } })));
   test('rejects an incoherent ownerId in the copy', () => assertFails(createGubBatch({ copyOverrides: { ownerId: ids.outsider } })));
-  test('rejects an incoherent inviteCode in the copy', () => assertFails(createGubBatch({ copyOverrides: { inviteCode: 'BAD-0000' } })));
+  test('rejects invite token data in the personal copy', () => assertFails(createGubBatch({ copyOverrides: { inviteTokenId } })));
   test('rejects an incorrect initial memberCount', () => assertFails(createGubBatch({ rootOverrides: { memberCount: 2 }, copyOverrides: { memberCount: 2 } })));
   test('rejects an arbitrary root field', () => assertFails(createGubBatch({ rootOverrides: { isAdmin: true } })));
   test('rejects unauthenticated creation', async () => {
@@ -468,8 +490,8 @@ describe('join Gub batch and membership', () => {
     await seedGub();
   });
   test('accepts a complete coherent join batch', () => assertSucceeds(joinGubBatch()));
-  test('private inviteCode discovery query remains denied to non-members', async () => {
-    const q = query(collection(db(ids.outsider), 'gubs'), where('inviteCode', '==', 'TES-1234'));
+  test('private inviteTokenId discovery query remains denied to non-members', async () => {
+    const q = query(collection(db(ids.outsider), 'gubs'), where('inviteTokenId', '==', inviteTokenId));
     await assertFails(getDocs(q));
   });
   test('rejects join without membership', () => assertFails(joinGubBatch({ includeMember: false })));
@@ -480,7 +502,7 @@ describe('join Gub batch and membership', () => {
   test('rejects memberCount increment greater than one', () => assertFails(joinGubBatch({ increment: 2 })));
   test('rejects changing name during join', () => assertFails(joinGubBatch({ rootUpdates: { name: 'Changed' } })));
   test('rejects changing ownerId during join', () => assertFails(joinGubBatch({ rootUpdates: { ownerId: ids.outsider } })));
-  test('rejects inviteCode mismatch in the copy', () => assertFails(joinGubBatch({ copyOverrides: { inviteCode: 'BAD-0000' } })));
+  test('rejects invite token data in the joined copy', () => assertFails(joinGubBatch({ copyOverrides: { inviteTokenId } })));
   test('rejects auto-promotion to owner', () => assertFails(joinGubBatch({ memberRole: 'owner' })));
   test('rejects membership under another UID', () => assertFails(joinGubBatch({ memberUid: ids.secondMember })));
   test('rejects personal copy under another UID', () => assertFails(joinGubBatch({ copyUid: ids.secondMember })));

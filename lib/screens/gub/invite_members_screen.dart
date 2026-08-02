@@ -1,17 +1,23 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:share_plus/share_plus.dart';
 
 import '../../repositories/gub_repository.dart';
 import '../../services/gub_service.dart';
 import '../../widgets/gub_content_card.dart';
 import '../../widgets/gub_screen_background.dart';
 import '../../widgets/user_header.dart';
+import 'widgets/invite_code_panel.dart';
 
 class InviteMembersScreen extends StatelessWidget {
   final String gubId;
+  final Future<Map<String, dynamic>?> Function(String gubId)? loadGub;
+  final bool showUserHeader;
 
-  const InviteMembersScreen({super.key, required this.gubId});
+  const InviteMembersScreen({
+    super.key,
+    required this.gubId,
+    this.loadGub,
+    this.showUserHeader = true,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -20,30 +26,36 @@ class InviteMembersScreen extends StatelessWidget {
       child: Scaffold(
         backgroundColor: Colors.transparent,
         appBar: AppBar(
-          title: const Text("Invite Members"),
+          title: const Text("Invite members"),
           backgroundColor: Colors.transparent,
           surfaceTintColor: Colors.transparent,
           elevation: 0,
           scrolledUnderElevation: 0,
         ),
         body: FutureBuilder<Map<String, dynamic>?>(
-          future: GubRepository.instance.getHub(gubId),
+          future: (loadGub ?? GubRepository.instance.getHub)(gubId),
           builder: (context, hubSnapshot) {
             if (hubSnapshot.connectionState == ConnectionState.waiting) {
               return const Center(child: CircularProgressIndicator());
             }
-            if (!hubSnapshot.hasData || hubSnapshot.data == null) {
+            if (hubSnapshot.hasError ||
+                !hubSnapshot.hasData ||
+                hubSnapshot.data == null) {
               return const Padding(
                 padding: EdgeInsets.all(20),
                 child: GubContentCard(
-                  child: Text("Gub not found", textAlign: TextAlign.center),
+                  child: Text(
+                    "Invite unavailable. Please try again.",
+                    textAlign: TextAlign.center,
+                  ),
                 ),
               );
             }
 
             final hub = hubSnapshot.data!;
-            final gubName = hub["name"] as String? ?? "Gub";
-            final inviteCode = hub["inviteCode"] as String? ?? "";
+            final gubName = hub["name"] as String? ?? "";
+            final inviteTokenId = hub["inviteTokenId"] as String? ?? "";
+            final inviteAvailable = hub["deletionStatus"] != "deleting";
 
             return SafeArea(
               top: false,
@@ -52,85 +64,20 @@ class InviteMembersScreen extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    UserHeader(gubId: gubId),
+                    if (showUserHeader) UserHeader(gubId: gubId),
                     GubContentCard(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          Text(
-                            gubName,
-                            style: const TextStyle(
-                              fontSize: 30,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
                           const Text(
-                            "Invite people to your Gub",
+                            "Share this invite with people you want to add to this Gub.",
                             style: TextStyle(color: Colors.grey, fontSize: 17),
                           ),
                           const SizedBox(height: 24),
-                          Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.all(22),
-                            decoration: BoxDecoration(
-                              color: Colors.blue.shade50,
-                              borderRadius: BorderRadius.circular(18),
-                            ),
-                            child: Column(
-                              children: [
-                                const Text(
-                                  "Gub Code",
-                                  style: TextStyle(color: Colors.grey),
-                                ),
-                                const SizedBox(height: 10),
-                                Text(
-                                  inviteCode,
-                                  style: const TextStyle(
-                                    fontSize: 34,
-                                    fontWeight: FontWeight.bold,
-                                    letterSpacing: 3,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 20),
-                          SizedBox(
-                            height: 55,
-                            child: FilledButton.icon(
-                              icon: const Icon(Icons.copy),
-                              label: const Text("Copy Code"),
-                              onPressed: () async {
-                                await Clipboard.setData(
-                                  ClipboardData(text: inviteCode),
-                                );
-                                if (!context.mounted) return;
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text("Code copied to clipboard"),
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
-                          const SizedBox(height: 15),
-                          SizedBox(
-                            height: 55,
-                            child: OutlinedButton.icon(
-                              icon: const Icon(Icons.share),
-                              label: const Text("Share"),
-                              onPressed: () async {
-                                await SharePlus.instance.share(
-                                  ShareParams(
-                                    text:
-                                        'Join my Gub "$gubName" on Gubify!\n\n'
-                                        'Download Gubify and enter this invite code:\n\n'
-                                        '$inviteCode',
-                                  ),
-                                );
-                              },
-                            ),
+                          InviteCodePanel(
+                            gubName: gubName,
+                            canonicalCode: inviteTokenId,
+                            inviteAvailable: inviteAvailable,
                           ),
                         ],
                       ),

@@ -109,6 +109,7 @@ class GubDeletionRepository {
     }
 
     onPhase(GubDeletionPhase.finalizing);
+    await _deleteInviteToken(data['inviteTokenId']);
     await _completePhase(gubReference, ownerId, GubDeletionPhase.finalizing);
     await gubReference.delete();
   }
@@ -128,6 +129,13 @@ class GubDeletionRepository {
         throw StateError('Only the Gub owner can delete this Gub.');
       }
       final deleting = data['deletionStatus'] == 'deleting';
+      final inviteTokenId = data['inviteTokenId'] as String?;
+      DocumentSnapshot<Map<String, dynamic>>? inviteToken;
+      if (inviteTokenId != null && inviteTokenId.isNotEmpty) {
+        inviteToken = await transaction.get(
+          _firestore.collection('inviteTokens').doc(inviteTokenId),
+        );
+      }
       if (!deleting && confirmedName != data['name']) {
         throw StateError(
           'The Gub name has changed. Reopen Manage Gub and try again.',
@@ -141,6 +149,17 @@ class GubDeletionRepository {
           'deletionUpdatedAt': FieldValue.serverTimestamp(),
           'deletionPhase': GubDeletionPhase.preparing.name,
         });
+        if (inviteToken?.exists == true) {
+          _validateInviteToken(
+            token: inviteToken!,
+            gubId: gubReference.id,
+            ownerId: ownerId,
+            gubName: data['name'] as String? ?? '',
+          );
+          if (inviteToken.data()?['active'] == true) {
+            transaction.update(inviteToken.reference, {'active': false});
+          }
+        }
         return {
           ...data,
           'deletionStatus': 'deleting',
@@ -155,8 +174,40 @@ class GubDeletionRepository {
       transaction.update(gubReference, {
         'deletionUpdatedAt': FieldValue.serverTimestamp(),
       });
+      final tokenSnapshot = inviteToken;
+      if (tokenSnapshot?.exists == true &&
+          tokenSnapshot?.data()?['active'] == true) {
+        _validateInviteToken(
+          token: tokenSnapshot!,
+          gubId: gubReference.id,
+          ownerId: ownerId,
+          gubName: data['name'] as String? ?? '',
+        );
+        transaction.update(tokenSnapshot.reference, {'active': false});
+      }
       return data;
     });
+  }
+
+  void _validateInviteToken({
+    required DocumentSnapshot<Map<String, dynamic>> token,
+    required String gubId,
+    required String ownerId,
+    required String gubName,
+  }) {
+    final data = token.data();
+    if (data?['gubId'] != gubId ||
+        data?['ownerId'] != ownerId ||
+        data?['gubName'] != gubName) {
+      throw StateError('This Gub invite token is inconsistent.');
+    }
+  }
+
+  Future<void> _deleteInviteToken(Object? value) async {
+    if (value is! String || value.isEmpty) return;
+    final reference = _firestore.collection('inviteTokens').doc(value);
+    final snapshot = await reference.get();
+    if (snapshot.exists) await reference.delete();
   }
 
   Future<void> _completePhase(

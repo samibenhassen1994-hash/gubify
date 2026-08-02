@@ -33,6 +33,7 @@ const uid = {
 };
 const ts = () => new Date('2026-01-01T00:00:00Z');
 const gubMembers = [uid.ownerGub, uid.memberGub, uid.secondMember];
+const tokenId = (id) => id === 'g2' ? 'DEL3C2Q8' : 'DEL3C2Q7';
 const communityMembers = [uid.ownerCommunity, uid.memberCommunity];
 let env;
 
@@ -41,10 +42,10 @@ const anonymousDb = () => env.unauthenticatedContext().firestore();
 const profile = (userId) => ({ displayName: userId, createdAt: ts(), updatedAt: ts(), activeHub: null, avatar: null });
 const member = (userId, role = 'member') => ({ uid: userId, displayName: userId, photoUrl: null, role, joinedAt: ts() });
 const gubRoot = (id = 'g1', ownerId = uid.ownerGub, overrides = {}) => ({
-  gubId: id, name: `${id} Gub`, ownerId, inviteCode: 'DEL-3000', memberCount: gubMembers.length, createdAt: ts(), ...overrides,
+  gubId: id, name: `${id} Gub`, ownerId, inviteTokenId: tokenId(id), memberCount: gubMembers.length, createdAt: ts(), ...overrides,
 });
 const gubCopy = (id, userId, role = 'member', overrides = {}) => ({
-  gubId: id, name: `${id} Gub`, inviteCode: 'DEL-3000', memberCount: gubMembers.length,
+  gubId: id, name: `${id} Gub`,
   ownerId: id === 'g2' ? uid.ownerOtherGub : uid.ownerGub, role, joinedAt: ts(), ...overrides,
 });
 const communityRoot = (id = 'c1', ownerId = uid.ownerCommunity, overrides = {}) => ({
@@ -96,12 +97,14 @@ beforeEach(async () => {
     const batch = writeBatch(seedDb);
     for (const userId of Object.values(uid)) batch.set(doc(seedDb, 'users', userId), profile(userId));
     batch.set(doc(seedDb, 'gubs', 'g1'), gubRoot());
+    batch.set(doc(seedDb, 'inviteTokens', tokenId('g1')), { gubId: 'g1', ownerId: uid.ownerGub, gubName: 'g1 Gub', active: true, createdAt: ts() });
     for (const userId of gubMembers) {
       const role = userId === uid.ownerGub ? 'owner' : 'member';
       batch.set(doc(seedDb, 'gubs', 'g1', 'members', userId), member(userId, role));
       batch.set(doc(seedDb, 'users', userId, 'gubs', 'g1'), gubCopy('g1', userId, role));
     }
     batch.set(doc(seedDb, 'gubs', 'g2'), gubRoot('g2', uid.ownerOtherGub, { memberCount: 1 }));
+    batch.set(doc(seedDb, 'inviteTokens', tokenId('g2')), { gubId: 'g2', ownerId: uid.ownerOtherGub, gubName: 'g2 Gub', active: true, createdAt: ts() });
     batch.set(doc(seedDb, 'gubs', 'g2', 'members', uid.ownerOtherGub), member(uid.ownerOtherGub, 'owner'));
     batch.set(doc(seedDb, 'users', uid.ownerOtherGub, 'gubs', 'g2'), gubCopy('g2', uid.ownerOtherGub, 'owner', { memberCount: 1 }));
     batch.set(doc(seedDb, 'communities', 'c1'), communityRoot());
@@ -141,16 +144,24 @@ async function seedPopulatedGub(id = 'g1') {
   });
 }
 async function startGubDeletion(actor = uid.ownerGub, overrides = {}) {
-  return updateDoc(doc(db(actor), 'gubs', 'g1'), {
+  const clientDb = db(actor);
+  const batch = writeBatch(clientDb);
+  batch.update(doc(clientDb, 'gubs', 'g1'), {
     deletionStatus: 'deleting', deletionRequestedBy: actor,
     deletionStartedAt: serverTimestamp(), deletionUpdatedAt: serverTimestamp(), deletionPhase: 'preparing', ...overrides,
   });
+  batch.update(doc(clientDb, 'inviteTokens', tokenId('g1')), { active: false });
+  return batch.commit();
 }
 async function markGubDeleting(id = 'g1', ownerId = uid.ownerGub, overrides = {}) {
-  await env.withSecurityRulesDisabled((context) => updateDoc(doc(context.firestore(), 'gubs', id), {
-    deletionStatus: 'deleting', deletionRequestedBy: ownerId, deletionStartedAt: ts(),
-    deletionUpdatedAt: ts(), deletionPhase: 'preparing', ...overrides,
-  }));
+  await env.withSecurityRulesDisabled(async (context) => {
+    const adminDb = context.firestore();
+    await updateDoc(doc(adminDb, 'gubs', id), {
+      deletionStatus: 'deleting', deletionRequestedBy: ownerId, deletionStartedAt: ts(),
+      deletionUpdatedAt: ts(), deletionPhase: 'preparing', ...overrides,
+    });
+    await updateDoc(doc(adminDb, 'inviteTokens', tokenId(id)), { active: false });
+  });
 }
 async function deleteCollection(clientDb, path) {
   while (true) {
@@ -181,6 +192,8 @@ async function cleanupGub(clientDb, id = 'g1') {
   for (const memberId of memberIds) copyBatch.delete(doc(clientDb, 'users', memberId, 'gubs', id));
   await copyBatch.commit();
   await updateDoc(rootRef, { deletionPhase: 'userCopies', deletionUpdatedAt: serverTimestamp() });
+  const tokenRef = doc(clientDb, 'inviteTokens', tokenId(id));
+  if ((await getDoc(tokenRef)).exists()) await deleteDoc(tokenRef);
   await updateDoc(rootRef, { deletionPhase: 'finalizing', deletionUpdatedAt: serverTimestamp() });
   await deleteDoc(rootRef);
 }
@@ -235,7 +248,7 @@ describe('Gub deletion transition and checkpoints', () => {
     await assertFails(startGubDeletion(uid.ownerGub, { deletionRequestedBy: uid.falseOwner }));
     await assertFails(startGubDeletion(uid.ownerGub, { deletionStartedAt: 'now' }));
     await assertFails(startGubDeletion(uid.ownerGub, { ownerId: uid.falseOwner }));
-    await assertFails(startGubDeletion(uid.ownerGub, { name: 'Changed', inviteCode: 'BAD', memberCount: 99 }));
+    await assertFails(startGubDeletion(uid.ownerGub, { name: 'Changed', inviteTokenId: 'BAD3C2Q7', memberCount: 99 }));
     await assertFails(startGubDeletion(uid.ownerGub, { arbitrary: true }));
   });
   test('deletion cannot start from an unexpected state or missing root', async () => {
@@ -321,7 +334,7 @@ describe('Gub cleanup authorization and isolation', () => {
     await seed(['gubs', 'g2', 'messages', 'preserved'], { value: true });
     await assertFails(deleteDoc(doc(db(uid.ownerGub), 'gubs', 'g2', 'messages', 'preserved')));
   });
-  test('active root cannot be deleted, deleting root only by starter owner', async () => {
+  test('active root cannot be deleted, deleting root only by starter owner after token cleanup', async () => {
     await seed(['gubs', 'g1'], gubRoot());
     await assertFails(deleteDoc(doc(db(uid.ownerGub), 'gubs', 'g1')));
     await markGubDeleting('g1', uid.ownerGub, { deletionRequestedBy: uid.falseOwner });
@@ -331,6 +344,7 @@ describe('Gub cleanup authorization and isolation', () => {
     await assertFails(deleteDoc(doc(db(uid.memberGub), 'gubs', 'g1')));
     await assertFails(deleteDoc(doc(db(uid.outsider), 'gubs', 'g1')));
     await assertFails(deleteDoc(doc(anonymousDb(), 'gubs', 'g1')));
+    await assertSucceeds(deleteDoc(doc(db(uid.ownerGub), 'inviteTokens', tokenId('g1'))));
     await assertSucceeds(deleteDoc(doc(db(uid.ownerGub), 'gubs', 'g1')));
   });
 });

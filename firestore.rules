@@ -10,6 +10,7 @@ service cloud.firestore {
     function gubAfter(id) { return getAfter(gubPath(id)); }
     function gubMemberPath(id, uid) { return /databases/$(database)/documents/gubs/$(id)/members/$(uid); }
     function userGubPath(uid, id) { return /databases/$(database)/documents/users/$(uid)/gubs/$(id); }
+    function inviteTokenPath(code) { return /databases/$(database)/documents/inviteTokens/$(code); }
     function isGubMember(id) { return signedIn() && exists(gubMemberPath(id, request.auth.uid)); }
     function isGubOwner(id) { return signedIn() && gubDoc(id).data.ownerId == request.auth.uid; }
     function gubActive(id) { return gubDoc(id).data.get('deletionStatus', 'active') != 'deleting'; }
@@ -38,17 +39,40 @@ service cloud.firestore {
     }
     function validGubRootCreate(id) {
       let data = request.resource.data;
+      let token = getAfter(inviteTokenPath(data.inviteTokenId));
       return data.keys().hasOnly([
-          'gubId','name','ownerId','inviteCode','memberCount','createdAt'
+          'gubId','name','ownerId','inviteTokenId','memberCount','createdAt'
         ])
         && data.gubId == id
         && data.name is string
         && data.ownerId == request.auth.uid
-        && data.inviteCode is string
+        && validInviteTokenCode(data.inviteTokenId)
         && data.memberCount == 1
-        && data.createdAt is timestamp;
+        && data.createdAt is timestamp
+        && token.data.gubId == id
+        && token.data.ownerId == data.ownerId
+        && token.data.gubName == data.name
+        && token.data.active == true;
+    }
+    function validInviteTokenCode(code) {
+      return code is string
+        && code.matches('^[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{8}$');
     }
     function validGubMemberData(data, uid, role) {
+      return data.keys().hasOnly([
+          'uid','displayName','photoUrl','role','joinedAt',
+          'antiSpamRulesAccepted','antiSpamRulesAcceptedAt','antiSpamRulesVersion',
+          'joinedViaInviteToken'
+        ])
+        && data.uid == uid
+        && data.displayName is string
+        && (data.get('photoUrl', null) == null || data.photoUrl is string)
+        && data.role == role
+        && data.joinedAt is timestamp
+        && ((role == 'owner' && !data.keys().hasAny(['joinedViaInviteToken']))
+          || (role == 'member' && validInviteTokenCode(data.joinedViaInviteToken)));
+    }
+    function validCommunityMemberData(data, uid, role) {
       return data.keys().hasOnly([
           'uid','displayName','photoUrl','role','joinedAt',
           'antiSpamRulesAccepted','antiSpamRulesAcceptedAt','antiSpamRulesVersion'
@@ -62,30 +86,36 @@ service cloud.firestore {
     function validGubCopyData(data, id, role) {
       let root = gubAfter(id).data;
       return data.keys().hasOnly([
-          'gubId','name','inviteCode','memberCount','ownerId','role','joinedAt'
+          'gubId','name','ownerId','role','joinedAt'
         ])
         && data.gubId == id
         && data.name == root.name
-        && data.inviteCode == root.inviteCode
-        && data.memberCount == root.memberCount
         && data.ownerId == root.ownerId
         && data.role == role
         && data.joinedAt is timestamp;
     }
     function validGubCopyRoleBackfill(data, id, uid) {
       return data.keys().hasOnly([
-          'gubId','name','inviteCode','memberCount','ownerId','role','joinedAt'
+          'gubId','name','ownerId','role','joinedAt','inviteCode','memberCount'
         ])
         && data.gubId == id
         && data.ownerId == gubAfter(id).data.ownerId
         && data.role == (gubAfter(id).data.ownerId == uid ? 'owner' : 'member');
     }
     function validGubJoin(id, uid) {
+      let member = getAfter(gubMemberPath(id, uid)).data;
+      let root = gubDoc(id).data;
+      let token = get(inviteTokenPath(member.joinedViaInviteToken)).data;
       return exists(gubPath(id))
         && !exists(gubMemberPath(id, uid))
         && gubActive(id)
         && gubAfter(id).data.diff(gubDoc(id).data).affectedKeys().hasOnly(['memberCount'])
-        && gubAfter(id).data.memberCount == gubDoc(id).data.memberCount + 1;
+        && gubAfter(id).data.memberCount == gubDoc(id).data.memberCount + 1
+        && member.joinedViaInviteToken == root.inviteTokenId
+        && token.gubId == id
+        && token.ownerId == root.ownerId
+        && token.gubName == root.name
+        && token.active == true;
     }
     function gubOwnerRemovingMember(id, uid) {
       return isGubOwner(id) && uid != request.auth.uid
@@ -103,6 +133,43 @@ service cloud.firestore {
       return validGubMemberData(member.data, uid, role)
         && validGubCopyData(copy.data, id, role)
         && (role == 'owner' || validGubJoin(id, uid));
+    }
+
+    function validInviteTokenCreate(code) {
+      let data = request.resource.data;
+      let root = getAfter(gubPath(data.gubId)).data;
+      return signedIn()
+        && validInviteTokenCode(code)
+        && data.keys().hasOnly(['gubId','ownerId','gubName','active','createdAt'])
+        && data.gubId is string
+        && data.ownerId == request.auth.uid
+        && data.gubName is string
+        && data.active == true
+        && data.createdAt == request.time
+        && root.gubId == data.gubId
+        && root.ownerId == data.ownerId
+        && root.name == data.gubName
+        && root.inviteTokenId == code;
+    }
+    function validInviteTokenRevocation(code) {
+      let data = resource.data;
+      let root = gubDoc(data.gubId).data;
+      let afterRoot = gubAfter(data.gubId).data;
+      return signedIn()
+        && data.ownerId == request.auth.uid
+        && root.ownerId == request.auth.uid
+        && root.inviteTokenId == code
+        && data.gubName == root.name
+        && request.resource.data.diff(data).affectedKeys().hasOnly(['active'])
+        && data.active == true
+        && request.resource.data.active == false
+        && afterRoot.deletionStatus == 'deleting'
+        && afterRoot.deletionRequestedBy == request.auth.uid;
+    }
+    function inviteTokenRevokedAfter(id, code) {
+      return !existsAfter(inviteTokenPath(code))
+        || (getAfter(inviteTokenPath(code)).data.gubId == id
+          && getAfter(inviteTokenPath(code)).data.active == false);
     }
 
     function messagePath(id, messageId) { return /databases/$(database)/documents/gubs/$(id)/messages/$(messageId); }
@@ -510,7 +577,7 @@ service cloud.firestore {
       let member = getAfter(communityMemberPath(id, uid));
       let copy = getAfter(userCommunityPath(uid, id));
       let root = communityAfter(id);
-      return validGubMemberData(member.data, uid, role)
+      return validCommunityMemberData(member.data, uid, role)
         && validCommunityCopyData(copy.data, id, role)
         && (role == 'owner' || validCommunityJoin(id, uid));
     }
@@ -541,6 +608,18 @@ service cloud.firestore {
       }
     }
 
+    match /inviteTokens/{canonicalCode} {
+      allow get: if signedIn() && validInviteTokenCode(canonicalCode);
+      allow list: if false;
+      allow create: if !exists(inviteTokenPath(canonicalCode))
+        && validInviteTokenCreate(canonicalCode);
+      allow update: if validInviteTokenRevocation(canonicalCode);
+      allow delete: if gubDeletingOwner(resource.data.gubId)
+        && resource.data.ownerId == request.auth.uid
+        && resource.data.gubName == gubDoc(resource.data.gubId).data.name
+        && gubDoc(resource.data.gubId).data.inviteTokenId == canonicalCode;
+    }
+
     match /gubs/{id} {
       allow read: if (signedIn() && resource.data.ownerId == request.auth.uid)
         || isGubMember(id);
@@ -560,7 +639,8 @@ service cloud.firestore {
           && request.resource.data.deletionRequestedBy == request.auth.uid
           && request.resource.data.deletionStartedAt == request.time
           && request.resource.data.deletionUpdatedAt == request.time
-          && request.resource.data.deletionPhase == 'preparing')
+          && request.resource.data.deletionPhase == 'preparing'
+          && inviteTokenRevokedAfter(id, resource.data.inviteTokenId))
         || (gubDeletingOwner(id)
           && request.resource.data.deletionStatus == 'deleting'
           && request.resource.data.deletionRequestedBy == resource.data.deletionRequestedBy
@@ -573,10 +653,12 @@ service cloud.firestore {
           && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['deletionMemberIds'])
             || request.resource.data.deletionMemberIds is list))
       );
-      allow delete: if gubDeletingOwner(id);
+      allow delete: if gubDeletingOwner(id)
+        && !exists(inviteTokenPath(resource.data.inviteTokenId));
 
       match /members/{uid} {
-        allow read: if isGubMember(id) || isGubOwner(id);
+        allow get: if own(uid) || isGubMember(id) || isGubOwner(id);
+        allow list: if isGubMember(id) || isGubOwner(id);
         allow create: if own(uid) && gubAfter(id).data.get('deletionStatus','active') != 'deleting'
           && request.resource.data.role == (gubAfter(id).data.ownerId == uid ? 'owner' : 'member')
           && validGubMemberAndCopy(id, uid, request.resource.data.role);

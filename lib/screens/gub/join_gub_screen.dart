@@ -9,7 +9,10 @@ import '../../widgets/user_header.dart';
 import 'gub_screen.dart';
 
 class JoinGubScreen extends StatefulWidget {
-  const JoinGubScreen({super.key});
+  final Future<String> Function({required String inviteCode})? joinAction;
+  final bool showUserHeader;
+
+  const JoinGubScreen({super.key, this.joinAction, this.showUserHeader = true});
 
   @override
   State<JoinGubScreen> createState() => _JoinGubScreenState();
@@ -69,6 +72,7 @@ class _JoinGubScreenState extends State<JoinGubScreen> {
   }
 
   Future<void> _joinHub() async {
+    if (_loading) return;
     final inviteCode = _controller.text.trim();
 
     if (inviteCode.isEmpty) {
@@ -81,7 +85,9 @@ class _JoinGubScreenState extends State<JoinGubScreen> {
     setState(() => _loading = true);
 
     try {
-      final gubId = await GubService().joinHub(inviteCode: inviteCode);
+      final gubId = await (widget.joinAction ?? GubService().joinHub)(
+        inviteCode: inviteCode,
+      );
 
       if (!mounted) return;
 
@@ -95,9 +101,13 @@ class _JoinGubScreenState extends State<JoinGubScreen> {
     } catch (e) {
       if (!mounted) return;
 
+      final message = e
+          .toString()
+          .replaceFirst('Exception: ', '')
+          .replaceFirst('Bad state: ', '');
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(e.toString())));
+      ).showSnackBar(SnackBar(content: Text(message)));
     } finally {
       if (mounted) {
         setState(() => _loading = false);
@@ -170,7 +180,8 @@ class _JoinGubScreenState extends State<JoinGubScreen> {
                           ),
                         ),
 
-                        const UserHeader(showCard: true),
+                        if (widget.showUserHeader)
+                          const UserHeader(showCard: true),
 
                         const SizedBox(height: 10),
 
@@ -212,14 +223,14 @@ class _JoinGubScreenState extends State<JoinGubScreen> {
                                 child: TextField(
                                   controller: _controller,
                                   focusNode: _inviteCodeFocusNode,
-                                  maxLength: AppLimits.inviteCodeLength,
+                                  maxLength: AppLimits.inviteCodeInputMaxLength,
                                   textCapitalization:
                                       TextCapitalization.characters,
                                   textInputAction: TextInputAction.done,
                                   onSubmitted: (_) => _joinHub(),
                                   inputFormatters: [
                                     FilteringTextInputFormatter.allow(
-                                      RegExp(r'[A-Za-z0-9-]'),
+                                      RegExp(r'[A-Za-z0-9\-\s]'),
                                     ),
                                   ],
                                   decoration: const InputDecoration(

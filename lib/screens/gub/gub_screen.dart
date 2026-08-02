@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../../repositories/gub_repository.dart';
+import '../../core/invites/invite_code.dart';
 import '../../services/gub_deletion_service.dart';
 import '../../modules/chat/widgets/gub_chat_overlay.dart';
 import '../../widgets/gub_access_guard.dart';
@@ -181,7 +182,8 @@ class _GubDashboard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final gubName = data["name"] as String? ?? "Hub";
-    final inviteCode = data["inviteCode"] as String? ?? "";
+    final inviteTokenId = data["inviteTokenId"] as String? ?? "";
+    final inviteCode = InviteCode.tryFormat(inviteTokenId) ?? "Unavailable";
     final ownerId = data["ownerId"] as String? ?? "";
     final memberCount = data["memberCount"] as int? ?? 1;
 
