@@ -2,6 +2,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 class CommunityModel {
   static const String publicVisibility = "public";
+  static const String openAccessMode = "open";
+  static const String approvalAccessMode = "approval";
   static const String defaultType = "General";
   static const String defaultLanguage = "English";
 
@@ -58,6 +60,7 @@ class CommunityModel {
   final String type;
   final String language;
   final String description;
+  final String accessMode;
   final String? deletionStatus;
   final String? deletionRequestedBy;
 
@@ -71,6 +74,7 @@ class CommunityModel {
     required this.type,
     required this.language,
     required this.description,
+    required this.accessMode,
     this.deletionStatus,
     this.deletionRequestedBy,
   });
@@ -99,6 +103,7 @@ class CommunityModel {
         defaultLanguage,
       ),
       description: (data["description"] as String? ?? "").trim(),
+      accessMode: normalizeAccessMode(data["accessMode"]),
       deletionStatus: data['deletionStatus'] as String?,
       deletionRequestedBy: data['deletionRequestedBy'] as String?,
     );
@@ -115,6 +120,7 @@ class CommunityModel {
       "type": type,
       "language": language,
       "description": description,
+      "accessMode": accessMode,
     };
   }
 
@@ -129,6 +135,7 @@ class CommunityModel {
       type: type,
       language: language,
       description: description,
+      accessMode: accessMode,
       deletionStatus: deletionStatus,
       deletionRequestedBy: deletionRequestedBy,
     );
@@ -139,6 +146,12 @@ class CommunityModel {
 
   static String normalizeLanguage(String? value) =>
       _normalizedOption(value, availableLanguages, defaultLanguage);
+
+  /// Legacy Communities without an explicit mode require approval and are not
+  /// returned by the Explorer query.
+  static String normalizeAccessMode(Object? value) {
+    return value == openAccessMode ? openAccessMode : approvalAccessMode;
+  }
 
   static String _normalizedStoredType(Object? value) {
     final normalized = value is String ? value.trim() : "";

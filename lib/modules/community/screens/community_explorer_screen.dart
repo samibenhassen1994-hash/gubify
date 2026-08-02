@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 
 import '../../../widgets/gub_screen_background.dart';
 import '../models/community_model.dart';
+import '../repositories/community_repository.dart';
 import '../services/community_service.dart';
 import '../widgets/community_explorer_card.dart';
 import '../widgets/community_filters_sheet.dart';
+import 'community_public_details_screen.dart';
 import 'gub_community_home_screen.dart';
 
 class CommunityExplorerScreen extends StatefulWidget {
@@ -17,37 +19,89 @@ class CommunityExplorerScreen extends StatefulWidget {
 
 class _CommunityExplorerScreenState extends State<CommunityExplorerScreen> {
   final TextEditingController _searchController = TextEditingController();
-  final Set<String> _joiningCommunityIds = <String>{};
+  final ScrollController _scrollController = ScrollController();
+  final List<CommunityModel> _communities = [];
+  final Set<String> _seenCommunityIds = {};
 
-  late Stream<List<CommunityModel>> _communitiesStream;
   late Stream<Set<String>> _joinedCommunityIdsStream;
   CommunityExplorerFilters _filters = const CommunityExplorerFilters();
+  CommunityExplorerCursor? _cursor;
+  Object? _loadError;
+  bool _loadingInitial = true;
+  bool _loadingMore = false;
+  bool _hasMore = true;
 
   @override
   void initState() {
     super.initState();
-    _communitiesStream = CommunityService.instance.publicCommunitiesStream();
     _joinedCommunityIdsStream = CommunityService.instance
         .joinedCommunityIdsStream();
     _searchController.addListener(_onSearchChanged);
+    _scrollController.addListener(_onScroll);
+    _loadNextPage();
   }
 
   void _onSearchChanged() {
     if (mounted) setState(() {});
   }
 
-  @override
-  void dispose() {
-    _searchController
-      ..removeListener(_onSearchChanged)
-      ..dispose();
-    super.dispose();
+  void _onScroll() {
+    if (!_scrollController.hasClients ||
+        _scrollController.position.extentAfter > 320) {
+      return;
+    }
+    _loadNextPage();
   }
 
-  List<CommunityModel> _filteredCommunities(List<CommunityModel> communities) {
-    final query = _searchController.text.trim().toLowerCase();
+  Future<void> _loadNextPage() async {
+    if (_loadingMore || !_hasMore) return;
+    setState(() {
+      _loadingMore = true;
+      _loadError = null;
+    });
+    try {
+      final page = await CommunityService.instance.loadPublicCommunitiesPage(
+        after: _cursor,
+      );
+      if (!mounted) return;
+      setState(() {
+        for (final community in page.communities) {
+          if (_seenCommunityIds.add(community.communityId)) {
+            _communities.add(community);
+          }
+        }
+        _cursor = page.nextCursor;
+        _hasMore = page.hasMore;
+        _loadingInitial = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _loadError = error;
+        _loadingInitial = false;
+      });
+    } finally {
+      if (mounted) setState(() => _loadingMore = false);
+    }
+  }
 
-    return communities
+  void _retryInitialLoad() {
+    setState(() {
+      _communities.clear();
+      _seenCommunityIds.clear();
+      _cursor = null;
+      _hasMore = true;
+      _loadError = null;
+      _loadingInitial = true;
+      _joinedCommunityIdsStream = CommunityService.instance
+          .joinedCommunityIdsStream();
+    });
+    _loadNextPage();
+  }
+
+  List<CommunityModel> get _filteredCommunities {
+    final query = _searchController.text.trim().toLowerCase();
+    return _communities
         .where((community) {
           final matchesQuery =
               query.isEmpty || community.name.toLowerCase().contains(query);
@@ -68,62 +122,29 @@ class _CommunityExplorerScreenState extends State<CommunityExplorerScreen> {
       builder: (_) => CommunityFiltersSheet(initialFilters: _filters),
     );
     if (!mounted || filters == null) return;
-
     setState(() => _filters = filters);
   }
 
-  void _retry() {
-    setState(() {
-      _communitiesStream = CommunityService.instance.publicCommunitiesStream();
-      _joinedCommunityIdsStream = CommunityService.instance
-          .joinedCommunityIdsStream();
-    });
-  }
-
-  Future<void> _joinCommunity(CommunityModel community) async {
-    if (_joiningCommunityIds.contains(community.communityId)) return;
-
-    setState(() => _joiningCommunityIds.add(community.communityId));
-    try {
-      final joinedCommunity = await CommunityService.instance.joinCommunity(
-        communityId: community.communityId,
-      );
-      if (!mounted) return;
-
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => GubCommunityHomeScreen(
-            communityId: joinedCommunity.communityId,
-            initialCommunity: joinedCommunity,
-          ),
-        ),
-      );
-    } catch (_) {
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Unable to join the community. Please try again."),
-        ),
-      );
-    } finally {
-      if (mounted) {
-        setState(() => _joiningCommunityIds.remove(community.communityId));
-      }
-    }
-  }
-
-  void _openCommunity(CommunityModel community) {
+  void _openCommunity(CommunityModel community, bool isJoined) {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => GubCommunityHomeScreen(
-          communityId: community.communityId,
-          initialCommunity: community,
-        ),
+        builder: (_) => isJoined
+            ? GubCommunityHomeScreen(communityId: community.communityId)
+            : CommunityPublicDetailsScreen(communityId: community.communityId),
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    _searchController
+      ..removeListener(_onSearchChanged)
+      ..dispose();
+    _scrollController
+      ..removeListener(_onScroll)
+      ..dispose();
+    super.dispose();
   }
 
   @override
@@ -155,7 +176,7 @@ class _CommunityExplorerScreenState extends State<CommunityExplorerScreen> {
                     Expanded(
                       child: SearchBar(
                         controller: _searchController,
-                        hintText: "Search communities",
+                        hintText: "Search loaded communities",
                         leading: const Icon(Icons.search_rounded),
                         padding: const WidgetStatePropertyAll(
                           EdgeInsets.symmetric(horizontal: 16),
@@ -174,72 +195,83 @@ class _CommunityExplorerScreenState extends State<CommunityExplorerScreen> {
                   ],
                 ),
               ),
-              Expanded(
-                child: StreamBuilder<List<CommunityModel>>(
-                  stream: _communitiesStream,
-                  builder: (context, communitiesSnapshot) {
-                    if (communitiesSnapshot.connectionState ==
-                        ConnectionState.waiting) {
-                      return const Center(child: CircularProgressIndicator());
-                    }
-                    if (communitiesSnapshot.hasError) {
-                      return _ExplorerErrorState(onRetry: _retry);
-                    }
-
-                    final communities = communitiesSnapshot.data ?? const [];
-                    return StreamBuilder<Set<String>>(
-                      stream: _joinedCommunityIdsStream,
-                      builder: (context, joinedSnapshot) {
-                        if (joinedSnapshot.connectionState ==
-                            ConnectionState.waiting) {
-                          return const Center(
-                            child: CircularProgressIndicator(),
-                          );
-                        }
-                        if (joinedSnapshot.hasError) {
-                          return _ExplorerErrorState(onRetry: _retry);
-                        }
-
-                        final filtered = _filteredCommunities(communities);
-                        if (filtered.isEmpty) {
-                          return _ExplorerEmptyState(
-                            isSearching:
-                                _searchController.text.trim().isNotEmpty ||
-                                _filters.hasActiveFilters,
-                          );
-                        }
-
-                        final joinedIds =
-                            joinedSnapshot.data ?? const <String>{};
-                        return ListView.separated(
-                          padding: const EdgeInsets.fromLTRB(20, 4, 20, 28),
-                          itemCount: filtered.length,
-                          separatorBuilder: (_, _) =>
-                              const SizedBox(height: 12),
-                          itemBuilder: (context, index) {
-                            final community = filtered[index];
-                            return CommunityExplorerCard(
-                              community: community,
-                              isJoined: joinedIds.contains(
-                                community.communityId,
-                              ),
-                              isJoining: _joiningCommunityIds.contains(
-                                community.communityId,
-                              ),
-                              onJoin: () => _joinCommunity(community),
-                              onOpen: () => _openCommunity(community),
-                            );
-                          },
-                        );
-                      },
-                    );
-                  },
-                ),
-              ),
+              Expanded(child: _buildResults()),
             ],
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildResults() {
+    if (_loadingInitial) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_loadError != null && _communities.isEmpty) {
+      return _ExplorerErrorState(onRetry: _retryInitialLoad);
+    }
+
+    return StreamBuilder<Set<String>>(
+      stream: _joinedCommunityIdsStream,
+      builder: (context, joinedSnapshot) {
+        if (joinedSnapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (joinedSnapshot.hasError) {
+          return _ExplorerErrorState(onRetry: _retryInitialLoad);
+        }
+        final filtered = _filteredCommunities;
+        if (filtered.isEmpty && !_hasMore) {
+          return _ExplorerEmptyState(
+            isSearching:
+                _searchController.text.trim().isNotEmpty ||
+                _filters.hasActiveFilters,
+          );
+        }
+        final joinedIds = joinedSnapshot.data ?? const <String>{};
+        return ListView.separated(
+          controller: _scrollController,
+          padding: const EdgeInsets.fromLTRB(20, 4, 20, 28),
+          itemCount: filtered.length + 1,
+          separatorBuilder: (_, _) => const SizedBox(height: 12),
+          itemBuilder: (context, index) {
+            if (index == filtered.length) {
+              if (_loadingMore) {
+                return const Padding(
+                  padding: EdgeInsets.all(20),
+                  child: Center(child: CircularProgressIndicator()),
+                );
+              }
+              if (_loadError != null) {
+                return Center(
+                  child: OutlinedButton.icon(
+                    onPressed: _loadNextPage,
+                    icon: const Icon(Icons.refresh_rounded),
+                    label: const Text("Retry loading more"),
+                  ),
+                );
+              }
+              if (_hasMore) {
+                return Center(
+                  child: OutlinedButton.icon(
+                    onPressed: _loadNextPage,
+                    icon: const Icon(Icons.expand_more_rounded),
+                    label: const Text("Load more communities"),
+                  ),
+                );
+              }
+              return const SizedBox.shrink();
+            }
+            final community = filtered[index];
+            final isJoined = joinedIds.contains(community.communityId);
+            return CommunityExplorerCard(
+              community: community,
+              isJoined: isJoined,
+              onOpen: () => _openCommunity(community, isJoined),
+            );
+          },
+        );
+      },
     );
   }
 }
@@ -250,20 +282,18 @@ class _ExplorerEmptyState extends StatelessWidget {
   const _ExplorerEmptyState({required this.isSearching});
 
   @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Text(
-          isSearching
-              ? "No communities match your search."
-              : "No public communities yet.",
-          textAlign: TextAlign.center,
-          style: const TextStyle(fontSize: 16, color: Color(0xFF475569)),
-        ),
+  Widget build(BuildContext context) => Center(
+    child: Padding(
+      padding: const EdgeInsets.all(32),
+      child: Text(
+        isSearching
+            ? "No communities match the loaded results."
+            : "No public communities yet.",
+        textAlign: TextAlign.center,
+        style: const TextStyle(fontSize: 16, color: Color(0xFF475569)),
       ),
-    );
-  }
+    ),
+  );
 }
 
 class _ExplorerErrorState extends StatelessWidget {
@@ -272,29 +302,27 @@ class _ExplorerErrorState extends StatelessWidget {
   const _ExplorerErrorState({required this.onRetry});
 
   @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(
-              Icons.cloud_off_rounded,
-              size: 44,
-              color: Color(0xFF64748B),
-            ),
-            const SizedBox(height: 12),
-            const Text("Unable to load communities."),
-            const SizedBox(height: 12),
-            OutlinedButton.icon(
-              onPressed: onRetry,
-              icon: const Icon(Icons.refresh_rounded),
-              label: const Text("Try again"),
-            ),
-          ],
-        ),
+  Widget build(BuildContext context) => Center(
+    child: Padding(
+      padding: const EdgeInsets.all(32),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(
+            Icons.cloud_off_rounded,
+            size: 44,
+            color: Color(0xFF64748B),
+          ),
+          const SizedBox(height: 12),
+          const Text("Unable to load communities."),
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: onRetry,
+            icon: const Icon(Icons.refresh_rounded),
+            label: const Text("Try again"),
+          ),
+        ],
       ),
-    );
-  }
+    ),
+  );
 }

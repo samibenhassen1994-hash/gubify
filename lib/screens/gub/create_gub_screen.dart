@@ -39,6 +39,7 @@ class _CreateGubScreenState extends State<CreateGubScreen> {
   GubType _selectedType = GubType.private;
   String _selectedCommunityType = CommunityModel.defaultType;
   String _selectedCommunityLanguage = CommunityModel.defaultLanguage;
+  String _selectedCommunityAccessMode = CommunityModel.approvalAccessMode;
 
   @override
   void initState() {
@@ -284,6 +285,7 @@ class _CreateGubScreenState extends State<CreateGubScreen> {
           description: _descriptionController.text,
           type: _selectedCommunityType,
           language: _selectedCommunityLanguage,
+          accessMode: _selectedCommunityAccessMode,
         );
 
         if (!mounted) return;
@@ -474,6 +476,40 @@ class _CreateGubScreenState extends State<CreateGubScreen> {
                                   value: _selectedCommunityLanguage,
                                   enabled: !_loading,
                                   onTap: _selectCommunityLanguage,
+                                ),
+                                const SizedBox(height: 16),
+                                RadioGroup<String>(
+                                  groupValue: _selectedCommunityAccessMode,
+                                  onChanged: (value) {
+                                    if (_loading || value == null) return;
+                                    setState(
+                                      () =>
+                                          _selectedCommunityAccessMode = value,
+                                    );
+                                  },
+                                  child: Column(
+                                    children: [
+                                      RadioListTile<String>(
+                                        value: CommunityModel.openAccessMode,
+                                        enabled: !_loading,
+                                        contentPadding: EdgeInsets.zero,
+                                        title: const Text('Open Community'),
+                                        subtitle: const Text(
+                                          'Anyone can join immediately.',
+                                        ),
+                                      ),
+                                      RadioListTile<String>(
+                                        value:
+                                            CommunityModel.approvalAccessMode,
+                                        enabled: !_loading,
+                                        contentPadding: EdgeInsets.zero,
+                                        title: const Text('Approval Required'),
+                                        subtitle: const Text(
+                                          'People must request access and be approved by the owner.',
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ],
 

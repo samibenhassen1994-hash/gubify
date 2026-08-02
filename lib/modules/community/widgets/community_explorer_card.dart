@@ -6,29 +6,23 @@ import '../models/community_model.dart';
 class CommunityExplorerCard extends StatelessWidget {
   final CommunityModel community;
   final bool isJoined;
-  final bool isJoining;
-  final VoidCallback onJoin;
   final VoidCallback onOpen;
 
   const CommunityExplorerCard({
     super.key,
     required this.community,
     required this.isJoined,
-    required this.isJoining,
-    required this.onJoin,
     required this.onOpen,
   });
 
   @override
   Widget build(BuildContext context) {
     return Semantics(
-      button: isJoined,
-      label: isJoined
-          ? "Open ${community.name}"
-          : "${community.name}. Join community.",
+      button: true,
+      label: isJoined ? "Open ${community.name}" : "View ${community.name}",
       child: InkWell(
         borderRadius: BorderRadius.circular(18),
-        onTap: isJoined ? onOpen : null,
+        onTap: onOpen,
         child: GubContentCard(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -48,7 +42,11 @@ class CommunityExplorerCard extends StatelessWidget {
                   ),
                   const SizedBox(width: 12),
                   _StatusBadge(
-                    label: isJoined ? "Joined" : "Public",
+                    label: isJoined
+                        ? "Member"
+                        : community.accessMode == CommunityModel.openAccessMode
+                        ? "Open"
+                        : "Approval",
                     color: isJoined
                         ? const Color(0xFF059669)
                         : const Color(0xFF2563EB),
@@ -96,17 +94,9 @@ class CommunityExplorerCard extends StatelessWidget {
                         label: const Text("Open community"),
                       )
                     : FilledButton.icon(
-                        onPressed: isJoining ? null : onJoin,
-                        icon: isJoining
-                            ? const SizedBox.square(
-                                dimension: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
-                                ),
-                              )
-                            : const Icon(Icons.group_add_outlined),
-                        label: Text(isJoining ? "Joining..." : "Join"),
+                        onPressed: onOpen,
+                        icon: const Icon(Icons.info_outline_rounded),
+                        label: const Text("View details"),
                       ),
               ),
             ],

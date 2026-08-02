@@ -89,6 +89,7 @@ const communityRoot = (
   type: 'General',
   language: 'English',
   description: '',
+  accessMode: 'open',
   ...overrides,
 });
 const communityCopy = (id, uid, role = 'member', overrides = {}) => ({
@@ -577,6 +578,7 @@ describe('join Gub batch and membership', () => {
 
 describe('Community creation, join, reads, and membership', () => {
   test('accepts the complete Flutter creation transaction', () => assertSucceeds(createCommunityBatch()));
+  test('accepts Approval Community creation', () => assertSucceeds(createCommunityBatch({ rootOverrides: { accessMode: 'approval' } })));
   test('rejects false Community ownerId', () => assertFails(createCommunityBatch({ ownerId: ids.communityOutsider })));
   test('rejects creation without owner membership', () => assertFails(createCommunityBatch({ includeMember: false })));
   test('rejects creation without personal copy', () => assertFails(createCommunityBatch({ includeCopy: false })));
@@ -602,6 +604,7 @@ describe('Community creation, join, reads, and membership', () => {
     await assertFails(createCommunityBatch({ rootOverrides: { description: 'x'.repeat(281) } }));
     await assertFails(createCommunityBatch({ rootOverrides: { type: 'Forged' } }));
     await assertFails(createCommunityBatch({ rootOverrides: { language: 'Forged' } }));
+    await assertFails(createCommunityBatch({ rootOverrides: { accessMode: 'private' } }));
   });
 
   describe('existing Community', () => {

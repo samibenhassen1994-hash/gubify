@@ -5,6 +5,7 @@ import '../../../widgets/gub_screen_background.dart';
 import '../../../screens/welcome_screen.dart';
 import '../models/community_model.dart';
 import '../services/community_service.dart';
+import 'community_join_requests_screen.dart';
 
 class CommunitySettingsScreen extends StatefulWidget {
   final CommunityModel community;
@@ -101,6 +102,32 @@ class _CommunitySettingsScreenState extends State<CommunitySettingsScreen> {
                 ),
               ),
               if (isOwner) ...[
+                const SizedBox(height: 16),
+                GubContentCard(
+                  padding: EdgeInsets.zero,
+                  child: ListTile(
+                    leading: const Icon(
+                      Icons.how_to_reg_rounded,
+                      color: Color(0xFF2563EB),
+                    ),
+                    title: const Text(
+                      'Join requests',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    subtitle: const Text(
+                      'Approve or reject pending access requests.',
+                    ),
+                    trailing: const Icon(Icons.chevron_right_rounded),
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => CommunityJoinRequestsScreen(
+                          community: widget.community,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
                 const SizedBox(height: 28),
                 const Text(
                   'Danger Zone',

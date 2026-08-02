@@ -2,6 +2,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 import '../../../config/app_limits.dart';
 import '../../../repositories/user_repository.dart';
+import '../models/community_access_request_model.dart';
 import '../models/community_model.dart';
 import '../repositories/community_repository.dart';
 
@@ -17,6 +18,7 @@ class CommunityService {
     String? type,
     String? language,
     String? description,
+    required String accessMode,
   }) async {
     final user = _auth.currentUser;
     if (user == null) {
@@ -27,6 +29,7 @@ class CommunityService {
     final normalizedType = CommunityModel.normalizeType(type);
     final normalizedLanguage = CommunityModel.normalizeLanguage(language);
     final normalizedDescription = (description ?? "").trim();
+    final normalizedAccessMode = CommunityModel.normalizeAccessMode(accessMode);
     if (normalizedName.isEmpty) {
       throw ArgumentError("Community name cannot be empty.");
     }
@@ -73,6 +76,7 @@ class CommunityService {
         type: normalizedType,
         language: normalizedLanguage,
         description: normalizedDescription,
+        accessMode: normalizedAccessMode,
       );
       if (community == null) {
         throw const CommunityCreationLimitException();
@@ -121,8 +125,32 @@ class CommunityService {
     }
   }
 
-  Stream<List<CommunityModel>> publicCommunitiesStream() {
-    return CommunityRepository.instance.publicCommunitiesStream();
+  Future<CommunityExplorerPage> loadPublicCommunitiesPage({
+    CommunityExplorerCursor? after,
+  }) {
+    if (_auth.currentUser == null) {
+      throw StateError("You must be signed in to explore communities.");
+    }
+    return CommunityRepository.instance.loadPublicCommunitiesPage(after: after);
+  }
+
+  Future<CommunityPublicAccessState?> loadPublicAccessState(
+    String communityId,
+  ) async {
+    final user = _auth.currentUser;
+    if (user == null) {
+      throw StateError("You must be signed in to view a community.");
+    }
+    final normalizedId = communityId.trim();
+    if (normalizedId.isEmpty) return null;
+    try {
+      return await CommunityRepository.instance.getPublicAccessState(
+        communityId: normalizedId,
+        userId: user.uid,
+      );
+    } on FirebaseException catch (error) {
+      throw Exception(_firebaseErrorMessage(error));
+    }
   }
 
   Stream<Set<String>> joinedCommunityIdsStream() {
@@ -242,28 +270,127 @@ class CommunityService {
     }
 
     try {
-      final userData = await UserRepository.instance.getUser(user.uid);
-      final storedDisplayName = userData?["displayName"];
-      final displayName =
-          storedDisplayName is String && storedDisplayName.trim().isNotEmpty
-          ? storedDisplayName.trim()
-          : user.displayName?.trim().isNotEmpty == true
-          ? user.displayName!.trim()
-          : "User";
-      final storedPhotoUrl = userData?["photoUrl"] ?? userData?["photoURL"];
-      final photoUrl =
-          storedPhotoUrl is String && storedPhotoUrl.trim().isNotEmpty
-          ? storedPhotoUrl.trim()
-          : user.photoURL;
+      final identity = await _currentIdentity(user);
 
       return await CommunityRepository.instance.joinCommunity(
         communityId: normalizedCommunityId,
         userId: user.uid,
-        displayName: displayName,
-        photoUrl: photoUrl,
+        displayName: identity.displayName,
+        photoUrl: identity.photoUrl,
       );
     } on FirebaseException catch (error) {
       throw Exception(_firebaseErrorMessage(error));
+    }
+  }
+
+  final Set<String> _accessOperationsInProgress = {};
+
+  Future<void> requestToJoin(String communityId) async {
+    final user = _requireUser("request access to a community");
+    final normalizedId = communityId.trim();
+    await _guardAccessOperation("request/$normalizedId/${user.uid}", () async {
+      final identity = await _currentIdentity(user);
+      await CommunityRepository.instance.createJoinRequest(
+        communityId: normalizedId,
+        userId: user.uid,
+        displayName: identity.displayName,
+      );
+    });
+  }
+
+  Future<void> cancelJoinRequest(String communityId) async {
+    final user = _requireUser("cancel a community request");
+    final normalizedId = communityId.trim();
+    await _guardAccessOperation("cancel/$normalizedId/${user.uid}", () {
+      return CommunityRepository.instance.cancelJoinRequest(
+        communityId: normalizedId,
+        userId: user.uid,
+      );
+    });
+  }
+
+  Future<List<CommunityAccessRequestModel>> pendingJoinRequests(
+    String communityId,
+  ) async {
+    final user = _requireUser("manage community requests");
+    final normalizedId = communityId.trim();
+    final community = await CommunityRepository.instance.getCommunity(
+      normalizedId,
+    );
+    if (community?.ownerId != user.uid) {
+      throw StateError("Only the Community owner can manage requests.");
+    }
+    return CommunityRepository.instance.pendingJoinRequests(
+      communityId: normalizedId,
+    );
+  }
+
+  Future<void> approveJoinRequest({
+    required String communityId,
+    required String userId,
+  }) async {
+    final owner = _requireUser("approve community requests");
+    await _guardAccessOperation("approve/$communityId/$userId", () {
+      return CommunityRepository.instance.approveJoinRequest(
+        communityId: communityId,
+        ownerId: owner.uid,
+        userId: userId,
+      );
+    });
+  }
+
+  Future<void> rejectJoinRequest({
+    required String communityId,
+    required String userId,
+  }) async {
+    final owner = _requireUser("reject community requests");
+    await _guardAccessOperation("reject/$communityId/$userId", () {
+      return CommunityRepository.instance.rejectJoinRequest(
+        communityId: communityId,
+        ownerId: owner.uid,
+        userId: userId,
+      );
+    });
+  }
+
+  User _requireUser(String action) {
+    final user = _auth.currentUser;
+    if (user == null) throw StateError("You must be signed in to $action.");
+    return user;
+  }
+
+  Future<({String displayName, String? photoUrl})> _currentIdentity(
+    User user,
+  ) async {
+    final userData = await UserRepository.instance.getUser(user.uid);
+    final storedDisplayName = userData?["displayName"];
+    final displayName =
+        storedDisplayName is String && storedDisplayName.trim().isNotEmpty
+        ? storedDisplayName.trim()
+        : user.displayName?.trim().isNotEmpty == true
+        ? user.displayName!.trim()
+        : "User";
+    final storedPhotoUrl = userData?["photoUrl"] ?? userData?["photoURL"];
+    final photoUrl =
+        storedPhotoUrl is String && storedPhotoUrl.trim().isNotEmpty
+        ? storedPhotoUrl.trim()
+        : user.photoURL;
+    return (displayName: displayName, photoUrl: photoUrl);
+  }
+
+  Future<void> _guardAccessOperation(
+    String key,
+    Future<void> Function() operation,
+  ) async {
+    if (!_accessOperationsInProgress.add(key)) {
+      throw StateError("This Community operation is already in progress.");
+    }
+    try {
+      await operation();
+    } on FirebaseException catch (error) {
+      throw Exception(_firebaseErrorMessage(error));
+    } finally {
+      _accessOperationsInProgress.remove(key);
     }
   }
 

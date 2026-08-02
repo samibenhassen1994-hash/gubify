@@ -327,7 +327,7 @@ describe('revocation, deletion, retry, and Community isolation', () => {
   test('56 Community creation remains valid', async () => {
     const clientDb = db(ids.communityOwner);
     const batch = writeBatch(clientDb);
-    batch.set(doc(clientDb, 'communities', 'c1'), { communityId: 'c1', name: 'Community', ownerId: ids.communityOwner, memberCount: 1, visibility: 'public', createdAt: serverTimestamp(), type: 'General', language: 'English', description: '' });
+    batch.set(doc(clientDb, 'communities', 'c1'), { communityId: 'c1', name: 'Community', ownerId: ids.communityOwner, memberCount: 1, visibility: 'public', createdAt: serverTimestamp(), type: 'General', language: 'English', description: '', accessMode: 'open' });
     batch.set(doc(clientDb, 'communities', 'c1', 'members', ids.communityOwner), { uid: ids.communityOwner, displayName: ids.communityOwner, photoUrl: null, role: 'owner', joinedAt: serverTimestamp() });
     batch.set(doc(clientDb, 'users', ids.communityOwner, 'communities', 'c1'), { communityId: 'c1', name: 'Community', ownerId: ids.communityOwner, memberCount: 1, visibility: 'public', role: 'owner', joinedAt: serverTimestamp() });
     batch.set(doc(clientDb, 'communityOwnership', ids.communityOwner), { ownerId: ids.communityOwner, communityId: 'c1', createdAt: serverTimestamp() });
