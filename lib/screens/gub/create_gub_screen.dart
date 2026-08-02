@@ -451,7 +451,8 @@ class _CreateGubScreenState extends State<CreateGubScreen> {
                                   enabled: !_loading,
                                   minLines: 2,
                                   maxLines: 4,
-                                  maxLength: 280,
+                                  maxLength:
+                                      AppLimits.communityDescriptionMaxLength,
                                   textCapitalization:
                                       TextCapitalization.sentences,
                                   decoration: const InputDecoration(
