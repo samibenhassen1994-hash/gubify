@@ -42,6 +42,13 @@ class CommunityService {
         "${AppLimits.gubNameMaxLength} characters.",
       );
     }
+    if (normalizedDescription.length >
+        AppLimits.communityDescriptionMaxLength) {
+      throw ArgumentError(
+        "Community description cannot exceed "
+        "${AppLimits.communityDescriptionMaxLength} characters.",
+      );
+    }
 
     try {
       final userData = await UserRepository.instance.getUser(user.uid);
@@ -88,6 +95,27 @@ class CommunityService {
 
     try {
       return await CommunityRepository.instance.getCommunity(normalizedId);
+    } on FirebaseException catch (error) {
+      throw Exception(_firebaseErrorMessage(error));
+    }
+  }
+
+  Future<CommunityModel?> loadCurrentMemberCommunity(String communityId) async {
+    final user = _auth.currentUser;
+    if (user == null) {
+      throw StateError("You must be signed in to view a community.");
+    }
+
+    final normalizedId = communityId.trim();
+    if (normalizedId.isEmpty) {
+      throw ArgumentError("Community ID cannot be empty.");
+    }
+
+    try {
+      return await CommunityRepository.instance.getCommunityForMember(
+        communityId: normalizedId,
+        userId: user.uid,
+      );
     } on FirebaseException catch (error) {
       throw Exception(_firebaseErrorMessage(error));
     }
@@ -166,7 +194,7 @@ class CommunityService {
     if (user == null) {
       throw const CommunityDeletionException("Please sign in again.");
     }
-    await CommunityRepository.instance.deleteCommunityClientSide(
+    await _runDeletion(
       communityId: communityId,
       confirmationName: confirmationName,
     );
@@ -179,18 +207,26 @@ class CommunityService {
     if (user == null) {
       throw const CommunityDeletionException('Please sign in again.');
     }
-    if (!_deletionsInProgress.add(communityId)) {
+    await _runDeletion(communityId: communityId, confirmationName: null);
+  }
+
+  Future<void> _runDeletion({
+    required String communityId,
+    required String? confirmationName,
+  }) async {
+    final normalizedCommunityId = communityId.trim();
+    if (!_deletionsInProgress.add(normalizedCommunityId)) {
       throw const CommunityDeletionException(
         'This Community deletion is already in progress.',
       );
     }
     try {
       await CommunityRepository.instance.deleteCommunityClientSide(
-        communityId: communityId,
-        confirmationName: null,
+        communityId: normalizedCommunityId,
+        confirmationName: confirmationName,
       );
     } finally {
-      _deletionsInProgress.remove(communityId);
+      _deletionsInProgress.remove(normalizedCommunityId);
     }
   }
 

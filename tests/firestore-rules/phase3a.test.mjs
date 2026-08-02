@@ -343,12 +343,18 @@ function createCommunityBatch({
 } = {}) {
   const clientDb = db(actor);
   const batch = writeBatch(clientDb);
-  const rootData = communityRoot(id, ownerId, rootOverrides);
+  const rootData = communityRoot(id, ownerId, {
+    createdAt: serverTimestamp(),
+    ...rootOverrides,
+  });
   batch.set(doc(clientDb, 'communities', id), rootData);
   if (includeMember) {
     batch.set(
       doc(clientDb, 'communities', id, 'members', memberUid),
-      gubMember(memberUid, 'owner', memberOverrides),
+      gubMember(memberUid, 'owner', {
+        joinedAt: serverTimestamp(),
+        ...memberOverrides,
+      }),
     );
   }
   if (includeCopy) {
@@ -357,6 +363,7 @@ function createCommunityBatch({
       communityCopy(id, copyUid, 'owner', {
         ownerId,
         name: rootData.name,
+        joinedAt: serverTimestamp(),
         ...copyOverrides,
       }),
     );
@@ -365,7 +372,7 @@ function createCommunityBatch({
     batch.set(doc(clientDb, 'communityOwnership', markerUid), {
       ownerId: actor,
       communityId: id,
-      createdAt: new Date('2026-01-01T00:00:00Z'),
+      createdAt: serverTimestamp(),
       ...markerOverrides,
     });
   }
@@ -392,7 +399,7 @@ function joinCommunityBatch({
   if (includeMember) {
     batch.set(
       doc(clientDb, 'communities', id, 'members', memberUid),
-      gubMember(memberUid, memberRole),
+      gubMember(memberUid, memberRole, { joinedAt: serverTimestamp() }),
     );
   }
   if (includeCopy) {
@@ -400,6 +407,7 @@ function joinCommunityBatch({
       doc(clientDb, 'users', copyUid, 'communities', id),
       communityCopy(id, copyUid, memberRole, {
         memberCount: 2 + increment,
+        joinedAt: serverTimestamp(),
         ...copyOverrides,
       }),
     );
@@ -581,6 +589,20 @@ describe('Community creation, join, reads, and membership', () => {
   test('rejects owner role for a different member', () => assertFails(createCommunityBatch({ memberUid: ids.memberCommunity, copyUid: ids.memberCommunity })));
   test('rejects incoherent root and copy', () => assertFails(createCommunityBatch({ copyOverrides: { name: 'Other' } })));
   test('rejects unauthenticated Community creation', () => assertFails(setDoc(doc(anonymousDb(), 'communities', 'c-anon'), communityRoot('c-anon', 'anonymous'))));
+  test('rejects client-controlled Community creation timestamps', async () => {
+    const fixed = new Date('2026-01-01T00:00:00Z');
+    await assertFails(createCommunityBatch({ rootOverrides: { createdAt: fixed } }));
+    await assertFails(createCommunityBatch({ memberOverrides: { joinedAt: fixed } }));
+    await assertFails(createCommunityBatch({ copyOverrides: { joinedAt: fixed } }));
+    await assertFails(createCommunityBatch({ markerOverrides: { createdAt: fixed } }));
+  });
+  test('rejects invalid Community text and unsupported metadata', async () => {
+    await assertFails(createCommunityBatch({ rootOverrides: { name: '   ' } }));
+    await assertFails(createCommunityBatch({ rootOverrides: { name: 'x'.repeat(31) } }));
+    await assertFails(createCommunityBatch({ rootOverrides: { description: 'x'.repeat(281) } }));
+    await assertFails(createCommunityBatch({ rootOverrides: { type: 'Forged' } }));
+    await assertFails(createCommunityBatch({ rootOverrides: { language: 'Forged' } }));
+  });
 
   describe('existing Community', () => {
     beforeEach(async () => {
@@ -611,6 +633,49 @@ describe('Community creation, join, reads, and membership', () => {
     test('rejects Community auto-promotion', () => assertFails(joinCommunityBatch({ memberRole: 'owner' })));
     test('rejects Community join under another UID', () => assertFails(joinCommunityBatch({ memberUid: ids.memberCommunity })));
     test('rejects duplicate Community join', () => assertFails(joinCommunityBatch({ actor: ids.memberCommunity })));
+    test('rejects arbitrary Community root updates and memberCount changes', async () => {
+      const root = doc(db(ids.memberCommunity), 'communities', 'c1');
+      await assertFails(updateDoc(root, { memberCount: 1 }));
+      await assertFails(updateDoc(root, { memberCount: -1 }));
+      await assertFails(updateDoc(root, { memberCount: 3 }));
+      await assertFails(updateDoc(root, { ownerId: ids.memberCommunity }));
+      await assertFails(updateDoc(root, { createdAt: serverTimestamp() }));
+      await assertFails(updateDoc(root, { arbitrary: true }));
+    });
+    test('rejects client-controlled join timestamps', async () => {
+      const fixed = new Date('2026-01-01T00:00:00Z');
+      await assertFails(joinCommunityBatch({ copyOverrides: { joinedAt: fixed } }));
+    });
+    test('an orphan user copy grants no membership but can be replaced by a valid join', async () => {
+      await env.withSecurityRulesDisabled(async (context) => {
+        await setDoc(
+          doc(context.firestore(), 'users', ids.communityOutsider, 'communities', 'c1'),
+          communityCopy('c1', ids.communityOutsider),
+        );
+      });
+      await assertSucceeds(getDoc(doc(db(ids.communityOutsider), 'communities', 'c1', 'members', ids.communityOutsider)));
+      await assertFails(getDocs(collection(db(ids.communityOutsider), 'communities', 'c1', 'members')));
+      await assertFails(getDocs(collection(db(ids.communityOutsider), 'communities', 'c1', 'messages')));
+      await assertSucceeds(joinCommunityBatch());
+    });
+    test('an authoritative member can recreate only a coherent missing personal copy', async () => {
+      await env.withSecurityRulesDisabled((context) =>
+        deleteDoc(doc(context.firestore(), 'users', ids.memberCommunity, 'communities', 'c1')),
+      );
+      const copy = communityCopy('c1', ids.memberCommunity, 'member', {
+        memberCount: 2,
+        joinedAt: new Date('2026-01-01T00:00:00Z'),
+      });
+      await assertSucceeds(
+        setDoc(doc(db(ids.memberCommunity), 'users', ids.memberCommunity, 'communities', 'c1'), copy),
+      );
+      await assertFails(
+        setDoc(doc(db(ids.memberCommunity), 'users', ids.memberCommunity, 'communities', 'c1'), {
+          ...copy,
+          role: 'owner',
+        }),
+      );
+    });
     test('legacy Community copy can backfill only its authoritative role despite stale count', async () => {
       await env.withSecurityRulesDisabled(async (context) => {
         const ref = doc(context.firestore(), 'users', ids.memberCommunity, 'communities', 'c1');
@@ -765,10 +830,18 @@ describe('Community chat', () => {
     ['senderName spoofing', { senderName: 'Forged' }],
     ['incoherent communityId', { communityId: 'other' }],
     ['wrong createdAt type', { createdAt: 'today' }],
+    ['client-controlled createdAt', { createdAt: new Date('2026-01-01T00:00:00Z') }],
+    ['empty text', { text: '   ' }],
+    ['text over the limit', { text: 'x'.repeat(2001) }],
     ['arbitrary extra field', { isAdmin: true }],
   ]) {
     test(`rejects ${name} in Community message`, () => assertFails(setDoc(doc(db(ids.memberCommunity), 'communities', 'c1', 'messages', `bad-${name}`), communityMessage(`bad-${name}`, ids.memberCommunity, overrides))));
   }
+  test('rejects a Community message without createdAt', async () => {
+    const data = communityMessage('missing-created-at', ids.memberCommunity);
+    delete data.createdAt;
+    await assertFails(setDoc(doc(db(ids.memberCommunity), 'communities', 'c1', 'messages', 'missing-created-at'), data));
+  });
   test('Community message update and normal delete are denied', async () => {
     await env.withSecurityRulesDisabled(async (context) => setDoc(doc(context.firestore(), 'communities', 'c1', 'messages', 'm1'), { ...communityMessage('m1', ids.memberCommunity), createdAt: new Date() }));
     await assertFails(updateDoc(doc(db(ids.memberCommunity), 'communities', 'c1', 'messages', 'm1'), { text: 'Edited' }));

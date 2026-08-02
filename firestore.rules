@@ -4,6 +4,12 @@ service cloud.firestore {
   match /databases/{database}/documents {
     function signedIn() { return request.auth != null; }
     function own(uid) { return signedIn() && request.auth.uid == uid; }
+    function validText(value, minLength, maxLength) {
+      return value is string
+        && value.size() >= minLength
+        && value.size() <= maxLength
+        && value.matches('.*\\S.*');
+    }
 
     function gubPath(id) { return /databases/$(database)/documents/gubs/$(id); }
     function gubDoc(id) { return get(gubPath(id)); }
@@ -78,7 +84,7 @@ service cloud.firestore {
           'antiSpamRulesAccepted','antiSpamRulesAcceptedAt','antiSpamRulesVersion'
         ])
         && data.uid == uid
-        && data.displayName is string
+        && validText(data.displayName, 1, 25)
         && (data.get('photoUrl', null) == null || data.photoUrl is string)
         && data.role == role
         && data.joinedAt is timestamp;
@@ -535,14 +541,23 @@ service cloud.firestore {
           'type','language','description'
         ])
         && data.communityId == id
-        && data.name is string
+        && validText(data.name, 3, 30)
         && data.ownerId == request.auth.uid
         && data.memberCount == 1
         && data.visibility == 'public'
-        && data.createdAt is timestamp
-        && data.type is string
-        && data.language is string
-        && data.description is string;
+        && data.createdAt == request.time
+        && data.type in [
+          'General','Gaming','Sport','Music','Study','Travel','Show','Work',
+          'Social','Events','Hobbies & Interests','Technology','Art & Creativity',
+          'Movies & TV','Books & Reading','Food & Cooking','Fitness & Wellness','Other'
+        ]
+        && data.language in [
+          'English','Mandarin Chinese','Hindi','Spanish','French','Arabic','Bengali',
+          'Portuguese','Russian','Urdu','Indonesian','German','Japanese','Italian',
+          'Turkish','Korean'
+        ]
+        && data.description is string
+        && data.description.size() <= 280;
     }
     function validCommunityCopyData(data, id, role) {
       let root = communityAfter(id).data;
@@ -555,7 +570,7 @@ service cloud.firestore {
         && data.memberCount == root.memberCount
         && data.visibility == root.visibility
         && data.role == role
-        && data.joinedAt is timestamp;
+        && data.joinedAt == getAfter(communityMemberPath(id, request.auth.uid)).data.joinedAt;
     }
     function validCommunityCopyRoleBackfill(data, id, uid) {
       return data.keys().hasOnly([
@@ -570,6 +585,8 @@ service cloud.firestore {
         && !exists(communityMemberPath(id, uid))
         && communityActive(id)
         && communityDoc(id).data.visibility == 'public'
+        && communityDoc(id).data.memberCount is int
+        && communityDoc(id).data.memberCount >= 1
         && communityAfter(id).data.diff(communityDoc(id).data).affectedKeys().hasOnly(['memberCount'])
         && communityAfter(id).data.memberCount == communityDoc(id).data.memberCount + 1;
     }
@@ -579,7 +596,19 @@ service cloud.firestore {
       let root = communityAfter(id);
       return validCommunityMemberData(member.data, uid, role)
         && validCommunityCopyData(copy.data, id, role)
+        && ((role == 'owner' && exists(communityPath(id)))
+          || member.data.joinedAt == request.time)
         && (role == 'owner' || validCommunityJoin(id, uid));
+    }
+    function validExistingCommunityCopy(id, uid) {
+      let member = getAfter(communityMemberPath(id, uid));
+      let role = communityAfter(id).data.ownerId == uid ? 'owner' : 'member';
+      return existsAfter(communityPath(id))
+        && existsAfter(communityMemberPath(id, uid))
+        && communityActive(id)
+        && member.data.uid == uid
+        && member.data.role == role
+        && validCommunityCopyData(request.resource.data, id, role);
     }
 
     match /users/{uid} {
@@ -599,11 +628,17 @@ service cloud.firestore {
       }
       match /communities/{id} {
         allow read: if own(uid);
-        allow create: if own(uid) && validCommunityMemberAndCopy(id, uid,
-          communityAfter(id).data.ownerId == uid ? 'owner' : 'member');
+        allow create: if own(uid) && (
+          validCommunityMemberAndCopy(id, uid,
+            communityAfter(id).data.ownerId == uid ? 'owner' : 'member')
+          || validExistingCommunityCopy(id, uid)
+        );
         allow update: if own(uid) && communityActive(id)
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['role'])
-          && validCommunityCopyRoleBackfill(request.resource.data, id, uid);
+          && (
+            (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['role'])
+              && validCommunityCopyRoleBackfill(request.resource.data, id, uid))
+            || validCommunityMemberAndCopy(id, uid, 'member')
+          );
         allow delete: if own(uid) || communityDeletingOwner(id);
       }
     }
@@ -806,7 +841,15 @@ service cloud.firestore {
           && request.resource.data.deletionMembersCapturedAt == request.time)
       );
       allow delete: if communityDeletingOwner(id);
-      match /members/{uid} { allow read: if isCommunityMember(id) || isCommunityOwner(id); allow create: if own(uid) && communityAfter(id).data.get('deletionStatus','active') != 'deleting' && request.resource.data.role == (communityAfter(id).data.ownerId == uid ? 'owner' : 'member') && validCommunityMemberAndCopy(id,uid,request.resource.data.role); allow delete: if communityDeletingOwner(id); }
+      match /members/{uid} {
+        allow get: if own(uid) || isCommunityMember(id) || isCommunityOwner(id);
+        allow list: if isCommunityMember(id) || isCommunityOwner(id);
+        allow create: if own(uid)
+          && communityAfter(id).data.get('deletionStatus','active') != 'deleting'
+          && request.resource.data.role == (communityAfter(id).data.ownerId == uid ? 'owner' : 'member')
+          && validCommunityMemberAndCopy(id,uid,request.resource.data.role);
+        allow delete: if communityDeletingOwner(id);
+      }
       match /messages/{messageId} {
         allow read: if isCommunityMember(id) || communityDeletingOwner(id);
         allow create: if isCommunityMember(id) && communityActive(id)
@@ -815,13 +858,14 @@ service cloud.firestore {
           && request.resource.data.communityId == id
           && request.resource.data.senderId == request.auth.uid
           && request.resource.data.senderName == get(communityMemberPath(id, request.auth.uid)).data.displayName
-          && request.resource.data.text is string
-          && request.resource.data.createdAt is timestamp;
+          && validText(request.resource.data.senderName, 1, 25)
+          && validText(request.resource.data.text, 1, 2000)
+          && request.resource.data.createdAt == request.time;
         allow delete: if communityDeletingOwner(id);
       }
       match /deletionMembers/{uid} {
         allow read: if communityDeletingOwner(id);
-        allow create: if communityDeletingOwner(id)
+        allow create, update: if communityDeletingOwner(id)
           && request.resource.data.keys().hasOnly(['uid'])
           && request.resource.data.uid == uid;
         allow delete: if communityDeletingOwner(id);
@@ -831,7 +875,7 @@ service cloud.firestore {
       allow read: if own(uid);
       allow create: if own(uid) && request.resource.data.keys().hasOnly(['ownerId','communityId','createdAt'])
         && request.resource.data.ownerId == uid
-        && request.resource.data.createdAt is timestamp
+        && request.resource.data.createdAt == request.time
         && communityAfter(request.resource.data.communityId).data.ownerId == uid
         && validCommunityMemberAndCopy(request.resource.data.communityId,uid,'owner');
       allow delete: if own(uid) && communityDeletingOwner(resource.data.communityId);

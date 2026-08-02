@@ -27,9 +27,9 @@ class _GubCommunityHomeScreenState extends State<GubCommunityHomeScreen> {
   @override
   void initState() {
     super.initState();
-    _communityFuture = widget.initialCommunity != null
-        ? Future.value(widget.initialCommunity)
-        : CommunityService.instance.loadCommunity(widget.communityId);
+    _communityFuture = CommunityService.instance.loadCurrentMemberCommunity(
+      widget.communityId,
+    );
   }
 
   @override
@@ -60,7 +60,7 @@ class _GubCommunityHomeScreenState extends State<GubCommunityHomeScreen> {
                   if (community == null) {
                     return const CommunityStateMessage(
                       icon: Icons.groups_outlined,
-                      message: "Community not found.",
+                      message: "This Community is no longer available to you.",
                     );
                   }
                   if (community.deletionStatus == 'deleting') {

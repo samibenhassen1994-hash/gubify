@@ -399,6 +399,8 @@ describe('Community transition, cleanup, legacy, and retry', () => {
     await assertFails(setDoc(doc(db(uid.memberCommunity), 'communities', 'c1', 'deletionMembers', uid.memberCommunity), { uid: uid.memberCommunity }));
     await assertFails(setDoc(marker, { uid: uid.falseOwner }));
     await assertSucceeds(setDoc(marker, { uid: uid.memberCommunity }));
+    await assertSucceeds(setDoc(marker, { uid: uid.memberCommunity }));
+    await assertFails(setDoc(marker, { uid: uid.falseOwner }));
     await assertSucceeds(getDocs(collection(ownerDb, 'communities', 'c1', 'deletionMembers')));
     await assertSucceeds(deleteDoc(marker));
     await assertSucceeds(deleteDoc(marker));

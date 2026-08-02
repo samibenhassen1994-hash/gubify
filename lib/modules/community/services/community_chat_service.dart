@@ -1,5 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 
+import '../../../config/app_limits.dart';
 import '../../../repositories/user_repository.dart';
 import '../models/community_chat_message_model.dart';
 import '../repositories/community_chat_repository.dart';
@@ -9,7 +10,7 @@ class CommunityChatService {
 
   static final CommunityChatService instance = CommunityChatService._();
 
-  static const int maxMessageLength = 2000;
+  static const int maxMessageLength = AppLimits.communityMessageMaxLength;
 
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
