@@ -1,9 +1,9 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../repositories/gub_repository.dart';
+import '../../services/gub_service.dart';
 import '../../widgets/gub_content_card.dart';
 import '../../widgets/gub_screen_background.dart';
 import '../../widgets/user_header.dart';
@@ -144,12 +144,8 @@ class InviteMembersScreen extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 15),
-                    StreamBuilder<QuerySnapshot>(
-                      stream: FirebaseFirestore.instance
-                          .collection("gubs")
-                          .doc(gubId)
-                          .collection("members")
-                          .snapshots(),
+                    StreamBuilder(
+                      stream: GubService().rawMembersStream(gubId),
                       builder: (context, snapshot) {
                         if (snapshot.connectionState ==
                             ConnectionState.waiting) {
@@ -180,20 +176,10 @@ class InviteMembersScreen extends StatelessWidget {
                                       child: const Icon(Icons.person),
                                     ),
                                     title: Text(
-                                      (document.data()
-                                              as Map<
-                                                String,
-                                                dynamic
-                                              >)["displayName"] ??
-                                          "User",
+                                      document.data()["displayName"] ?? "User",
                                     ),
                                     subtitle: Text(
-                                      (document.data()
-                                              as Map<
-                                                String,
-                                                dynamic
-                                              >)["role"] ??
-                                          "",
+                                      document.data()["role"] ?? "",
                                     ),
                                   ),
                                 ),

@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../../core/models/creation_availability.dart';
+import '../../../core/navigation/creation_gate.dart';
 import '../../../services/gub_service.dart';
 import '../../profile/screens/user_profile_screen.dart';
 import '../../organized_events/screens/create_gub_event_screen.dart';
@@ -425,6 +427,12 @@ class _GubChatOverlayState extends State<GubChatOverlay> {
       _isTaskConversionOpen = true;
 
       try {
+        final allowed = await CreationGate.ensureAvailable(
+          context: context,
+          gubId: chatGubId,
+          moduleType: CreationModuleType.task,
+        );
+        if (!allowed || !mounted) return;
         await Navigator.of(context, rootNavigator: true).push<void>(
           MaterialPageRoute(
             builder: (_) => CreateTaskScreen(
@@ -452,6 +460,12 @@ class _GubChatOverlayState extends State<GubChatOverlay> {
       _isProposalConversionOpen = true;
 
       try {
+        final allowed = await CreationGate.ensureAvailable(
+          context: context,
+          gubId: chatGubId,
+          moduleType: CreationModuleType.proposal,
+        );
+        if (!allowed || !mounted) return;
         final memberCount = (await GubService().getMembers(chatGubId)).length;
 
         if (!mounted) return;
@@ -489,6 +503,12 @@ class _GubChatOverlayState extends State<GubChatOverlay> {
       _isSharedBudgetConversionOpen = true;
 
       try {
+        final allowed = await CreationGate.ensureAvailable(
+          context: context,
+          gubId: chatGubId,
+          moduleType: CreationModuleType.sharedBudget,
+        );
+        if (!allowed || !mounted) return;
         await Navigator.of(context, rootNavigator: true).push<void>(
           MaterialPageRoute(
             builder: (_) => CreateSharedBudgetScreen(
@@ -515,6 +535,12 @@ class _GubChatOverlayState extends State<GubChatOverlay> {
       _isEventConversionOpen = true;
 
       try {
+        final allowed = await CreationGate.ensureAvailable(
+          context: context,
+          gubId: chatGubId,
+          moduleType: CreationModuleType.organizedEvent,
+        );
+        if (!allowed || !mounted) return;
         await Navigator.of(context, rootNavigator: true).push<void>(
           MaterialPageRoute(
             builder: (_) => CreateGubEventScreen(

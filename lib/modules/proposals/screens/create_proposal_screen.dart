@@ -62,6 +62,7 @@ class _CreateProposalScreenState extends State<CreateProposalScreen> {
   TimeOfDay? eventTime;
 
   int votingDays = 1;
+  bool _saving = false;
 
   @override
   void initState() {
@@ -385,6 +386,8 @@ class _CreateProposalScreenState extends State<CreateProposalScreen> {
   }
 
   Future<void> _createProposal() async {
+    if (_saving) return;
+
     if (_titleController.text.trim().isEmpty) {
       ScaffoldMessenger.of(
         context,
@@ -410,50 +413,61 @@ class _CreateProposalScreenState extends State<CreateProposalScreen> {
 
     final user = FirebaseAuth.instance.currentUser!;
 
-    final creatorName = await UserService().getDisplayName(user.uid);
+    setState(() => _saving = true);
+    try {
+      final creatorName = await UserService().getDisplayName(user.uid);
 
-    final proposal = ProposalModel(
-      gubId: widget.gubId,
-      proposalId: FirebaseFirestore.instance.collection("temp").doc().id,
-      title: _titleController.text.trim(),
-      description: _descriptionController.text.trim(),
-      creatorId: user.uid,
-      creatorName: creatorName,
-      status: "voting",
-      createdAt: Timestamp.now(),
-      expiresAt: Timestamp.fromDate(
-        DateTime.now().add(Duration(days: votingDays)),
-      ),
-      eventDate: Timestamp.fromDate(
-        DateTime(
-          eventDate!.year,
-          eventDate!.month,
-          eventDate!.day,
-          eventTime!.hour,
-          eventTime!.minute,
+      final proposal = ProposalModel(
+        gubId: widget.gubId,
+        proposalId: FirebaseFirestore.instance.collection("temp").doc().id,
+        title: _titleController.text.trim(),
+        description: _descriptionController.text.trim(),
+        creatorId: user.uid,
+        creatorName: creatorName,
+        status: "voting",
+        createdAt: Timestamp.now(),
+        expiresAt: Timestamp.fromDate(
+          DateTime.now().add(Duration(days: votingDays)),
         ),
-      ),
-      type: "custom",
-      yesVotes: 0,
-      noVotes: 0,
-      memberCount: widget.memberCount,
-      resultProcessed: false,
-      eventCreated: false,
-      tasksCreated: false,
-      sourceType: widget.isChatConversion ? "chat" : "manual",
-      sourceId: widget.isChatConversion ? widget.sourceId : null,
-      sourcePreview: widget.isChatConversion ? widget.sourcePreview : null,
-      originUserId: widget.isChatConversion ? widget.originUserId : null,
-      sourceAuthorName: widget.isChatConversion
-          ? widget.sourceAuthorName
-          : null,
-    );
+        eventDate: Timestamp.fromDate(
+          DateTime(
+            eventDate!.year,
+            eventDate!.month,
+            eventDate!.day,
+            eventTime!.hour,
+            eventTime!.minute,
+          ),
+        ),
+        type: "custom",
+        yesVotes: 0,
+        noVotes: 0,
+        memberCount: widget.memberCount,
+        resultProcessed: false,
+        eventCreated: false,
+        tasksCreated: false,
+        sourceType: widget.isChatConversion ? "chat" : "manual",
+        sourceId: widget.isChatConversion ? widget.sourceId : null,
+        sourcePreview: widget.isChatConversion ? widget.sourcePreview : null,
+        originUserId: widget.isChatConversion ? widget.originUserId : null,
+        sourceAuthorName: widget.isChatConversion
+            ? widget.sourceAuthorName
+            : null,
+      );
 
-    await ProposalService.instance.createProposal(proposal: proposal);
+      await ProposalService.instance.createProposal(proposal: proposal);
 
-    if (!mounted) return;
-
-    Navigator.pop(context);
+      if (!mounted) return;
+      Navigator.pop(context);
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.toString())));
+    } finally {
+      if (mounted) {
+        setState(() => _saving = false);
+      }
+    }
   }
 
   @override
@@ -680,7 +694,7 @@ class _CreateProposalScreenState extends State<CreateProposalScreen> {
                 SizedBox(
                   height: 56,
                   child: FilledButton.icon(
-                    onPressed: _createProposal,
+                    onPressed: _saving ? null : _createProposal,
                     style: FilledButton.styleFrom(
                       backgroundColor: _primaryColor,
                       foregroundColor: Colors.white,

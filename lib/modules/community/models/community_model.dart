@@ -58,6 +58,8 @@ class CommunityModel {
   final String type;
   final String language;
   final String description;
+  final String? deletionStatus;
+  final String? deletionRequestedBy;
 
   const CommunityModel({
     required this.communityId,
@@ -69,6 +71,8 @@ class CommunityModel {
     required this.type,
     required this.language,
     required this.description,
+    this.deletionStatus,
+    this.deletionRequestedBy,
   });
 
   factory CommunityModel.fromFirestore(
@@ -95,6 +99,8 @@ class CommunityModel {
         defaultLanguage,
       ),
       description: (data["description"] as String? ?? "").trim(),
+      deletionStatus: data['deletionStatus'] as String?,
+      deletionRequestedBy: data['deletionRequestedBy'] as String?,
     );
   }
 
@@ -123,6 +129,8 @@ class CommunityModel {
       type: type,
       language: language,
       description: description,
+      deletionStatus: deletionStatus,
+      deletionRequestedBy: deletionRequestedBy,
     );
   }
 

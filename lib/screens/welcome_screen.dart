@@ -27,9 +27,26 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   }
 
   Future<void> _openSupport() async {
-    final uri = Uri.parse('https://www.gubify.com/support');
+    final uri = Uri.parse(
+      'https://www.gofundme.com/f/help-bring-gubify-to-everyone?attribution_id=sl:3b8bc3c9-610c-4bdd-8a69-414992484cbc&ts=1784696885&utm_campaign=natman_sharesheet_dash&utm_medium=customer&utm_source=whatsapp',
+    );
 
-    await launchUrl(uri, mode: LaunchMode.externalApplication);
+    try {
+      final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!opened && mounted) {
+        _showLinkError();
+      }
+    } catch (_) {
+      if (mounted) {
+        _showLinkError();
+      }
+    }
+  }
+
+  void _showLinkError() {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Unable to open this link.')));
   }
 
   void _goToCreateGub() {

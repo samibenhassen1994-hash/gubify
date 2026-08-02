@@ -56,4 +56,14 @@ class NotificationModel {
       "data": data,
     };
   }
+
+  static bool targetsUser(Map<String, dynamic> json, String userId) {
+    final rawData = json["data"];
+    if (rawData is! Map) return true;
+
+    final recipientIds = rawData["recipientIds"];
+    if (recipientIds is! List || recipientIds.isEmpty) return true;
+
+    return recipientIds.whereType<String>().contains(userId);
+  }
 }

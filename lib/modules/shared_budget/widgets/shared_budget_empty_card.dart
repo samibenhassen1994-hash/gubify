@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/models/creation_availability.dart';
+import '../../../core/navigation/creation_gate.dart';
 import '../screens/create_shared_budget_screen.dart';
 import '../screens/shared_budget_screen.dart';
 
@@ -49,7 +51,13 @@ class SharedBudgetEmptyCard extends StatelessWidget {
               FilledButton.icon(
                 icon: const Icon(Icons.add),
                 label: const Text("Create Budget"),
-                onPressed: () {
+                onPressed: () async {
+                  final allowed = await CreationGate.ensureAvailable(
+                    context: context,
+                    gubId: gubId,
+                    moduleType: CreationModuleType.sharedBudget,
+                  );
+                  if (!allowed || !context.mounted) return;
                   Navigator.push(
                     context,
                     MaterialPageRoute(

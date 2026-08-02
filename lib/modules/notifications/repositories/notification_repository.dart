@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../models/notification_model.dart';
+import '../../../repositories/gub_repository.dart';
 
 class NotificationRepository {
   NotificationRepository._();
@@ -19,6 +20,7 @@ class NotificationRepository {
     required String gubId,
     required NotificationModel notification,
   }) async {
+    await GubRepository.instance.ensureActive(gubId);
     await notificationsCollection(
       gubId,
     ).doc(notification.notificationId).set(notification.toFirestore());
@@ -36,12 +38,14 @@ class NotificationRepository {
     required String gubId,
     required String uid,
   }) async {
+    await GubRepository.instance.ensureActive(gubId);
     final snapshot = await notificationsCollection(gubId).get();
 
     final batch = _firestore.batch();
 
     for (final doc in snapshot.docs) {
       final data = doc.data();
+      if (!NotificationModel.targetsUser(data, uid)) continue;
 
       final List readBy = List.from(data["readBy"] ?? []);
 
@@ -60,6 +64,7 @@ class NotificationRepository {
     required String notificationId,
     required String uid,
   }) async {
+    await GubRepository.instance.ensureActive(gubId);
     await notificationsCollection(gubId).doc(notificationId).update({
       "readBy": FieldValue.arrayUnion([uid]),
     });

@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 
 import '../../../widgets/gub_content_card.dart';
 import '../../../widgets/gub_screen_background.dart';
+import '../../../widgets/delete_item_dialog.dart';
+import '../../../core/models/deletion_context.dart';
 import '../../chat/widgets/gub_chat_overlay.dart';
 import '../models/task_model.dart';
 import '../services/task_service.dart';
@@ -25,6 +27,33 @@ class TaskDetailsScreen extends StatefulWidget {
 class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
   bool _loading = false;
   bool _openingOriginalMessage = false;
+  late final Future<DeletionContext> _deletionContextFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _deletionContextFuture = TaskService.instance.deletionContext(
+      gubId: widget.gubId,
+      taskId: widget.taskId,
+    );
+  }
+
+  Future<void> _deleteTask() async {
+    final deletionContext = await _deletionContextFuture;
+    if (!mounted || !deletionContext.canDelete) return;
+    final deleted = await showDeleteItemDialog(
+      context: context,
+      title: 'Delete task?',
+      moduleName: 'task',
+      deletionContext: deletionContext,
+      successMessage: 'Task deleted.',
+      onDelete: () => TaskService.instance.deleteTask(
+        gubId: widget.gubId,
+        taskId: widget.taskId,
+      ),
+    );
+    if (deleted && mounted) Navigator.pop(context);
+  }
 
   Future<void> _openOriginalMessage(TaskModel task) async {
     final messageId = task.sourceId;
@@ -109,6 +138,18 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
           surfaceTintColor: Colors.transparent,
           elevation: 0,
           scrolledUnderElevation: 0,
+          actions: [
+            FutureBuilder<DeletionContext>(
+              future: _deletionContextFuture,
+              builder: (context, snapshot) => snapshot.data?.canDelete == true
+                  ? IconButton(
+                      tooltip: 'Delete task',
+                      onPressed: _deleteTask,
+                      icon: const Icon(Icons.delete_outline_rounded),
+                    )
+                  : const SizedBox.shrink(),
+            ),
+          ],
         ),
 
         body: StreamBuilder<TaskModel?>(

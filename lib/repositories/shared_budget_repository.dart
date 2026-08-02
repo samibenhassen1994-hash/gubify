@@ -1,10 +1,12 @@
-import 'dart:developer' as developer;
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
+import '../core/models/creation_availability.dart';
+import '../core/models/deletion_context.dart';
 import '../modules/shared_budget/models/shared_budget_member_model.dart';
 import '../modules/shared_budget/models/shared_budget_model.dart';
+import 'creation_cooldown_repository.dart';
+import 'gub_repository.dart';
 
 class SharedBudgetRepository {
   SharedBudgetRepository._();
@@ -13,8 +15,6 @@ class SharedBudgetRepository {
 
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
-
-  static const int _deleteBatchSize = 400;
 
   /// Legacy Firestore path retained to read existing Shared Budget documents.
   CollectionReference<Map<String, dynamic>> sharedBudgetsCollection(
@@ -28,6 +28,7 @@ class SharedBudgetRepository {
     String gubId,
     SharedBudgetModel sharedBudget,
   ) async {
+    await GubRepository.instance.ensureActive(gubId);
     await sharedBudgetsCollection(
       gubId,
     ).doc(sharedBudget.sharedBudgetId).set(sharedBudget.toFirestore());
@@ -39,6 +40,7 @@ class SharedBudgetRepository {
     required String sharedBudgetId,
     required List<SharedBudgetMemberModel> members,
   }) async {
+    await GubRepository.instance.ensureActive(gubId);
     final batch = _firestore.batch();
 
     for (final member in members) {
@@ -57,6 +59,7 @@ class SharedBudgetRepository {
     required String gubId,
     required String uid,
   }) async {
+    await GubRepository.instance.ensureActive(gubId);
     final sharedBudgets = await sharedBudgetsCollection(gubId).get();
 
     for (final sharedBudget in sharedBudgets.docs) {
@@ -104,7 +107,15 @@ class SharedBudgetRepository {
     }
 
     await _firestore.runTransaction((transaction) async {
+      final gubSnapshot = await transaction.get(
+        _firestore.collection('gubs').doc(gubId),
+      );
       final sharedBudgetSnapshot = await transaction.get(sharedBudgetRef);
+
+      if (!gubSnapshot.exists ||
+          gubSnapshot.data()?['deletionStatus'] == 'deleting') {
+        throw StateError('This Gub is no longer available.');
+      }
 
       if (!sharedBudgetSnapshot.exists) {
         throw StateError("Shared Budget not found.");
@@ -113,6 +124,9 @@ class SharedBudgetRepository {
       final sharedBudgetData = sharedBudgetSnapshot.data()!;
       final targetAmount = (sharedBudgetData["targetAmount"] ?? 0).toDouble();
       final status = sharedBudgetData["status"] ?? "active";
+      if (status == "deleted" || sharedBudgetData["deletedAt"] != null) {
+        return;
+      }
       final hasReachedTarget =
           targetAmount > 0 && currentAmount >= targetAmount;
 
@@ -194,15 +208,19 @@ class SharedBudgetRepository {
   List<SharedBudgetModel> _sharedBudgetsFromDocs(
     Iterable<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
   ) {
-    final sharedBudgets = docs.map((doc) {
-      final data = doc.data();
-      final createdAt = data["createdAt"];
+    final sharedBudgets = docs
+        .map((doc) {
+          final data = doc.data();
+          if (_isDeleted(data)) return null;
+          final createdAt = data["createdAt"];
 
-      return (
-        sharedBudget: SharedBudgetModel.fromFirestore(data),
-        createdAt: createdAt is Timestamp ? createdAt : null,
-      );
-    }).toList();
+          return (
+            sharedBudget: SharedBudgetModel.fromFirestore(data),
+            createdAt: createdAt is Timestamp ? createdAt : null,
+          );
+        })
+        .whereType<({SharedBudgetModel sharedBudget, Timestamp? createdAt})>()
+        .toList();
 
     sharedBudgets.sort((a, b) {
       final aCreatedAt = a.createdAt?.toDate().millisecondsSinceEpoch ?? 0;
@@ -228,9 +246,10 @@ class SharedBudgetRepository {
     String gubId,
     String sharedBudgetId,
   ) async {
+    await GubRepository.instance.ensureActive(gubId);
     final doc = await sharedBudgetsCollection(gubId).doc(sharedBudgetId).get();
 
-    if (!doc.exists) {
+    if (!doc.exists || _isDeleted(doc.data())) {
       return null;
     }
 
@@ -245,7 +264,7 @@ class SharedBudgetRepository {
       document,
     ) {
       final data = document.data();
-      return document.exists && data != null
+      return document.exists && data != null && !_isDeleted(data)
           ? SharedBudgetModel.fromFirestore(data)
           : null;
     });
@@ -272,78 +291,102 @@ class SharedBudgetRepository {
     final sharedBudgetReference = sharedBudgetsCollection(
       gubId,
     ).doc(sharedBudgetId);
-    final sharedBudgetSnapshot = await sharedBudgetReference.get();
-
-    if (!sharedBudgetSnapshot.exists) {
-      throw StateError("Shared Budget not found.");
-    }
-
-    final data = sharedBudgetSnapshot.data()!;
-    final ownerId = data["ownerId"] ?? "";
-
-    if (ownerId != user.uid) {
-      throw StateError(
-        "Only the Shared Budget creator can delete this budget.",
-      );
-    }
-
-    final status = data["status"] ?? "active";
-    final archived = data["archived"] ?? false;
-    final targetAmount = (data["targetAmount"] ?? 0).toDouble();
-    final currentAmount = (data["currentAmount"] ?? 0).toDouble();
-    final isCompleted =
-        status == "completed" ||
-        (targetAmount > 0 && currentAmount >= targetAmount);
-
-    if (isCompleted || archived) {
-      throw StateError("Only active Shared Budgets can be deleted.");
-    }
-
-    await _deleteDocumentsInBatches(
-      sharedBudgetReference.collection("members"),
+    final gubReference = _firestore.collection("gubs").doc(gubId);
+    final availableAt = Timestamp.fromDate(
+      DateTime.now().add(CreationCooldownRepository.cooldownDuration),
     );
 
-    try {
-      final notificationsQuery = _firestore
-          .collection("gubs")
-          .doc(gubId)
-          .collection("notifications")
-          .where("data.goalId", isEqualTo: sharedBudgetId);
+    await _firestore.runTransaction((transaction) async {
+      final sharedBudgetSnapshot = await transaction.get(sharedBudgetReference);
+      final gubSnapshot = await transaction.get(gubReference);
+      if (!sharedBudgetSnapshot.exists ||
+          _isDeleted(sharedBudgetSnapshot.data())) {
+        throw StateError("Shared Budget not found.");
+      }
+      if (!gubSnapshot.exists) throw StateError("Gub not found.");
+      if (gubSnapshot.data()?['deletionStatus'] == 'deleting') {
+        throw StateError('This Gub is no longer available.');
+      }
 
-      await _deleteDocumentsInBatches(notificationsQuery);
-    } catch (error, stackTrace) {
-      developer.log(
-        "Unable to delete notifications linked to Shared Budget $sharedBudgetId.",
-        name: "SharedBudgetRepository.deleteSharedBudget",
-        error: error,
-        stackTrace: stackTrace,
+      final data = sharedBudgetSnapshot.data()!;
+      final creatorId = data["ownerId"] as String? ?? "";
+      final gubOwnerId = gubSnapshot.data()?["ownerId"] as String? ?? "";
+      if (user.uid != creatorId && user.uid != gubOwnerId) {
+        throw StateError(
+          "You don't have permission to delete this Shared Budget.",
+        );
+      }
+
+      transaction.update(sharedBudgetReference, {
+        "status": "deleted",
+        "archived": true,
+        "deletedAt": FieldValue.serverTimestamp(),
+        "deletedBy": user.uid,
+      });
+      if (creatorId.isNotEmpty && creatorId != gubOwnerId) {
+        CreationCooldownRepository.instance.setInTransaction(
+          transaction: transaction,
+          gubId: gubId,
+          creatorId: creatorId,
+          moduleType: CreationModuleType.sharedBudget,
+          deletedItemId: sharedBudgetId,
+          deletedBy: user.uid,
+          availableAt: availableAt,
+        );
+      }
+    });
+  }
+
+  Future<bool> canDeleteSharedBudget({
+    required String gubId,
+    required String sharedBudgetId,
+  }) async {
+    return (await deletionContext(
+      gubId: gubId,
+      sharedBudgetId: sharedBudgetId,
+    )).canDelete;
+  }
+
+  Future<DeletionContext> deletionContext({
+    required String gubId,
+    required String sharedBudgetId,
+  }) async {
+    final userId = _auth.currentUser?.uid;
+    if (userId == null) {
+      return const DeletionContext(
+        canDelete: false,
+        currentUserIsOwner: false,
+        creatorId: null,
+        ownerId: '',
       );
     }
 
-    await sharedBudgetReference.delete();
+    final documents = await Future.wait([
+      sharedBudgetsCollection(gubId).doc(sharedBudgetId).get(),
+      _firestore.collection("gubs").doc(gubId).get(),
+    ]);
+    final budget = documents[0];
+    final gub = documents[1];
+    final creatorId = _nonEmptyString(budget.data()?["ownerId"]);
+    final ownerId = _nonEmptyString(gub.data()?["ownerId"]) ?? "";
+    return DeletionContext(
+      canDelete:
+          budget.exists &&
+          gub.exists &&
+          !_isDeleted(budget.data()) &&
+          (userId == creatorId || userId == ownerId),
+      currentUserIsOwner: userId == ownerId,
+      creatorId: creatorId,
+      ownerId: ownerId,
+    );
   }
 
-  Future<void> _deleteDocumentsInBatches(
-    Query<Map<String, dynamic>> query,
-  ) async {
-    while (true) {
-      final snapshot = await query.limit(_deleteBatchSize).get();
+  bool _isDeleted(Map<String, dynamic>? data) {
+    return data?["status"] == "deleted" || data?["deletedAt"] != null;
+  }
 
-      if (snapshot.docs.isEmpty) {
-        return;
-      }
-
-      final batch = _firestore.batch();
-
-      for (final document in snapshot.docs) {
-        batch.delete(document.reference);
-      }
-
-      await batch.commit();
-
-      if (snapshot.docs.length < _deleteBatchSize) {
-        return;
-      }
-    }
+  String? _nonEmptyString(Object? value) {
+    if (value is! String || value.trim().isEmpty) return null;
+    return value;
   }
 }

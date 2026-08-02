@@ -1,6 +1,8 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import '../../../core/models/creation_availability.dart';
+import '../../../core/navigation/creation_gate.dart';
 import '../../../widgets/gub_content_card.dart';
 import '../../../widgets/gub_screen_background.dart';
 import '../../chat/widgets/gub_chat_overlay.dart';
@@ -57,7 +59,13 @@ class SharedBudgetScreen extends StatelessWidget {
                 ? FloatingActionButton.extended(
                     icon: const Icon(Icons.add),
                     label: const Text("New Shared Budget"),
-                    onPressed: () {
+                    onPressed: () async {
+                      final allowed = await CreationGate.ensureAvailable(
+                        context: context,
+                        gubId: gubId,
+                        moduleType: CreationModuleType.sharedBudget,
+                      );
+                      if (!allowed || !context.mounted) return;
                       Navigator.push(
                         context,
                         MaterialPageRoute(

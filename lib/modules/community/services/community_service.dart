@@ -172,6 +172,28 @@ class CommunityService {
     );
   }
 
+  final Set<String> _deletionsInProgress = {};
+
+  Future<void> resumeDeletion({required String communityId}) async {
+    final user = _auth.currentUser;
+    if (user == null) {
+      throw const CommunityDeletionException('Please sign in again.');
+    }
+    if (!_deletionsInProgress.add(communityId)) {
+      throw const CommunityDeletionException(
+        'This Community deletion is already in progress.',
+      );
+    }
+    try {
+      await CommunityRepository.instance.deleteCommunityClientSide(
+        communityId: communityId,
+        confirmationName: null,
+      );
+    } finally {
+      _deletionsInProgress.remove(communityId);
+    }
+  }
+
   Future<CommunityModel> joinCommunity({required String communityId}) async {
     final user = _auth.currentUser;
     if (user == null) {

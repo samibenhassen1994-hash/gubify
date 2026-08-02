@@ -1,8 +1,12 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import '../../../core/models/creation_availability.dart';
+import '../../../core/models/deletion_context.dart';
+import '../../../core/navigation/creation_gate.dart';
 import '../../../widgets/gub_content_card.dart';
 import '../../../widgets/gub_screen_background.dart';
+import '../../../widgets/delete_item_dialog.dart';
 import '../../chat/widgets/gub_chat_overlay.dart';
 import '../models/proposal_model.dart';
 import 'create_proposal_screen.dart';
@@ -19,6 +23,33 @@ class ProposalDetailsScreen extends StatefulWidget {
 
 class _ProposalDetailsScreenState extends State<ProposalDetailsScreen> {
   bool _openingOriginalMessage = false;
+  late final Future<DeletionContext> _deletionContextFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _deletionContextFuture = ProposalService.instance.deletionContext(
+      gubId: widget.proposal.gubId,
+      proposalId: widget.proposal.proposalId,
+    );
+  }
+
+  Future<void> _deleteProposal() async {
+    final deletionContext = await _deletionContextFuture;
+    if (!mounted || !deletionContext.canDelete) return;
+    final deleted = await showDeleteItemDialog(
+      context: context,
+      title: 'Delete proposal?',
+      moduleName: 'proposal',
+      deletionContext: deletionContext,
+      successMessage: 'Proposal deleted.',
+      onDelete: () => ProposalService.instance.deleteProposal(
+        gubId: widget.proposal.gubId,
+        proposalId: widget.proposal.proposalId,
+      ),
+    );
+    if (deleted && mounted) Navigator.pop(context);
+  }
 
   Future<void> _openOriginalMessage(ProposalModel proposal) async {
     final messageId = proposal.sourceId;
@@ -344,7 +375,14 @@ class _ProposalDetailsScreenState extends State<ProposalDetailsScreen> {
                             SizedBox(
                               width: double.infinity,
                               child: OutlinedButton.icon(
-                                onPressed: () {
+                                onPressed: () async {
+                                  final allowed =
+                                      await CreationGate.ensureAvailable(
+                                        context: context,
+                                        gubId: p.gubId,
+                                        moduleType: CreationModuleType.proposal,
+                                      );
+                                  if (!allowed || !context.mounted) return;
                                   Navigator.push(
                                     context,
                                     MaterialPageRoute(
@@ -380,6 +418,18 @@ class _ProposalDetailsScreenState extends State<ProposalDetailsScreen> {
       surfaceTintColor: Colors.transparent,
       elevation: 0,
       scrolledUnderElevation: 0,
+      actions: [
+        FutureBuilder<DeletionContext>(
+          future: _deletionContextFuture,
+          builder: (context, snapshot) => snapshot.data?.canDelete == true
+              ? IconButton(
+                  tooltip: 'Delete proposal',
+                  onPressed: _deleteProposal,
+                  icon: const Icon(Icons.delete_outline_rounded),
+                )
+              : const SizedBox.shrink(),
+        ),
+      ],
     );
   }
 }

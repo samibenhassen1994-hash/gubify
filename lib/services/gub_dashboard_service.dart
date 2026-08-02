@@ -1,5 +1,8 @@
 import 'dart:async';
 
+import 'package:firebase_auth/firebase_auth.dart';
+
+import '../core/models/creation_availability.dart';
 import '../modules/shared_budget/models/shared_budget_model.dart';
 import '../modules/shared_budget/services/shared_budget_service.dart';
 import '../modules/gub_calendar/models/event_model.dart';
@@ -8,17 +11,22 @@ import '../modules/proposals/models/proposal_model.dart';
 import '../modules/proposals/services/proposal_service.dart';
 import '../modules/tasks/models/task_model.dart';
 import '../modules/tasks/services/task_service.dart';
+import '../repositories/creation_cooldown_repository.dart';
 
 class GubDashboardSummary {
   final bool tasksLoaded;
   final bool proposalsLoaded;
   final bool eventsLoaded;
   final bool budgetsLoaded;
+  final bool taskCooldownLoaded;
   final bool tasksFailed;
   final bool proposalsFailed;
   final bool eventsFailed;
   final bool budgetsFailed;
+  final bool taskCooldownFailed;
   final int activeTaskCount;
+  final List<TaskModel> activeTasks;
+  final CreationCooldown? taskCreationCooldown;
   final int pendingProposalCount;
   final ProposalModel? activeProposal;
   final int upcomingEventCount;
@@ -31,11 +39,15 @@ class GubDashboardSummary {
     required this.proposalsLoaded,
     required this.eventsLoaded,
     required this.budgetsLoaded,
+    required this.taskCooldownLoaded,
     required this.tasksFailed,
     required this.proposalsFailed,
     required this.eventsFailed,
     required this.budgetsFailed,
+    required this.taskCooldownFailed,
     required this.activeTaskCount,
+    required this.activeTasks,
+    required this.taskCreationCooldown,
     required this.pendingProposalCount,
     required this.activeProposal,
     required this.upcomingEventCount,
@@ -49,11 +61,15 @@ class GubDashboardSummary {
       proposalsLoaded = false,
       eventsLoaded = false,
       budgetsLoaded = false,
+      taskCooldownLoaded = false,
       tasksFailed = false,
       proposalsFailed = false,
       eventsFailed = false,
       budgetsFailed = false,
+      taskCooldownFailed = false,
       activeTaskCount = 0,
+      activeTasks = const [],
+      taskCreationCooldown = null,
       pendingProposalCount = 0,
       activeProposal = null,
       upcomingEventCount = 0,
@@ -74,6 +90,7 @@ class GubDashboardService {
     StreamSubscription<List<ProposalModel>>? proposalSubscription;
     StreamSubscription<List<EventModel>>? eventSubscription;
     StreamSubscription<List<SharedBudgetModel>>? budgetSubscription;
+    StreamSubscription<CreationCooldown?>? taskCooldownSubscription;
 
     var summary = const GubDashboardSummary.loading();
 
@@ -87,11 +104,16 @@ class GubDashboardService {
       bool? proposalsLoaded,
       bool? eventsLoaded,
       bool? budgetsLoaded,
+      bool? taskCooldownLoaded,
       bool? tasksFailed,
       bool? proposalsFailed,
       bool? eventsFailed,
       bool? budgetsFailed,
+      bool? taskCooldownFailed,
       int? activeTaskCount,
+      List<TaskModel>? activeTasks,
+      CreationCooldown? taskCreationCooldown,
+      bool clearTaskCreationCooldown = false,
       int? pendingProposalCount,
       ProposalModel? activeProposal,
       bool clearActiveProposal = false,
@@ -108,11 +130,17 @@ class GubDashboardService {
           proposalsLoaded: proposalsLoaded ?? summary.proposalsLoaded,
           eventsLoaded: eventsLoaded ?? summary.eventsLoaded,
           budgetsLoaded: budgetsLoaded ?? summary.budgetsLoaded,
+          taskCooldownLoaded: taskCooldownLoaded ?? summary.taskCooldownLoaded,
           tasksFailed: tasksFailed ?? summary.tasksFailed,
           proposalsFailed: proposalsFailed ?? summary.proposalsFailed,
           eventsFailed: eventsFailed ?? summary.eventsFailed,
           budgetsFailed: budgetsFailed ?? summary.budgetsFailed,
+          taskCooldownFailed: taskCooldownFailed ?? summary.taskCooldownFailed,
           activeTaskCount: activeTaskCount ?? summary.activeTaskCount,
+          activeTasks: activeTasks ?? summary.activeTasks,
+          taskCreationCooldown: clearTaskCreationCooldown
+              ? null
+              : taskCreationCooldown ?? summary.taskCreationCooldown,
           pendingProposalCount:
               pendingProposalCount ?? summary.pendingProposalCount,
           activeProposal: clearActiveProposal
@@ -134,6 +162,8 @@ class GubDashboardService {
         if (proposalSubscription != null) proposalSubscription!.cancel(),
         if (eventSubscription != null) eventSubscription!.cancel(),
         if (budgetSubscription != null) budgetSubscription!.cancel(),
+        if (taskCooldownSubscription != null)
+          taskCooldownSubscription!.cancel(),
       ]);
     }
 
@@ -145,20 +175,49 @@ class GubDashboardService {
             .tasksStream(gubId)
             .listen(
               (tasks) {
+                final activeTasks = tasks
+                    .where((task) => task.status == "active" && !task.archived)
+                    .toList(growable: false);
                 update(
                   tasksLoaded: true,
                   tasksFailed: false,
-                  activeTaskCount: tasks
-                      .where(
-                        (task) => task.status == "active" && !task.archived,
-                      )
-                      .length,
+                  activeTaskCount: activeTasks.length,
+                  activeTasks: activeTasks,
                 );
               },
               onError: (Object _) {
                 update(tasksLoaded: true, tasksFailed: true);
               },
             );
+
+        final currentUserId = FirebaseAuth.instance.currentUser?.uid;
+        if (currentUserId == null) {
+          update(taskCooldownLoaded: true, clearTaskCreationCooldown: true);
+        } else {
+          taskCooldownSubscription = CreationCooldownRepository.instance
+              .stream(
+                gubId: gubId,
+                creatorId: currentUserId,
+                moduleType: CreationModuleType.task,
+              )
+              .listen(
+                (cooldown) {
+                  update(
+                    taskCooldownLoaded: true,
+                    taskCooldownFailed: false,
+                    taskCreationCooldown: cooldown,
+                    clearTaskCreationCooldown: cooldown == null,
+                  );
+                },
+                onError: (Object _) {
+                  update(
+                    taskCooldownLoaded: true,
+                    taskCooldownFailed: true,
+                    clearTaskCreationCooldown: true,
+                  );
+                },
+              );
+        }
 
         proposalSubscription = ProposalService.instance
             .proposalsStream(gubId)

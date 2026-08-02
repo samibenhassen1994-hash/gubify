@@ -21,6 +21,13 @@ class MemberRepository {
     return document.data();
   }
 
+  Stream<QuerySnapshot<Map<String, dynamic>>> membersStream(String gubId) =>
+      _firestore
+          .collection('gubs')
+          .doc(gubId)
+          .collection('members')
+          .snapshots();
+
   Future<void> removeMember({
     required String gubId,
     required String uid,

@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
+import '../../modules/chat/widgets/gub_chat_overlay.dart';
 import '../../services/gub_deletion_service.dart';
 import '../../widgets/gub_content_card.dart';
 import '../../widgets/gub_screen_background.dart';
+import 'widgets/delete_gub_dialog.dart';
 
 class ManageGubScreen extends StatefulWidget {
   final String gubId;
@@ -14,49 +16,31 @@ class ManageGubScreen extends StatefulWidget {
 }
 
 class _ManageGubScreenState extends State<ManageGubScreen> {
-  late Future<bool> _isOwnerFuture;
-  bool _isDeleting = false;
+  late final Future<GubDeletionAccess> _accessFuture;
 
   @override
   void initState() {
     super.initState();
-    _isOwnerFuture = GubDeletionService.instance.isCurrentUserOwner(widget.gubId);
+    _accessFuture = GubDeletionService.instance.access(widget.gubId);
   }
 
-  Future<void> _confirmDeletion() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Delete Gub?'),
-        content: const Text(
-          'This permanently removes the Gub and its shared data for all members.',
+  Future<void> _confirmDeletion(GubDeletionAccess access) async {
+    await GubChatOverlay.runWithChatOverlayHidden(() async {
+      await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => DeleteGubDialog(
+          gubName: access.gubName,
+          onDelete: (confirmedName, onProgress) {
+            return GubDeletionService.instance.deleteGubCompletely(
+              gubId: widget.gubId,
+              confirmedName: confirmedName,
+              onProgress: onProgress,
+            );
+          },
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true || !mounted || _isDeleting) return;
-
-    setState(() => _isDeleting = true);
-    try {
-      await GubDeletionService.instance.deleteGub(widget.gubId);
-    } catch (error) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error.toString().replaceFirst('Unsupported operation: ', ''))),
       );
-    } finally {
-      if (mounted) setState(() => _isDeleting = false);
-    }
+    });
   }
 
   @override
@@ -89,13 +73,15 @@ class _ManageGubScreenState extends State<ManageGubScreen> {
                 trailing: Icon(Icons.arrow_forward_ios, size: 16),
               ),
             ),
-            FutureBuilder<bool>(
-              future: _isOwnerFuture,
+            FutureBuilder<GubDeletionAccess>(
+              future: _accessFuture,
               builder: (context, snapshot) {
-                if (snapshot.data != true) return const SizedBox.shrink();
+                final access = snapshot.data;
+                if (access?.isOwner != true) {
+                  return const SizedBox.shrink();
+                }
                 return _DeleteGubSection(
-                  isDeleting: _isDeleting,
-                  onDelete: _confirmDeletion,
+                  onDelete: () => _confirmDeletion(access!),
                 );
               },
             ),
@@ -107,10 +93,9 @@ class _ManageGubScreenState extends State<ManageGubScreen> {
 }
 
 class _DeleteGubSection extends StatelessWidget {
-  final bool isDeleting;
   final VoidCallback onDelete;
 
-  const _DeleteGubSection({required this.isDeleting, required this.onDelete});
+  const _DeleteGubSection({required this.onDelete});
 
   @override
   Widget build(BuildContext context) => Column(
@@ -137,14 +122,8 @@ class _DeleteGubSection extends StatelessWidget {
             style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
           ),
           subtitle: const Text('Permanently delete this Gub.'),
-          trailing: isDeleting
-              ? const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Icon(Icons.arrow_forward_ios, size: 16),
-          onTap: isDeleting ? null : onDelete,
+          trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+          onTap: onDelete,
         ),
       ),
     ],

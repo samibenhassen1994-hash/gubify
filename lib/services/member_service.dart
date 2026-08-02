@@ -1,3 +1,4 @@
+import '../repositories/gub_repository.dart';
 import '../repositories/member_repository.dart';
 import '../repositories/shared_budget_repository.dart';
 
@@ -12,25 +13,25 @@ class MemberService {
     required String ownerId,
     required String currentUserId,
   }) async {
-    // Solo il proprietario può rimuovere membri
-    if (currentUserId != ownerId) {
-      throw Exception("Only the Hub owner can remove members.");
+    final gub = await GubRepository.instance.getHubAuthoritatively(gubId);
+    final authoritativeOwnerId = gub?['ownerId'] as String?;
+    if (gub == null || gub['deletionStatus'] == 'deleting') {
+      throw Exception('This Gub is no longer available.');
+    }
+    // ownerId is retained for the UI API, but never trusted for authorization.
+    if (currentUserId != authoritativeOwnerId) {
+      throw Exception('Only the Hub owner can remove members.');
+    }
+    if (uid == authoritativeOwnerId) {
+      throw Exception('The Hub owner cannot remove themselves.');
     }
 
-    // Il proprietario non può rimuovere sé stesso
-    if (uid == ownerId) {
-      throw Exception("The Hub owner cannot remove themselves.");
-    }
-
-    // Rimuove il membro
     await MemberRepository.instance.removeMember(gubId: gubId, uid: uid);
     await SharedBudgetRepository.instance.removeMemberFromAllSharedBudgets(
       gubId: gubId,
       uid: uid,
     );
-    // Aggiorna il numero di membri
     final memberCount = await MemberRepository.instance.getMemberCount(gubId);
-
     await MemberRepository.instance.updateMemberCount(
       gubId: gubId,
       memberCount: memberCount,

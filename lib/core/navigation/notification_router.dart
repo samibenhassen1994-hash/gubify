@@ -6,6 +6,8 @@ import '../../modules/shared_budget/screens/shared_budget_screen.dart';
 import '../../modules/shared_budget/services/shared_budget_service.dart';
 import '../../modules/gub_calendar/repositories/event_repository.dart';
 import '../../modules/gub_calendar/screens/gub_calendar_screen.dart';
+import '../../modules/organized_events/repositories/gub_event_repository.dart';
+import '../../modules/organized_events/screens/gub_event_details_screen.dart';
 import '../../modules/proposals/repositories/proposal_repository.dart';
 import '../../modules/proposals/screens/proposal_details_screen.dart';
 import '../../modules/proposals/screens/proposals_screen.dart';
@@ -14,6 +16,7 @@ import '../../modules/tasks/screens/task_details_screen.dart';
 import '../../modules/tasks/screens/tasks_screen.dart';
 import '../../repositories/gub_repository.dart';
 import '../../screens/gub/board_screen.dart';
+import '../../widgets/gub_community_rules_gate.dart';
 
 class NotificationRouter {
   NotificationRouter._();
@@ -24,6 +27,14 @@ class NotificationRouter {
     required Map<String, dynamic> data,
   }) async {
     final effectiveGubId = _stringValue(data["gubId"]) ?? gubId;
+    final gub = await GubRepository.instance.getHubAuthoritatively(
+      effectiveGubId,
+    );
+    if (!context.mounted) return;
+    if (gub == null || gub["deletionStatus"] == "deleting") {
+      _showMessage(context, "This Gub is no longer available.");
+      return;
+    }
     final type = (_stringValue(data["type"]) ?? "").toLowerCase();
     final destination =
         (_stringValue(data["module"]) ?? _stringValue(data["screen"]) ?? "")
@@ -34,6 +45,12 @@ class NotificationRouter {
     final proposalId = _stringValue(data["proposalId"]);
     final taskId = _stringValue(data["taskId"]);
     final eventId = _stringValue(data["eventId"]);
+    final organizedEventId =
+        _stringValue(data["organizedEventId"]) ??
+        (type.startsWith("organized_event_") ? eventId : null);
+    final calendarEventId =
+        _stringValue(data["calendarEventId"]) ??
+        (organizedEventId == null ? eventId : null);
     final postId = _stringValue(data["postId"]);
 
     if (sharedBudgetId != null) {
@@ -59,11 +76,20 @@ class NotificationRouter {
       return;
     }
 
-    if (eventId != null) {
+    if (organizedEventId != null) {
+      await _openOrganizedEvent(
+        context: context,
+        gubId: effectiveGubId,
+        eventId: organizedEventId,
+      );
+      return;
+    }
+
+    if (calendarEventId != null) {
       await _openCalendarEvent(
         context: context,
         gubId: effectiveGubId,
-        eventId: eventId,
+        eventId: calendarEventId,
       );
       return;
     }
@@ -85,6 +111,11 @@ class NotificationRouter {
 
     if (type.startsWith("task_")) {
       _openTasks(context: context, gubId: effectiveGubId);
+      return;
+    }
+
+    if (type.startsWith("organized_event_")) {
+      _showMessage(context, "This organized event is no longer available.");
       return;
     }
 
@@ -122,6 +153,11 @@ class NotificationRouter {
         await _openCalendar(context: context, gubId: effectiveGubId);
         return;
 
+      case "organized_event":
+      case "organized_events":
+        _showMessage(context, "This organized event is no longer available.");
+        return;
+
       case "board":
       case "post":
       case "posts":
@@ -154,10 +190,13 @@ class NotificationRouter {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => SharedBudgetMembersScreen(
+        builder: (_) => _rulesProtected(
           gubId: gubId,
-          sharedBudgetId: sharedBudget.sharedBudgetId,
-          ownerId: sharedBudget.ownerId,
+          child: SharedBudgetMembersScreen(
+            gubId: gubId,
+            sharedBudgetId: sharedBudget.sharedBudgetId,
+            ownerId: sharedBudget.ownerId,
+          ),
         ),
       ),
     );
@@ -183,7 +222,10 @@ class NotificationRouter {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => ProposalDetailsScreen(proposal: proposal),
+        builder: (_) => _rulesProtected(
+          gubId: gubId,
+          child: ProposalDetailsScreen(proposal: proposal),
+        ),
       ),
     );
   }
@@ -208,7 +250,10 @@ class NotificationRouter {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => TaskDetailsScreen(gubId: gubId, taskId: taskId),
+        builder: (_) => _rulesProtected(
+          gubId: gubId,
+          child: TaskDetailsScreen(gubId: gubId, taskId: taskId),
+        ),
       ),
     );
   }
@@ -233,6 +278,31 @@ class NotificationRouter {
     await _openCalendar(context: context, gubId: gubId);
   }
 
+  static Future<void> _openOrganizedEvent({
+    required BuildContext context,
+    required String gubId,
+    required String eventId,
+  }) async {
+    final event = await GubEventRepository.instance.get(gubId, eventId);
+
+    if (!context.mounted) return;
+
+    if (event == null) {
+      _showMessage(context, "This organized event is no longer available.");
+      return;
+    }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => _rulesProtected(
+          gubId: gubId,
+          child: GubEventDetailsScreen(gubId: gubId, eventId: eventId),
+        ),
+      ),
+    );
+  }
+
   static Future<void> _openSharedBudget({
     required BuildContext context,
     required String gubId,
@@ -253,8 +323,13 @@ class NotificationRouter {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) =>
-            SharedBudgetScreen(gubId: gubId, canCreateBudget: canCreateBudget),
+        builder: (_) => _rulesProtected(
+          gubId: gubId,
+          child: SharedBudgetScreen(
+            gubId: gubId,
+            canCreateBudget: canCreateBudget,
+          ),
+        ),
       ),
     );
   }
@@ -275,8 +350,13 @@ class NotificationRouter {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) =>
-            ProposalsScreen(gubId: gubId, memberCount: gub["memberCount"] ?? 1),
+        builder: (_) => _rulesProtected(
+          gubId: gubId,
+          child: ProposalsScreen(
+            gubId: gubId,
+            memberCount: gub["memberCount"] ?? 1,
+          ),
+        ),
       ),
     );
   }
@@ -289,7 +369,12 @@ class NotificationRouter {
 
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => TasksScreen(gubId: gubId)),
+      MaterialPageRoute(
+        builder: (_) => _rulesProtected(
+          gubId: gubId,
+          child: TasksScreen(gubId: gubId),
+        ),
+      ),
     );
   }
 
@@ -309,8 +394,10 @@ class NotificationRouter {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) =>
-            GubCalendarScreen(gubId: gubId, ownerId: gub["ownerId"] ?? ""),
+        builder: (_) => _rulesProtected(
+          gubId: gubId,
+          child: GubCalendarScreen(gubId: gubId, ownerId: gub["ownerId"] ?? ""),
+        ),
       ),
     );
   }
@@ -323,8 +410,20 @@ class NotificationRouter {
 
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => BoardScreen(gubId: gubId)),
+      MaterialPageRoute(
+        builder: (_) => _rulesProtected(
+          gubId: gubId,
+          child: BoardScreen(gubId: gubId),
+        ),
+      ),
     );
+  }
+
+  static Widget _rulesProtected({
+    required String gubId,
+    required Widget child,
+  }) {
+    return GubCommunityRulesGate(gubId: gubId, child: child);
   }
 
   static String? _stringValue(dynamic value) {

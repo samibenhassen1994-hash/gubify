@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../../repositories/gub_repository.dart';
 
 class ChatReadRepository {
   ChatReadRepository._();
@@ -20,7 +21,11 @@ class ChatReadRepository {
         .doc(userId);
   }
 
-  Future<void> markAsRead({required String gubId, required String userId}) {
+  Future<void> markAsRead({
+    required String gubId,
+    required String userId,
+  }) async {
+    await GubRepository.instance.ensureActive(gubId);
     return chatReadDocument(gubId: gubId, userId: userId).set({
       "userId": userId,
       "gubId": gubId,

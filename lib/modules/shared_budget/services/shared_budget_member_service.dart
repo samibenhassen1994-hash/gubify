@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../../repositories/shared_budget_member_repository.dart';
+import '../../../repositories/gub_repository.dart';
 import '../../../repositories/user_repository.dart';
 import '../../notifications/services/notification_service.dart';
 
@@ -38,6 +39,7 @@ class SharedBudgetMemberService {
     required String uid,
     required double amount,
   }) async {
+    await GubRepository.instance.ensureActive(gubId);
     final amountInCents = amount * 100;
 
     if (!amount.isFinite ||
@@ -71,6 +73,7 @@ class SharedBudgetMemberService {
     required String uid,
     required String confirmedById,
   }) async {
+    await GubRepository.instance.ensureActive(gubId);
     final owner = await UserRepository.instance.getUser(confirmedById);
     final ownerName = owner?["displayName"] ?? "Administrator";
 

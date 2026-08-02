@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/models/creation_availability.dart';
+import '../../../core/navigation/creation_gate.dart';
 import '../models/proposal_model.dart';
 import '../screens/create_proposal_screen.dart';
 import '../screens/proposal_details_screen.dart';
@@ -42,8 +44,14 @@ class ProposalHomeCard extends StatelessWidget {
 
         return InkWell(
           borderRadius: BorderRadius.circular(20),
-          onTap: () {
+          onTap: () async {
             if (activeProposal == null) {
+              final allowed = await CreationGate.ensureAvailable(
+                context: context,
+                gubId: gubId,
+                moduleType: CreationModuleType.proposal,
+              );
+              if (!allowed || !context.mounted) return;
               Navigator.push(
                 context,
                 MaterialPageRoute(

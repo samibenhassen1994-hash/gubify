@@ -1,0 +1,15 @@
+{
+  "scripts": {
+    "test:rules:smoke": "node --test tests/firestore-rules/structural-smoke.test.mjs",
+    "test:rules:phase3a": "node --test tests/firestore-rules/phase3a.test.mjs",
+    "test:rules:phase3b": "node --test tests/firestore-rules/phase3b.test.mjs",
+    "test:rules:phase3c": "node --test tests/firestore-rules/phase3c.test.mjs",
+    "test:rules:phase3d": "node --test tests/firestore-rules/phase3d.test.mjs",
+    "test:rules:all": "node --test --test-concurrency=1 tests/firestore-rules/structural-smoke.test.mjs tests/firestore-rules/phase3a.test.mjs tests/firestore-rules/phase3b.test.mjs tests/firestore-rules/phase3c.test.mjs tests/firestore-rules/phase3d.test.mjs"
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.1",
+    "firebase": "^12.17.0",
+    "firebase-tools": "^15.25.0"
+  }
+}

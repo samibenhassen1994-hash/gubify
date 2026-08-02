@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../core/models/member_option.dart';
 import '../config/app_limits.dart';
 import '../repositories/user_repository.dart';
+import '../repositories/member_repository.dart';
 
 class GubService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -128,6 +129,9 @@ class GubService {
 
     final hubDoc = query.docs.first;
     final gubId = hubDoc.id;
+    if (hubDoc.data()["deletionStatus"] == "deleting") {
+      throw Exception("This Gub is no longer available.");
+    }
 
     final memberRef = _firestore
         .collection("gubs")
@@ -175,17 +179,6 @@ class GubService {
     return gubId;
   }
 
-  /// Client-side recursive deletion is intentionally unsupported.
-  ///
-  /// A Gub has nested data and member-owned references that cannot be safely
-  /// enumerated and removed by the Firestore client SDK. Use a server-side
-  /// cleanup operation before enabling deletion.
-  Future<void> deleteHub({required String gubId}) async {
-    throw UnsupportedError(
-      "Secure deletion requires server-side cleanup for the full Gub data tree.",
-    );
-  }
-
   Stream<List<MemberOption>> membersStream(String gubId) {
     return _firestore
         .collection("gubs")
@@ -203,6 +196,9 @@ class GubService {
           }).toList(),
         );
   }
+
+  Stream<QuerySnapshot<Map<String, dynamic>>> rawMembersStream(String gubId) =>
+      MemberRepository.instance.membersStream(gubId);
 
   Future<List<MemberOption>> getMembers(String gubId) async {
     final snapshot = await _firestore

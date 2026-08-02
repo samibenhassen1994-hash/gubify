@@ -2,6 +2,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../../../widgets/gub_screen_background.dart';
+import '../../../widgets/delete_item_dialog.dart';
+import '../../../core/models/deletion_context.dart';
 import '../../chat/widgets/gub_chat_overlay.dart';
 import '../models/gub_event_model.dart';
 import '../services/gub_event_service.dart';
@@ -22,6 +24,33 @@ class GubEventDetailsScreen extends StatefulWidget {
 
 class _GubEventDetailsScreenState extends State<GubEventDetailsScreen> {
   bool _openingOriginalMessage = false;
+  late final Future<DeletionContext> _deletionContextFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _deletionContextFuture = GubEventService.instance.deletionContext(
+      gubId: widget.gubId,
+      eventId: widget.eventId,
+    );
+  }
+
+  Future<void> _deleteEvent() async {
+    final deletionContext = await _deletionContextFuture;
+    if (!mounted || !deletionContext.canDelete) return;
+    final deleted = await showDeleteItemDialog(
+      context: context,
+      title: 'Delete event?',
+      moduleName: 'event',
+      deletionContext: deletionContext,
+      successMessage: 'Event deleted.',
+      onDelete: () => GubEventService.instance.delete(
+        gubId: widget.gubId,
+        eventId: widget.eventId,
+      ),
+    );
+    if (deleted && mounted) Navigator.pop(context);
+  }
 
   Future<void> _openOriginalMessage(GubEventModel event) async {
     final messageId = event.sourceId;
@@ -53,6 +82,18 @@ class _GubEventDetailsScreenState extends State<GubEventDetailsScreen> {
         title: const Text('Event'),
         backgroundColor: Colors.transparent,
         surfaceTintColor: Colors.transparent,
+        actions: [
+          FutureBuilder<DeletionContext>(
+            future: _deletionContextFuture,
+            builder: (context, snapshot) => snapshot.data?.canDelete == true
+                ? IconButton(
+                    tooltip: 'Delete event',
+                    onPressed: _deleteEvent,
+                    icon: const Icon(Icons.delete_outline_rounded),
+                  )
+                : const SizedBox.shrink(),
+          ),
+        ],
       ),
       body: SafeArea(
         top: false,
@@ -65,9 +106,14 @@ class _GubEventDetailsScreenState extends State<GubEventDetailsScreen> {
             if (snapshot.hasError) {
               return const Center(child: Text('Unable to load this event.'));
             }
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
             final event = snapshot.data;
             if (event == null) {
-              return const Center(child: CircularProgressIndicator());
+              return const Center(
+                child: Text('This event is no longer available.'),
+              );
             }
 
             final uid = FirebaseAuth.instance.currentUser?.uid;

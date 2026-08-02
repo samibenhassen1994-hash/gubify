@@ -43,6 +43,14 @@ class _GubAccessGuardState extends State<GubAccessGuard> {
 
     if (_dialogShown) return;
 
+    final gub = await FirebaseFirestore.instance
+        .collection("gubs")
+        .doc(widget.gubId)
+        .get();
+    if (!gub.exists || gub.data()?["deletionStatus"] == "deleting") {
+      return;
+    }
+
     _dialogShown = true;
 
     final uid = FirebaseAuth.instance.currentUser!.uid;

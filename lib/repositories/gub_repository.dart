@@ -34,8 +34,40 @@ class GubRepository {
     return data;
   }
 
+  Future<Map<String, dynamic>?> getHubAuthoritatively(String gubId) async {
+    final document = await _firestore.collection("gubs").doc(gubId).get();
+    if (!document.exists) {
+      _hubCache.remove(gubId);
+      return null;
+    }
+    final data = document.data();
+    if (data != null) _hubCache[gubId] = data;
+    return data;
+  }
+
   Stream<DocumentSnapshot<Map<String, dynamic>>> hubStream(String gubId) {
     return _firestore.collection("gubs").doc(gubId).snapshots();
+  }
+
+  Future<bool> isAuthoritativeOwner({
+    required String gubId,
+    required String userId,
+  }) async {
+    final document = await _firestore.collection("gubs").doc(gubId).get();
+    if (!document.exists) throw StateError("Gub not found.");
+    final data = document.data();
+    if (data?["deletionStatus"] == "deleting") {
+      throw StateError("This Gub is being deleted.");
+    }
+    if (data != null) _hubCache[gubId] = data;
+    return data?["ownerId"] == userId;
+  }
+
+  Future<void> ensureActive(String gubId) async {
+    final document = await _firestore.collection('gubs').doc(gubId).get();
+    if (!document.exists || document.data()?['deletionStatus'] == 'deleting') {
+      throw StateError('This Gub is no longer available.');
+    }
   }
 
   Stream<List<Map<String, dynamic>>> userGubsStream(String userId) {

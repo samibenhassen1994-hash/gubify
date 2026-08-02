@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/models/creation_availability.dart';
+import '../../../core/navigation/creation_gate.dart';
 import '../../../widgets/gub_screen_background.dart';
 import '../../chat/widgets/gub_chat_overlay.dart';
 import '../models/gub_event_model.dart';
@@ -27,14 +29,22 @@ class GubEventsScreen extends StatelessWidget {
           surfaceTintColor: Colors.transparent,
         ),
         floatingActionButton: FloatingActionButton.extended(
-          onPressed: () => GubChatOverlay.runWithChatOverlayHidden(
-            () => Navigator.push<void>(
-              context,
-              MaterialPageRoute(
-                builder: (_) => CreateGubEventScreen(gubId: gubId),
+          onPressed: () async {
+            final allowed = await CreationGate.ensureAvailable(
+              context: context,
+              gubId: gubId,
+              moduleType: CreationModuleType.organizedEvent,
+            );
+            if (!allowed || !context.mounted) return;
+            await GubChatOverlay.runWithChatOverlayHidden(
+              () => Navigator.push<void>(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => CreateGubEventScreen(gubId: gubId),
+                ),
               ),
-            ),
-          ),
+            );
+          },
           icon: const Icon(Icons.add),
           label: const Text('Create event'),
         ),

@@ -4,6 +4,11 @@ import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
+import '../../../core/errors/active_creation_limit_exception.dart';
+import '../../../core/models/creation_availability.dart';
+import '../../../core/models/deletion_context.dart';
+import '../../../repositories/creation_cooldown_repository.dart';
+import '../../../repositories/gub_repository.dart';
 import '../models/shared_budget_member_model.dart';
 import '../models/shared_budget_model.dart';
 import '../../../repositories/shared_budget_repository.dart';
@@ -16,6 +21,30 @@ class SharedBudgetService {
 
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final Set<String> _creationsInProgress = {};
+
+  Future<CreationAvailability> creationAvailability({
+    required String gubId,
+    String? creatorId,
+  }) async {
+    final effectiveCreatorId = creatorId ?? _auth.currentUser?.uid;
+    if (effectiveCreatorId == null) {
+      throw StateError("You must be signed in to create a Shared Budget.");
+    }
+    if (await GubRepository.instance.isAuthoritativeOwner(
+      gubId: gubId,
+      userId: effectiveCreatorId,
+    )) {
+      return const CreationAvailability(isUnlimited: true);
+    }
+
+    final cooldown = await CreationCooldownRepository.instance.get(
+      gubId: gubId,
+      creatorId: effectiveCreatorId,
+      moduleType: CreationModuleType.sharedBudget,
+    );
+    return CreationAvailability(cooldown: cooldown);
+  }
 
   Future<void> createSharedBudget({
     required String gubId,
@@ -29,81 +58,102 @@ class SharedBudgetService {
     String? originUserId,
     String? sourceAuthorName,
   }) async {
+    await GubRepository.instance.ensureActive(gubId);
     final creator = await _requireAuthorizedCreator(gubId);
-    final normalizedValues = _validate(title, description, targetAmount);
-    final members = await _loadHubMembers(gubId);
-
-    final sharedBudget = _buildSharedBudget(
-      creatorId: creator.uid,
-      title: normalizedValues.title,
-      description: normalizedValues.description,
-      targetAmount: targetAmount,
-      memberCount: members.length,
-      deadline: deadline,
-      sourceType: sourceType,
-      sourceId: sourceId,
-      sourcePreview: sourcePreview,
-      originUserId: originUserId,
-      sourceAuthorName: sourceAuthorName,
-    );
-
-    await SharedBudgetRepository.instance.createSharedBudget(
-      gubId,
-      sharedBudget,
-    );
-
-    final sharedBudgetMembers = members
-        .map(
-          (member) => SharedBudgetMemberModel(
-            uid: member["uid"],
-            displayName: member["displayName"] ?? "User",
-            photoUrl: member["photoUrl"],
-            amount: 0,
-            confirmed: false,
-            updatedAt: Timestamp.now(),
-            confirmedAt: null,
-          ),
-        )
-        .toList();
-
-    await SharedBudgetRepository.instance.createSharedBudgetMembers(
-      gubId: gubId,
-      sharedBudgetId: sharedBudget.sharedBudgetId,
-      members: sharedBudgetMembers,
-    );
-
-    var creatorName = creator.displayName ?? "Administrator";
-
-    for (final member in members) {
-      if (member["uid"] == creator.uid) {
-        creatorName = member["displayName"] ?? creatorName;
-        break;
-      }
+    final creationKey = "$gubId/${creator.uid}";
+    if (!_creationsInProgress.add(creationKey)) {
+      throw StateError("A Shared Budget creation is already in progress.");
     }
 
     try {
-      // Legacy notification type, module key and payload field are preserved.
-      await NotificationService.instance.send(
+      final availability = await creationAvailability(
         gubId: gubId,
-        title: "New Shared Budget",
-        body: "$creatorName created “${sharedBudget.title}”.",
-        type: "goal_created",
-        senderId: creator.uid,
-        senderName: creatorName,
-        markSenderAsRead: true,
-        data: {
-          "module": "goals",
-          "gubId": gubId,
-          "goalId": sharedBudget.sharedBudgetId,
-        },
+        creatorId: creator.uid,
       );
-    } catch (error, stackTrace) {
-      developer.log(
-        "Unable to send the Shared Budget creation notification.",
-        name: "SharedBudgetService.createSharedBudget",
-        error: error,
-        stackTrace: stackTrace,
+      if (availability.isCoolingDown) {
+        throw CreationCooldownException(
+          "You can create another Shared Budget in "
+          "${formatCooldownRemaining(availability.cooldown!.remaining)}.",
+        );
+      }
+
+      final normalizedValues = _validate(title, description, targetAmount);
+      final members = await _loadHubMembers(gubId);
+
+      final sharedBudget = _buildSharedBudget(
+        creatorId: creator.uid,
+        title: normalizedValues.title,
+        description: normalizedValues.description,
+        targetAmount: targetAmount,
+        memberCount: members.length,
+        deadline: deadline,
+        sourceType: sourceType,
+        sourceId: sourceId,
+        sourcePreview: sourcePreview,
+        originUserId: originUserId,
+        sourceAuthorName: sourceAuthorName,
       );
+
+      await SharedBudgetRepository.instance.createSharedBudget(
+        gubId,
+        sharedBudget,
+      );
+
+      final sharedBudgetMembers = members
+          .map(
+            (member) => SharedBudgetMemberModel(
+              uid: member["uid"],
+              displayName: member["displayName"] ?? "User",
+              photoUrl: member["photoUrl"],
+              amount: 0,
+              confirmed: false,
+              updatedAt: Timestamp.now(),
+              confirmedAt: null,
+            ),
+          )
+          .toList();
+
+      await SharedBudgetRepository.instance.createSharedBudgetMembers(
+        gubId: gubId,
+        sharedBudgetId: sharedBudget.sharedBudgetId,
+        members: sharedBudgetMembers,
+      );
+
+      var creatorName = creator.displayName ?? "Administrator";
+
+      for (final member in members) {
+        if (member["uid"] == creator.uid) {
+          creatorName = member["displayName"] ?? creatorName;
+          break;
+        }
+      }
+
+      try {
+        // Legacy notification type, module key and payload field are preserved.
+        await NotificationService.instance.send(
+          gubId: gubId,
+          title: "New Shared Budget",
+          body: "$creatorName created “${sharedBudget.title}”.",
+          type: "goal_created",
+          senderId: creator.uid,
+          senderName: creatorName,
+          markSenderAsRead: true,
+          data: {
+            "module": "goals",
+            "gubId": gubId,
+            "goalId": sharedBudget.sharedBudgetId,
+          },
+        );
+      } catch (error, stackTrace) {
+        developer.log(
+          "Unable to send the Shared Budget creation notification.",
+          name: "SharedBudgetService.createSharedBudget",
+          error: error,
+          stackTrace: stackTrace,
+        );
+      }
+    } finally {
+      _creationsInProgress.remove(creationKey);
     }
   }
 
@@ -128,10 +178,39 @@ class SharedBudgetService {
   Future<void> deleteSharedBudget({
     required String gubId,
     required String sharedBudgetId,
-  }) {
-    return SharedBudgetRepository.instance.deleteSharedBudget(
+  }) async {
+    await GubRepository.instance.ensureActive(gubId);
+    if (!await canDeleteSharedBudget(
+      gubId: gubId,
+      sharedBudgetId: sharedBudgetId,
+    )) {
+      throw StateError(
+        "You don't have permission to delete this Shared Budget.",
+      );
+    }
+    await SharedBudgetRepository.instance.deleteSharedBudget(
       gubId,
       sharedBudgetId,
+    );
+  }
+
+  Future<bool> canDeleteSharedBudget({
+    required String gubId,
+    required String sharedBudgetId,
+  }) {
+    return SharedBudgetRepository.instance.canDeleteSharedBudget(
+      gubId: gubId,
+      sharedBudgetId: sharedBudgetId,
+    );
+  }
+
+  Future<DeletionContext> deletionContext({
+    required String gubId,
+    required String sharedBudgetId,
+  }) {
+    return SharedBudgetRepository.instance.deletionContext(
+      gubId: gubId,
+      sharedBudgetId: sharedBudgetId,
     );
   }
 

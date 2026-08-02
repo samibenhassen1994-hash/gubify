@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import '../../../core/navigation/notification_router.dart';
 import '../../../widgets/gub_content_card.dart';
 import '../../../widgets/gub_screen_background.dart';
+import '../models/notification_model.dart';
 import '../repositories/notification_repository.dart';
 
 class NotificationsScreen extends StatefulWidget {
@@ -86,6 +87,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
             final notifications = snapshot.data!.docs.where((doc) {
               final data = doc.data();
+              if (!NotificationModel.targetsUser(data, currentUser.uid)) {
+                return false;
+              }
 
               final String type = data["type"] ?? "";
               final String senderId = data["senderId"] ?? "";
@@ -178,6 +182,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       "proposalId",
       "taskId",
       "eventId",
+      "organizedEventId",
+      "calendarEventId",
       "postId",
       "gubId",
     ]) {

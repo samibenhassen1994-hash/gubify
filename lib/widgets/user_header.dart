@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../modules/chat/widgets/chat_user_avatar.dart';
 import '../modules/notifications/screens/notifications_screen.dart';
+import '../modules/notifications/models/notification_model.dart';
 import '../modules/profile/screens/personal_profile_screen.dart';
 import '../modules/profile/screens/user_profile_screen.dart';
 import '../repositories/user_repository.dart';
@@ -126,6 +127,9 @@ class _UserHeaderState extends State<UserHeader> {
 
                   final count = docs.where((doc) {
                     final data = doc.data();
+                    if (!NotificationModel.targetsUser(data, user.uid)) {
+                      return false;
+                    }
 
                     final readBy = List<String>.from(data["readBy"] ?? []);
 

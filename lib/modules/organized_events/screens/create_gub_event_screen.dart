@@ -40,6 +40,7 @@ class _CreateGubEventScreenState extends State<CreateGubEventScreen> {
   final _selected = <String>{};
   final _tasks = <String, TextEditingController>{};
   List<Map<String, String>>? _members;
+  bool _saving = false;
 
   @override
   void initState() {
@@ -65,6 +66,8 @@ class _CreateGubEventScreenState extends State<CreateGubEventScreen> {
   }
 
   Future<void> _save() async {
+    if (_saving) return;
+
     final assignments = (_members ?? [])
         .where((member) => _selected.contains(member['userId']))
         .map(
@@ -77,6 +80,7 @@ class _CreateGubEventScreenState extends State<CreateGubEventScreen> {
         )
         .toList();
 
+    setState(() => _saving = true);
     try {
       await GubEventService.instance.create(
         gubId: widget.gubId,
@@ -98,6 +102,10 @@ class _CreateGubEventScreenState extends State<CreateGubEventScreen> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(error.toString())));
+    } finally {
+      if (mounted) {
+        setState(() => _saving = false);
+      }
     }
   }
 
@@ -171,7 +179,7 @@ class _CreateGubEventScreenState extends State<CreateGubEventScreen> {
                           ...members.map(_buildMemberRow),
                           const SizedBox(height: 22),
                           FilledButton.icon(
-                            onPressed: _save,
+                            onPressed: _saving ? null : _save,
                             icon: const Icon(Icons.add_task_rounded),
                             label: const Text('Create event'),
                           ),

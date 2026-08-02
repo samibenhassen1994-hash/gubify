@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../../../repositories/gub_repository.dart';
 import '../models/chat_message_model.dart';
 
 class ChatRepository {
@@ -21,6 +22,7 @@ class ChatRepository {
     required String senderName,
     required String text,
   }) async {
+    await GubRepository.instance.ensureActive(gubId);
     final messageReference = messagesCollection(gubId).doc();
     final message = ChatMessageModel(
       messageId: messageReference.id,

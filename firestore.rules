@@ -1,0 +1,758 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function own(uid) { return signedIn() && request.auth.uid == uid; }
+
+    function gubPath(id) { return /databases/$(database)/documents/gubs/$(id); }
+    function gubDoc(id) { return get(gubPath(id)); }
+    function gubAfter(id) { return getAfter(gubPath(id)); }
+    function gubMemberPath(id, uid) { return /databases/$(database)/documents/gubs/$(id)/members/$(uid); }
+    function userGubPath(uid, id) { return /databases/$(database)/documents/users/$(uid)/gubs/$(id); }
+    function isGubMember(id) { return signedIn() && exists(gubMemberPath(id, request.auth.uid)); }
+    function isGubOwner(id) { return signedIn() && gubDoc(id).data.ownerId == request.auth.uid; }
+    function gubActive(id) { return gubDoc(id).data.get('deletionStatus', 'active') != 'deleting'; }
+    function gubDeletingOwner(id) {
+      return isGubOwner(id) && gubDoc(id).data.get('deletionStatus', '') == 'deleting'
+        && gubDoc(id).data.get('deletionRequestedBy', '') == request.auth.uid;
+    }
+    function validGubDeletionPhaseAdvance(before, after) {
+      return (before == 'preparing' && after in ['preparing','nestedCollections'])
+        || (before == 'nestedCollections' && after in ['nestedCollections','directCollections'])
+        || (before == 'directCollections' && after in ['directCollections','userCopies'])
+        || (before == 'userCopies' && after in ['userCopies','finalizing'])
+        || (before == 'finalizing' && after == 'finalizing');
+    }
+    function validUserProfile(data) {
+      return data.keys().hasOnly([
+          'displayName','createdAt','updatedAt','activeHub','avatar','photoUrl','photoURL'
+        ])
+        && data.displayName is string
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp
+        && (data.get('activeHub', null) == null || data.activeHub is string)
+        && (data.get('avatar', null) == null || data.avatar is string)
+        && (data.get('photoUrl', null) == null || data.photoUrl is string)
+        && (data.get('photoURL', null) == null || data.photoURL is string);
+    }
+    function validGubRootCreate(id) {
+      let data = request.resource.data;
+      return data.keys().hasOnly([
+          'gubId','name','ownerId','inviteCode','memberCount','createdAt'
+        ])
+        && data.gubId == id
+        && data.name is string
+        && data.ownerId == request.auth.uid
+        && data.inviteCode is string
+        && data.memberCount == 1
+        && data.createdAt is timestamp;
+    }
+    function validGubMemberData(data, uid, role) {
+      return data.keys().hasOnly([
+          'uid','displayName','photoUrl','role','joinedAt',
+          'antiSpamRulesAccepted','antiSpamRulesAcceptedAt','antiSpamRulesVersion'
+        ])
+        && data.uid == uid
+        && data.displayName is string
+        && (data.get('photoUrl', null) == null || data.photoUrl is string)
+        && data.role == role
+        && data.joinedAt is timestamp;
+    }
+    function validGubCopyData(data, id, role) {
+      let root = gubAfter(id).data;
+      return data.keys().hasOnly([
+          'gubId','name','inviteCode','memberCount','ownerId','role','joinedAt'
+        ])
+        && data.gubId == id
+        && data.name == root.name
+        && data.inviteCode == root.inviteCode
+        && data.memberCount == root.memberCount
+        && data.ownerId == root.ownerId
+        && data.role == role
+        && data.joinedAt is timestamp;
+    }
+    function validGubCopyRoleBackfill(data, id, uid) {
+      return data.keys().hasOnly([
+          'gubId','name','inviteCode','memberCount','ownerId','role','joinedAt'
+        ])
+        && data.gubId == id
+        && data.ownerId == gubAfter(id).data.ownerId
+        && data.role == (gubAfter(id).data.ownerId == uid ? 'owner' : 'member');
+    }
+    function validGubJoin(id, uid) {
+      return exists(gubPath(id))
+        && !exists(gubMemberPath(id, uid))
+        && gubActive(id)
+        && gubAfter(id).data.diff(gubDoc(id).data).affectedKeys().hasOnly(['memberCount'])
+        && gubAfter(id).data.memberCount == gubDoc(id).data.memberCount + 1;
+    }
+    function gubOwnerRemovingMember(id, uid) {
+      return isGubOwner(id) && uid != request.auth.uid
+        && exists(gubMemberPath(id, uid))
+        && !existsAfter(gubMemberPath(id, uid));
+    }
+    function validGubOwnerMember(id, uid) {
+      let member = getAfter(gubMemberPath(id, uid));
+      return validGubMemberData(member.data, uid, 'owner');
+    }
+    function validGubMemberAndCopy(id, uid, role) {
+      let member = getAfter(gubMemberPath(id, uid));
+      let copy = getAfter(userGubPath(uid, id));
+      let root = gubAfter(id);
+      return validGubMemberData(member.data, uid, role)
+        && validGubCopyData(copy.data, id, role)
+        && (role == 'owner' || validGubJoin(id, uid));
+    }
+
+    function messagePath(id, messageId) { return /databases/$(database)/documents/gubs/$(id)/messages/$(messageId); }
+    function taskPath(id, taskId) { return /databases/$(database)/documents/gubs/$(id)/tasks/$(taskId); }
+    function eventPath(id, eventId) { return /databases/$(database)/documents/gubs/$(id)/events/$(eventId); }
+    function organizedEventPath(id, eventId) { return /databases/$(database)/documents/gubs/$(id)/organizedEvents/$(eventId); }
+    function proposalPath(id, proposalId) { return /databases/$(database)/documents/gubs/$(id)/proposals/$(proposalId); }
+    function votePath(id, proposalId, uid) { return /databases/$(database)/documents/gubs/$(id)/proposals/$(proposalId)/votes/$(uid); }
+    function goalPath(id, goalId) { return /databases/$(database)/documents/gubs/$(id)/goals/$(goalId); }
+    function goalMemberPath(id, goalId, uid) { return /databases/$(database)/documents/gubs/$(id)/goals/$(goalId)/members/$(uid); }
+    function cooldownPath(id, cooldownId) { return /databases/$(database)/documents/gubs/$(id)/creationCooldowns/$(cooldownId); }
+
+    function validNullableString(value) { return value == null || value is string; }
+    function validNullableTimestamp(value) { return value == null || value is timestamp; }
+    function validChatSource(data, id) {
+      let message = get(messagePath(id, data.sourceId)).data;
+      return data.sourceType == 'chat'
+        && data.sourceId is string
+        && message.gubId == id
+        && data.sourcePreview == message.text
+        && data.originUserId == message.senderId
+        && data.sourceAuthorName == message.senderName;
+    }
+    function validSource(data, id) {
+      return (data.sourceType == 'manual'
+          && data.sourceId == null
+          && data.sourcePreview == null
+          && data.originUserId == null
+          && data.sourceAuthorName == null)
+        || validChatSource(data, id);
+    }
+    function validAssignee(id, data) {
+      return (data.assignedUserId == null && data.assignedUserName == null)
+        || (data.assignedUserId is string
+          && exists(gubMemberPath(id, data.assignedUserId))
+          && data.assignedUserName == get(gubMemberPath(id, data.assignedUserId)).data.displayName);
+    }
+    function validTaskCreate(id, taskId) {
+      let data = request.resource.data;
+      return data.keys().hasOnly([
+          'gubId','taskId','title','description','creatorId','creatorName',
+          'assignedUserId','assignedUserName','sourceType','sourceId','sourcePreview',
+          'originUserId','sourceAuthorName','additionalDetails','status','priority',
+          'createdAt','dueDate','completedAt','completedBy','notificationsEnabled','archived'
+        ])
+        && data.gubId == id && data.taskId == taskId
+        && data.title is string && data.description is string
+        && data.creatorId == request.auth.uid
+        && data.creatorName == get(gubMemberPath(id, request.auth.uid)).data.displayName
+        && validAssignee(id, data)
+        && validSource(data, id)
+        && (data.sourceType == 'chat' ? validNullableString(data.additionalDetails) : data.additionalDetails == null)
+        && data.status == 'active' && data.priority == 'normal'
+        && data.createdAt is timestamp && validNullableTimestamp(data.dueDate)
+        && data.completedAt == null && data.completedBy == null
+        && data.notificationsEnabled is bool && data.archived == false;
+    }
+    function validTaskCompletion(id) {
+      return isGubMember(id) && gubActive(id)
+        && resource.data.status == 'active'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','completedAt','completedBy'])
+        && request.resource.data.status == 'completed'
+        && request.resource.data.completedAt is timestamp
+        && request.resource.data.completedBy == request.auth.uid
+        && (resource.data.assignedUserId == null
+          || resource.data.assignedUserId == ''
+          || resource.data.assignedUserId == request.auth.uid);
+    }
+
+    function validCalendarEventCreate(id, eventId) {
+      let data = request.resource.data;
+      let proposal = get(proposalPath(id, data.proposalId)).data;
+      return data.keys().hasOnly([
+          'gubId','eventId','proposalId','title','description','type',
+          'creatorId','creatorName','eventDate','createdAt','status'
+        ])
+        && data.gubId == id && data.eventId == eventId
+        && data.proposalId is string
+        && proposal.status == 'approved' && proposal.resultProcessed == true
+        && proposal.eventCreated == false
+        && data.title == proposal.title && data.description == proposal.description
+        && data.type == proposal.type && data.creatorId == proposal.creatorId
+        && data.creatorName == proposal.creatorName && data.eventDate == proposal.eventDate
+        && data.createdAt is timestamp && data.status == 'scheduled';
+    }
+
+    function validOrganizedEventCreate(id, eventId) {
+      let data = request.resource.data;
+      return data.keys().hasOnly([
+          'eventId','gubId','title','description','location','scheduledAt','createdBy',
+          'createdByName','createdAt','status','completedAt','sourceType','sourceId',
+          'sourcePreview','originUserId','sourceAuthorName','assignments'
+        ])
+        && data.eventId == eventId && data.gubId == id
+        && data.title is string && validNullableString(data.description)
+        && validNullableString(data.location) && validNullableTimestamp(data.scheduledAt)
+        && data.createdBy == request.auth.uid
+        && validNullableString(data.createdByName)
+        && data.createdAt is timestamp && data.status == 'active' && data.completedAt == null
+        && validSource(data, id)
+        && data.assignments is list && data.assignments.size() > 0;
+    }
+    function changedOwnAssignmentAt(data, index) {
+      return data.assignments.size() > index
+        && resource.data.assignments[index].userId == request.auth.uid
+        && data.assignments[index].keys().hasOnly(['userId','userName','taskText','isCompleted','completedAt'])
+        && data.assignments[index].diff(resource.data.assignments[index]).affectedKeys().hasOnly(['isCompleted','completedAt'])
+        && data.assignments[index].diff(resource.data.assignments[index]).affectedKeys().hasAny(['isCompleted'])
+        && data.assignments[index].isCompleted is bool
+        && ((data.assignments[index].isCompleted == true && data.assignments[index].completedAt is timestamp)
+          || (data.assignments[index].isCompleted == false && data.assignments[index].completedAt == null));
+    }
+    function changesOwnOrganizedAssignment(data) {
+      return changedOwnAssignmentAt(data,0) || changedOwnAssignmentAt(data,1)
+        || changedOwnAssignmentAt(data,2) || changedOwnAssignmentAt(data,3)
+        || changedOwnAssignmentAt(data,4) || changedOwnAssignmentAt(data,5)
+        || changedOwnAssignmentAt(data,6) || changedOwnAssignmentAt(data,7)
+        || changedOwnAssignmentAt(data,8) || changedOwnAssignmentAt(data,9)
+        || changedOwnAssignmentAt(data,10) || changedOwnAssignmentAt(data,11)
+        || changedOwnAssignmentAt(data,12) || changedOwnAssignmentAt(data,13)
+        || changedOwnAssignmentAt(data,14) || changedOwnAssignmentAt(data,15)
+        || changedOwnAssignmentAt(data,16) || changedOwnAssignmentAt(data,17)
+        || changedOwnAssignmentAt(data,18) || changedOwnAssignmentAt(data,19);
+    }
+    function validOrganizedCompletion(id) {
+      return isGubMember(id) && gubActive(id) && resource.data.status == 'active'
+        && changesOwnOrganizedAssignment(request.resource.data)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['assignments','status','completedAt'])
+        && request.resource.data.assignments is list
+        && request.resource.data.assignments.size() == resource.data.assignments.size()
+        && request.resource.data.assignments.toSet().difference(resource.data.assignments.toSet()).size() <= 1
+        && resource.data.assignments.toSet().difference(request.resource.data.assignments.toSet()).size() <= 1
+        && (request.resource.data.status == 'active' || request.resource.data.status == 'completed')
+        && validNullableTimestamp(request.resource.data.completedAt);
+    }
+
+    function validProposalCreate(id, proposalId) {
+      let data = request.resource.data;
+      return data.keys().hasOnly([
+          'gubId','proposalId','title','description','creatorId','creatorName','status',
+          'createdAt','expiresAt','eventDate','type','yesVotes','noVotes','memberCount',
+          'resultProcessed','eventCreated','tasksCreated','sourceType','sourceId',
+          'sourcePreview','originUserId','sourceAuthorName'
+        ])
+        && data.gubId == id && data.proposalId == proposalId
+        && data.title is string && data.description is string
+        && data.creatorId == request.auth.uid
+        && data.creatorName == get(gubMemberPath(id, request.auth.uid)).data.displayName
+        && data.status == 'voting' && data.createdAt is timestamp && data.expiresAt is timestamp
+        && validNullableTimestamp(data.eventDate) && data.type is string
+        && data.yesVotes == 0 && data.noVotes == 0
+        && data.memberCount == gubDoc(id).data.memberCount
+        && data.resultProcessed == false && data.eventCreated == false && data.tasksCreated == false
+        && validSource(data, id);
+    }
+    function validVoteAggregate(id, proposalId) {
+      let vote = get(votePath(id, proposalId, request.auth.uid)).data.vote;
+      return resource.data.status == 'voting' && resource.data.resultProcessed == false
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['yesVotes','noVotes'])
+        && request.resource.data.yesVotes >= 0 && request.resource.data.noVotes >= 0
+        && request.resource.data.yesVotes + request.resource.data.noVotes <= resource.data.memberCount
+        && ((vote == 'yes'
+            && request.resource.data.yesVotes == resource.data.yesVotes + 1
+            && request.resource.data.noVotes == resource.data.noVotes)
+          || (vote == 'no'
+            && request.resource.data.noVotes == resource.data.noVotes + 1
+            && request.resource.data.yesVotes == resource.data.yesVotes));
+    }
+    function validProposalResult() {
+      let data = request.resource.data;
+      let remaining = data.memberCount - data.yesVotes - data.noVotes;
+      return resource.data.status == 'voting' && resource.data.resultProcessed == false
+        && data.diff(resource.data).affectedKeys().hasOnly(['status','resultProcessed'])
+        && data.resultProcessed == true
+        && ((data.status == 'approved' && data.yesVotes > data.noVotes + remaining)
+          || (data.status == 'rejected' && data.noVotes >= data.yesVotes + remaining));
+    }
+    function validProposalEventFlag() {
+      return resource.data.status == 'approved' && resource.data.resultProcessed == true
+        && resource.data.eventCreated == false
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['eventCreated'])
+        && request.resource.data.eventCreated == true;
+    }
+
+    function validGoalCreate(id, goalId) {
+      let data = request.resource.data;
+      return data.keys().hasOnly([
+          'goalId','title','description','targetAmount','currentAmount','ownerId',
+          'completedMembers','totalMembers','status','archived','createdAt','deadline',
+          'completedAt','sourceType','sourceId','sourcePreview','originUserId','sourceAuthorName'
+        ])
+        && data.goalId == goalId && data.title is string && data.description is string
+        && data.targetAmount is number && data.targetAmount > 0
+        && data.currentAmount == 0 && data.ownerId == request.auth.uid && isGubOwner(id)
+        && data.completedMembers == 0 && data.totalMembers == gubDoc(id).data.memberCount
+        && data.status == 'active' && data.archived == false
+        && data.createdAt is timestamp && validNullableTimestamp(data.deadline)
+        && data.completedAt == null && validSource(data, id);
+    }
+    function validGoalMemberCreate(id, goalId, memberId) {
+      let data = request.resource.data;
+      return data.keys().hasOnly(['uid','displayName','photoUrl','amount','confirmed','updatedAt','confirmedAt'])
+        && data.uid == memberId && exists(gubMemberPath(id, memberId))
+        && data.displayName == get(gubMemberPath(id, memberId)).data.displayName
+        && validNullableString(data.photoUrl) && data.amount == 0
+        && data.confirmed == false && data.updatedAt is timestamp && data.confirmedAt == null
+        && get(goalPath(id, goalId)).data.ownerId == request.auth.uid;
+    }
+    function validOwnContribution(id, goalId, memberId) {
+      let goal = get(goalPath(id, goalId)).data;
+      return own(memberId) && goal.status == 'active' && goal.archived == false
+        && resource.data.confirmed == false
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['amount','confirmed','updatedAt','confirmedAt'])
+        && request.resource.data.uid == resource.data.uid
+        && request.resource.data.amount is number && request.resource.data.amount > 0
+        && request.resource.data.amount <= goal.targetAmount - goal.currentAmount
+        && request.resource.data.confirmed == false
+        && request.resource.data.updatedAt is timestamp
+        && request.resource.data.confirmedAt == null;
+    }
+    function validOwnerConfirmation(id) {
+      return isGubOwner(id)
+        && resource.data.confirmed == false && resource.data.amount > 0
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['confirmed','confirmedAt'])
+        && request.resource.data.confirmed == true
+        && request.resource.data.confirmedAt is timestamp;
+    }
+    function validGoalProgress(id) {
+      return isGubOwner(id) && resource.data.status == 'active' && resource.data.archived == false
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'currentAmount','completedMembers','totalMembers','status','archived','completedAt'
+        ])
+        && request.resource.data.currentAmount is number
+        && (
+          (
+            request.resource.data.currentAmount > resource.data.currentAmount
+            && request.resource.data.completedMembers == resource.data.completedMembers + 1
+            && request.resource.data.totalMembers == resource.data.totalMembers
+          )
+          || (
+            request.resource.data.totalMembers < resource.data.totalMembers
+            && request.resource.data.currentAmount <= resource.data.currentAmount
+            && request.resource.data.completedMembers <= resource.data.completedMembers
+          )
+        )
+        && request.resource.data.currentAmount <= resource.data.targetAmount
+        && request.resource.data.totalMembers >= 0
+        && ((request.resource.data.status == 'active' && request.resource.data.completedAt == null)
+          || (request.resource.data.status == 'completed'
+            && request.resource.data.currentAmount == resource.data.targetAmount
+            && request.resource.data.completedAt is timestamp));
+    }
+
+    function validSoftDelete(id, creatorId, moduleType, itemId) {
+      return gubActive(id) && (request.auth.uid == creatorId || isGubOwner(id))
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','archived','deletedAt','deletedBy'])
+        && request.resource.data.status == 'deleted'
+        && request.resource.data.get('archived', false) == (moduleType == 'sharedBudget')
+        && request.resource.data.deletedAt is timestamp
+        && request.resource.data.deletedBy == request.auth.uid
+        && (creatorId == gubDoc(id).data.ownerId
+          || getAfter(cooldownPath(id, creatorId + '_' + moduleType)).data.deletedItemId == itemId);
+    }
+    function validCooldownData(id, cooldownId) {
+      let data = request.resource.data;
+      return data.keys().hasOnly(['creatorId','moduleType','deletedItemId','deletedBy','deletedAt','availableAt'])
+        && cooldownId == data.creatorId + '_' + data.moduleType
+        && data.moduleType in ['task','organizedEvent','proposal','sharedBudget']
+        && data.creatorId is string && data.deletedItemId is string
+        && data.deletedBy == request.auth.uid
+        && data.deletedAt is timestamp && data.availableAt is timestamp;
+    }
+    function validCooldownCause(id, cooldownId) {
+      let data = request.resource.data;
+      return validCooldownData(id, cooldownId)
+        && ((data.moduleType == 'task'
+            && get(taskPath(id, data.deletedItemId)).data.creatorId == data.creatorId
+            && !existsAfter(taskPath(id, data.deletedItemId)))
+          || (data.moduleType == 'organizedEvent'
+            && get(organizedEventPath(id, data.deletedItemId)).data.createdBy == data.creatorId
+            && !existsAfter(organizedEventPath(id, data.deletedItemId)))
+          || (data.moduleType == 'proposal'
+            && get(proposalPath(id, data.deletedItemId)).data.creatorId == data.creatorId
+            && getAfter(proposalPath(id, data.deletedItemId)).data.status == 'deleted')
+          || (data.moduleType == 'sharedBudget'
+            && get(goalPath(id, data.deletedItemId)).data.ownerId == data.creatorId
+            && getAfter(goalPath(id, data.deletedItemId)).data.status == 'deleted'));
+    }
+    function validHardDeleteWithCooldown(id, creatorId, moduleType, itemId) {
+      return gubActive(id) && (request.auth.uid == creatorId || isGubOwner(id))
+        && (creatorId == gubDoc(id).data.ownerId
+          || getAfter(cooldownPath(id, creatorId + '_' + moduleType)).data.deletedItemId == itemId);
+    }
+
+    function validNotificationCreate(id, notificationId) {
+      let data = request.resource.data;
+      return data.keys().hasOnly(['notificationId','title','body','type','senderId','senderName','createdAt','readBy','data'])
+        && data.notificationId == notificationId
+        && data.title is string && data.body is string
+        && data.type in [
+          'task_created','task_completed','proposal_created','proposal_approved','proposal_rejected',
+          'organized_event_created','organized_event_completed','goal_created','goal_submitted',
+          'goal_confirmation','board_post'
+        ]
+        && data.senderId is string && data.senderName is string
+        && data.createdAt is timestamp && data.readBy is list && data.data is map
+        && ((data.type == 'task_created'
+              && get(taskPath(id, data.data.taskId)).data.creatorId == data.senderId
+              && data.senderId == request.auth.uid)
+          || (data.type == 'task_completed'
+              && get(taskPath(id, data.data.taskId)).data.completedBy == data.senderId
+              && data.senderId == request.auth.uid)
+          || (data.type == 'proposal_created'
+              && get(proposalPath(id, data.data.proposalId)).data.creatorId == data.senderId
+              && data.senderId == request.auth.uid)
+          || ((data.type == 'proposal_approved' || data.type == 'proposal_rejected')
+              && get(proposalPath(id, data.data.proposalId)).data.creatorId == data.senderId
+              && get(proposalPath(id, data.data.proposalId)).data.resultProcessed == true)
+          || (data.type == 'organized_event_created'
+              && get(organizedEventPath(id, data.data.eventId)).data.createdBy == data.senderId
+              && data.senderId == request.auth.uid)
+          || (data.type == 'organized_event_completed'
+              && get(organizedEventPath(id, data.data.eventId)).data.status == 'completed'
+              && data.senderId == request.auth.uid)
+          || (data.type == 'goal_created'
+              && get(goalPath(id, data.data.goalId)).data.ownerId == data.senderId
+              && data.senderId == request.auth.uid)
+          || (data.type == 'goal_submitted'
+              && get(goalMemberPath(id, data.data.goalId, data.data.memberId)).data.uid == data.senderId
+              && data.senderId == request.auth.uid)
+          || (data.type == 'goal_confirmation'
+              && isGubOwner(id) && data.senderId == request.auth.uid
+              && get(goalMemberPath(id, data.data.goalId, data.data.memberId)).data.confirmed == true)
+          || (data.type == 'board_post' && data.senderId == request.auth.uid
+              && data.senderName == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.displayName));
+    }
+    function validReadByUpdate() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readBy'])
+        && request.resource.data.readBy is list
+        && resource.data.readBy.toSet().difference(request.resource.data.readBy.toSet()).size() == 0
+        && request.resource.data.readBy.toSet().difference(resource.data.readBy.toSet()).hasOnly([request.auth.uid]);
+    }
+
+    function communityPath(id) { return /databases/$(database)/documents/communities/$(id); }
+    function communityDoc(id) { return get(communityPath(id)); }
+    function communityAfter(id) { return getAfter(communityPath(id)); }
+    function communityMemberPath(id, uid) { return /databases/$(database)/documents/communities/$(id)/members/$(uid); }
+    function userCommunityPath(uid, id) { return /databases/$(database)/documents/users/$(uid)/communities/$(id); }
+    function ownershipPath(uid) { return /databases/$(database)/documents/communityOwnership/$(uid); }
+    function isCommunityMember(id) { return signedIn() && exists(communityMemberPath(id, request.auth.uid)); }
+    function isCommunityOwner(id) { return signedIn() && communityDoc(id).data.ownerId == request.auth.uid; }
+    function communityActive(id) { return communityDoc(id).data.get('deletionStatus', 'active') != 'deleting'; }
+    function communityDeletingOwner(id) {
+      let root = communityDoc(id).data;
+      return isCommunityOwner(id) && root.deletionStatus == 'deleting'
+        && (root.get('deletionRequestedBy', '') == request.auth.uid
+          || (root.get('deletionRequestedBy', '') == '' && root.get('deletionStartedBy', '') == request.auth.uid));
+    }
+    function validCommunityRootCreate(id) {
+      let data = request.resource.data;
+      return data.keys().hasOnly([
+          'communityId','name','ownerId','memberCount','visibility','createdAt',
+          'type','language','description'
+        ])
+        && data.communityId == id
+        && data.name is string
+        && data.ownerId == request.auth.uid
+        && data.memberCount == 1
+        && data.visibility == 'public'
+        && data.createdAt is timestamp
+        && data.type is string
+        && data.language is string
+        && data.description is string;
+    }
+    function validCommunityCopyData(data, id, role) {
+      let root = communityAfter(id).data;
+      return data.keys().hasOnly([
+          'communityId','name','ownerId','memberCount','visibility','role','joinedAt'
+        ])
+        && data.communityId == id
+        && data.name == root.name
+        && data.ownerId == root.ownerId
+        && data.memberCount == root.memberCount
+        && data.visibility == root.visibility
+        && data.role == role
+        && data.joinedAt is timestamp;
+    }
+    function validCommunityCopyRoleBackfill(data, id, uid) {
+      return data.keys().hasOnly([
+          'communityId','name','ownerId','memberCount','visibility','role','joinedAt'
+        ])
+        && data.communityId == id
+        && data.ownerId == communityAfter(id).data.ownerId
+        && data.role == (communityAfter(id).data.ownerId == uid ? 'owner' : 'member');
+    }
+    function validCommunityJoin(id, uid) {
+      return exists(communityPath(id))
+        && !exists(communityMemberPath(id, uid))
+        && communityActive(id)
+        && communityDoc(id).data.visibility == 'public'
+        && communityAfter(id).data.diff(communityDoc(id).data).affectedKeys().hasOnly(['memberCount'])
+        && communityAfter(id).data.memberCount == communityDoc(id).data.memberCount + 1;
+    }
+    function validCommunityMemberAndCopy(id, uid, role) {
+      let member = getAfter(communityMemberPath(id, uid));
+      let copy = getAfter(userCommunityPath(uid, id));
+      let root = communityAfter(id);
+      return validGubMemberData(member.data, uid, role)
+        && validCommunityCopyData(copy.data, id, role)
+        && (role == 'owner' || validCommunityJoin(id, uid));
+    }
+
+    match /users/{uid} {
+      allow read: if signedIn();
+      allow create: if own(uid) && validUserProfile(request.resource.data);
+      allow update: if own(uid) && validUserProfile(request.resource.data)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['displayName', 'photoUrl', 'photoURL', 'updatedAt']);
+
+      match /gubs/{id} {
+        allow read: if own(uid);
+        allow create: if own(uid) && validGubMemberAndCopy(id, uid,
+          gubAfter(id).data.ownerId == uid ? 'owner' : 'member');
+        allow update: if own(uid) && gubActive(id)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['role'])
+          && validGubCopyRoleBackfill(request.resource.data, id, uid);
+        allow delete: if own(uid) || gubDeletingOwner(id) || gubOwnerRemovingMember(id, uid);
+      }
+      match /communities/{id} {
+        allow read: if own(uid);
+        allow create: if own(uid) && validCommunityMemberAndCopy(id, uid,
+          communityAfter(id).data.ownerId == uid ? 'owner' : 'member');
+        allow update: if own(uid) && communityActive(id)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['role'])
+          && validCommunityCopyRoleBackfill(request.resource.data, id, uid);
+        allow delete: if own(uid) || communityDeletingOwner(id);
+      }
+    }
+
+    match /gubs/{id} {
+      allow read: if (signedIn() && resource.data.ownerId == request.auth.uid)
+        || isGubMember(id);
+      allow create: if signedIn() && validGubRootCreate(id)
+        && validGubOwnerMember(id, request.auth.uid)
+        && validGubMemberAndCopy(id, request.auth.uid, 'owner');
+      allow update: if (
+        (signedIn() && gubActive(id) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memberCount'])
+          && (request.resource.data.memberCount == resource.data.memberCount + 1
+            || request.resource.data.memberCount == resource.data.memberCount - 1)
+          && ((request.resource.data.memberCount == resource.data.memberCount + 1
+              && validGubMemberAndCopy(id, request.auth.uid, 'member'))
+            || (request.resource.data.memberCount == resource.data.memberCount - 1 && isGubOwner(id))))
+        || (isGubOwner(id) && resource.data.get('deletionStatus','active') == 'active' && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'deletionStatus','deletionRequestedBy','deletionStartedAt','deletionUpdatedAt','deletionPhase'
+        ]) && request.resource.data.deletionStatus == 'deleting'
+          && request.resource.data.deletionRequestedBy == request.auth.uid
+          && request.resource.data.deletionStartedAt == request.time
+          && request.resource.data.deletionUpdatedAt == request.time
+          && request.resource.data.deletionPhase == 'preparing')
+        || (gubDeletingOwner(id)
+          && request.resource.data.deletionStatus == 'deleting'
+          && request.resource.data.deletionRequestedBy == resource.data.deletionRequestedBy
+          && request.resource.data.deletionStartedAt == resource.data.deletionStartedAt
+          && request.resource.data.ownerId == resource.data.ownerId
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['deletionPhase','deletionUpdatedAt','deletionMemberIds'])
+          && validGubDeletionPhaseAdvance(resource.data.deletionPhase, request.resource.data.deletionPhase)
+          && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['deletionUpdatedAt'])
+            || request.resource.data.deletionUpdatedAt == request.time)
+          && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['deletionMemberIds'])
+            || request.resource.data.deletionMemberIds is list))
+      );
+      allow delete: if gubDeletingOwner(id);
+
+      match /members/{uid} {
+        allow read: if isGubMember(id) || isGubOwner(id);
+        allow create: if own(uid) && gubAfter(id).data.get('deletionStatus','active') != 'deleting'
+          && request.resource.data.role == (gubAfter(id).data.ownerId == uid ? 'owner' : 'member')
+          && validGubMemberAndCopy(id, uid, request.resource.data.role);
+        allow update: if own(uid) && gubActive(id)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['antiSpamRulesAccepted','antiSpamRulesAcceptedAt','antiSpamRulesVersion']);
+        allow delete: if (isGubOwner(id) && uid != request.auth.uid) || gubDeletingOwner(id);
+      }
+      match /messages/{messageId} {
+        allow read: if isGubMember(id) || gubDeletingOwner(id);
+        allow create: if isGubMember(id) && gubActive(id)
+          && request.resource.data.keys().hasOnly(['messageId','gubId','senderId','senderName','text','createdAt'])
+          && request.resource.data.messageId == messageId
+          && request.resource.data.gubId == id
+          && request.resource.data.senderId == request.auth.uid
+          && request.resource.data.senderName == get(gubMemberPath(id, request.auth.uid)).data.displayName
+          && request.resource.data.text is string
+          && request.resource.data.createdAt is timestamp;
+        allow delete: if gubDeletingOwner(id);
+      }
+      match /chatReads/{uid} {
+        allow read: if (own(uid) && isGubMember(id)) || gubDeletingOwner(id);
+        allow create, update: if own(uid) && isGubMember(id) && gubActive(id)
+          && request.resource.data.keys().hasOnly(['userId','gubId','lastReadAt'])
+          && request.resource.data.userId == uid
+          && request.resource.data.gubId == id
+          && request.resource.data.lastReadAt is timestamp;
+        allow delete: if gubDeletingOwner(id);
+      }
+      match /boardReads/{uid} {
+        allow read: if (own(uid) && isGubMember(id)) || gubDeletingOwner(id);
+        allow create, update: if own(uid) && isGubMember(id) && gubActive(id)
+          && request.resource.data.keys().hasOnly(['lastReadAt'])
+          && request.resource.data.lastReadAt is timestamp;
+        allow delete: if gubDeletingOwner(id);
+      }
+      match /posts/{postId} {
+        allow read: if isGubMember(id) || gubDeletingOwner(id);
+        allow create: if isGubMember(id) && gubActive(id)
+          && request.resource.data.keys().hasOnly([
+            'gubId','authorId','authorName','authorPhoto','message','likes','comments','createdAt','updatedAt'
+          ])
+          && request.resource.data.gubId == id
+          && request.resource.data.authorId == request.auth.uid
+          && request.resource.data.authorName == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.displayName
+          && (request.resource.data.authorPhoto == null || request.resource.data.authorPhoto is string)
+          && request.resource.data.message is string
+          && request.resource.data.likes == 0
+          && request.resource.data.comments == 0
+          && request.resource.data.createdAt is timestamp
+          && request.resource.data.updatedAt is timestamp;
+        allow delete: if gubDeletingOwner(id);
+      }
+      match /tasks/{taskId} {
+        allow read: if isGubMember(id) || gubDeletingOwner(id);
+        allow create: if isGubMember(id) && gubActive(id) && validTaskCreate(id, taskId);
+        allow update: if validTaskCompletion(id);
+        allow delete: if validHardDeleteWithCooldown(id, resource.data.creatorId, 'task', taskId)
+          || gubDeletingOwner(id);
+      }
+      match /events/{eventId} {
+        allow read: if isGubMember(id) || gubDeletingOwner(id);
+        allow create: if isGubMember(id) && gubActive(id) && validCalendarEventCreate(id, eventId);
+        allow delete: if (gubActive(id) && (resource.data.creatorId == request.auth.uid || isGubOwner(id)))
+          || gubDeletingOwner(id);
+      }
+      match /organizedEvents/{eventId} {
+        allow read: if isGubMember(id) || gubDeletingOwner(id);
+        allow create: if isGubMember(id) && gubActive(id) && validOrganizedEventCreate(id, eventId);
+        allow update: if validOrganizedCompletion(id);
+        allow delete: if validHardDeleteWithCooldown(id, resource.data.createdBy, 'organizedEvent', eventId)
+          || gubDeletingOwner(id);
+      }
+      match /proposals/{proposalId} {
+        allow read: if isGubMember(id) || gubDeletingOwner(id);
+        allow create: if isGubMember(id) && gubActive(id) && validProposalCreate(id, proposalId);
+        allow update: if isGubMember(id) && gubActive(id)
+          && (validVoteAggregate(id, proposalId)
+            || validProposalResult()
+            || validProposalEventFlag()
+            || validSoftDelete(id, resource.data.creatorId, 'proposal', proposalId));
+        allow delete: if gubDeletingOwner(id);
+      }
+      match /proposals/{proposalId}/votes/{uid} {
+        allow read: if isGubMember(id) || gubDeletingOwner(id);
+        allow create: if own(uid) && isGubMember(id) && gubActive(id)
+          && get(proposalPath(id, proposalId)).data.status == 'voting'
+          && request.resource.data.keys().hasOnly(['uid','vote','votedAt'])
+          && request.resource.data.uid == uid
+          && request.resource.data.vote in ['yes','no']
+          && request.resource.data.votedAt is timestamp;
+        allow delete: if gubDeletingOwner(id);
+      }
+      match /goals/{goalId} {
+        allow read: if isGubMember(id) || gubDeletingOwner(id);
+        allow create: if isGubMember(id) && gubActive(id) && validGoalCreate(id, goalId);
+        allow update: if gubActive(id)
+          && (validGoalProgress(id)
+            || validSoftDelete(id, resource.data.ownerId, 'sharedBudget', goalId));
+        allow delete: if gubDeletingOwner(id);
+      }
+      match /goals/{goalId}/members/{uid} {
+        allow read: if isGubMember(id) || gubDeletingOwner(id);
+        allow create: if gubActive(id) && validGoalMemberCreate(id, goalId, uid);
+        allow update: if gubActive(id)
+          && (validOwnContribution(id, goalId, uid) || validOwnerConfirmation(id));
+        allow delete: if (gubActive(id) && isGubOwner(id) && uid != request.auth.uid)
+          || gubDeletingOwner(id);
+      }
+      match /notifications/{notificationId} {
+        allow read: if isGubMember(id) || gubDeletingOwner(id);
+        allow create: if isGubMember(id) && gubActive(id)
+          && validNotificationCreate(id, notificationId);
+        allow update: if isGubMember(id) && gubActive(id) && validReadByUpdate();
+        allow delete: if gubDeletingOwner(id);
+      }
+      match /creationCooldowns/{cooldownId} {
+        allow read: if isGubMember(id) || gubDeletingOwner(id);
+        allow create, update: if isGubMember(id) && gubActive(id)
+          && validCooldownCause(id, cooldownId);
+        allow delete: if gubDeletingOwner(id);
+      }
+    }
+
+    match /communities/{id} {
+      allow read: if signedIn() && (resource.data.visibility == 'public'
+        || resource.data.ownerId == request.auth.uid || isCommunityMember(id));
+      allow create: if signedIn() && validCommunityRootCreate(id)
+        && validCommunityMemberAndCopy(id, request.auth.uid, 'owner')
+        && getAfter(ownershipPath(request.auth.uid)).data.communityId == id;
+      allow update: if (
+        (communityActive(id) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memberCount'])
+          && request.resource.data.memberCount == resource.data.memberCount + 1
+          && validCommunityMemberAndCopy(id, request.auth.uid, 'member'))
+        || (isCommunityOwner(id) && resource.data.get('deletionStatus','active') == 'active'
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['deletionStatus','deletionStartedAt','deletionStartedBy','deletionRequestedBy'])
+          && request.resource.data.deletionStatus == 'deleting'
+          && request.resource.data.deletionStartedAt == request.time
+          && request.resource.data.deletionStartedBy == request.auth.uid
+          && request.resource.data.deletionRequestedBy == request.auth.uid)
+        || (communityDeletingOwner(id) && request.resource.data.ownerId == resource.data.ownerId
+          && request.resource.data.deletionStatus == 'deleting'
+          && request.resource.data.get('deletionRequestedBy','') == resource.data.get('deletionRequestedBy','')
+          && request.resource.data.get('deletionStartedBy','') == resource.data.get('deletionStartedBy','')
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['deletionMembersCapturedAt'])
+          && request.resource.data.deletionMembersCapturedAt == request.time)
+      );
+      allow delete: if communityDeletingOwner(id);
+      match /members/{uid} { allow read: if isCommunityMember(id) || isCommunityOwner(id); allow create: if own(uid) && communityAfter(id).data.get('deletionStatus','active') != 'deleting' && request.resource.data.role == (communityAfter(id).data.ownerId == uid ? 'owner' : 'member') && validCommunityMemberAndCopy(id,uid,request.resource.data.role); allow delete: if communityDeletingOwner(id); }
+      match /messages/{messageId} {
+        allow read: if isCommunityMember(id) || communityDeletingOwner(id);
+        allow create: if isCommunityMember(id) && communityActive(id)
+          && request.resource.data.keys().hasOnly(['messageId','communityId','senderId','senderName','text','createdAt'])
+          && request.resource.data.messageId == messageId
+          && request.resource.data.communityId == id
+          && request.resource.data.senderId == request.auth.uid
+          && request.resource.data.senderName == get(communityMemberPath(id, request.auth.uid)).data.displayName
+          && request.resource.data.text is string
+          && request.resource.data.createdAt is timestamp;
+        allow delete: if communityDeletingOwner(id);
+      }
+      match /deletionMembers/{uid} {
+        allow read: if communityDeletingOwner(id);
+        allow create: if communityDeletingOwner(id)
+          && request.resource.data.keys().hasOnly(['uid'])
+          && request.resource.data.uid == uid;
+        allow delete: if communityDeletingOwner(id);
+      }
+    }
+    match /communityOwnership/{uid} {
+      allow read: if own(uid);
+      allow create: if own(uid) && request.resource.data.keys().hasOnly(['ownerId','communityId','createdAt'])
+        && request.resource.data.ownerId == uid
+        && request.resource.data.createdAt is timestamp
+        && communityAfter(request.resource.data.communityId).data.ownerId == uid
+        && validCommunityMemberAndCopy(request.resource.data.communityId,uid,'owner');
+      allow delete: if own(uid) && communityDeletingOwner(resource.data.communityId);
+    }
+  }
+}

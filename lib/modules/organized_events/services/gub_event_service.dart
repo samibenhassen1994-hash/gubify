@@ -1,5 +1,11 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+
+import '../../../core/errors/active_creation_limit_exception.dart';
+import '../../../core/models/creation_availability.dart';
+import '../../../core/models/deletion_context.dart';
+import '../../../repositories/creation_cooldown_repository.dart';
+import '../../../repositories/gub_repository.dart';
 import '../../notifications/services/notification_service.dart';
 import '../models/gub_event_model.dart';
 import '../repositories/gub_event_repository.dart';
@@ -8,6 +14,44 @@ class GubEventService {
   GubEventService._();
   static final instance = GubEventService._();
   final _db = FirebaseFirestore.instance;
+  final Set<String> _creationsInProgress = {};
+
+  Future<CreationAvailability> creationAvailability({
+    required String gubId,
+    String? creatorId,
+  }) async {
+    final effectiveCreatorId =
+        creatorId ?? FirebaseAuth.instance.currentUser?.uid;
+    if (effectiveCreatorId == null) {
+      throw StateError('You must be signed in to create an event.');
+    }
+    if (await GubRepository.instance.isAuthoritativeOwner(
+      gubId: gubId,
+      userId: effectiveCreatorId,
+    )) {
+      return const CreationAvailability(isUnlimited: true);
+    }
+
+    final activeFuture = GubEventRepository.instance.getActiveEventCreatedBy(
+      gubId: gubId,
+      creatorId: effectiveCreatorId,
+    );
+    final cooldownFuture = CreationCooldownRepository.instance.get(
+      gubId: gubId,
+      creatorId: effectiveCreatorId,
+      moduleType: CreationModuleType.organizedEvent,
+    );
+    final results = await Future.wait<Object?>([activeFuture, cooldownFuture]);
+    final activeEvent = results[0] as GubEventModel?;
+    final cooldown = results[1] as CreationCooldown?;
+    return CreationAvailability(
+      activeItemId: activeEvent?.eventId,
+      activeItemTitle: activeEvent?.title,
+      activeItem: activeEvent,
+      cooldown: cooldown,
+    );
+  }
+
   Stream<List<GubEventModel>> stream(String gubId) =>
       GubEventRepository.instance.stream(gubId);
   Stream<int> activeCountStream(String gubId) => stream(
@@ -43,6 +87,7 @@ class GubEventService {
     String? originUserId,
     String? sourceAuthorName,
   }) async {
+    await GubRepository.instance.ensureActive(gubId);
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
       throw StateError('Sign in required.');
@@ -75,8 +120,36 @@ class GubEventService {
       originUserId: originUserId,
       sourceAuthorName: sourceAuthorName,
     );
-    await GubEventRepository.instance.create(event);
-    for (final _ in assignments.where((item) => item.userId != user.uid)) {
+    final creationKey = '$gubId/${user.uid}';
+    if (!_creationsInProgress.add(creationKey)) {
+      throw StateError('An event creation is already in progress.');
+    }
+
+    try {
+      final availability = await creationAvailability(
+        gubId: gubId,
+        creatorId: user.uid,
+      );
+      if (availability.hasActiveItem) {
+        throw const ActiveCreationLimitException(
+          'You already have an active event. Complete it before creating another one.',
+        );
+      }
+      if (availability.isCoolingDown) {
+        throw CreationCooldownException(
+          'You can create another event in '
+          '${formatCooldownRemaining(availability.cooldown!.remaining)}.',
+        );
+      }
+
+      await GubEventRepository.instance.create(event);
+      final recipientIds = assignments
+          .map((assignment) => assignment.userId)
+          .where((userId) => userId.isNotEmpty && userId != user.uid)
+          .toSet()
+          .toList(growable: false);
+      if (recipientIds.isEmpty) return;
+
       await NotificationService.instance.send(
         gubId: gubId,
         title: 'New event',
@@ -85,8 +158,15 @@ class GubEventService {
         type: 'organized_event_created',
         senderId: user.uid,
         senderName: event.createdByName ?? 'User',
-        data: {'eventId': event.eventId},
+        data: {
+          'module': 'organized_events',
+          'eventId': event.eventId,
+          'organizedEventId': event.eventId,
+          'recipientIds': recipientIds,
+        },
       );
+    } finally {
+      _creationsInProgress.remove(creationKey);
     }
   }
 
@@ -94,6 +174,7 @@ class GubEventService {
     required GubEventModel event,
     required bool completed,
   }) async {
+    await GubRepository.instance.ensureActive(event.gubId);
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
       throw StateError('Sign in required.');
@@ -102,23 +183,34 @@ class GubEventService {
       gubId: event.gubId,
       eventId: event.eventId,
       userId: user.uid,
+      senderName: user.displayName ?? 'User',
       completed: completed,
     );
-    if (!becameCompleted) {
-      return;
+    if (!becameCompleted) return;
+  }
+
+  Future<void> delete({required String gubId, required String eventId}) async {
+    await GubRepository.instance.ensureActive(gubId);
+    if (!await canDelete(gubId: gubId, eventId: eventId)) {
+      throw StateError("You don't have permission to delete this event.");
     }
-    for (final _ in event.assignments.where(
-      (item) => item.userId != user.uid,
-    )) {
-      await NotificationService.instance.send(
-        gubId: event.gubId,
-        title: 'Event completed',
-        body: 'All tasks are complete for ${event.title}.',
-        type: 'organized_event_completed',
-        senderId: user.uid,
-        senderName: user.displayName ?? 'User',
-        data: {'eventId': event.eventId},
-      );
-    }
+    await GubEventRepository.instance.delete(gubId: gubId, eventId: eventId);
+  }
+
+  Future<bool> canDelete({required String gubId, required String eventId}) {
+    return GubEventRepository.instance.canDelete(
+      gubId: gubId,
+      eventId: eventId,
+    );
+  }
+
+  Future<DeletionContext> deletionContext({
+    required String gubId,
+    required String eventId,
+  }) {
+    return GubEventRepository.instance.deletionContext(
+      gubId: gubId,
+      eventId: eventId,
+    );
   }
 }

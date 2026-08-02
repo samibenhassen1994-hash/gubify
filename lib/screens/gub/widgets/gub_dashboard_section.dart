@@ -1,6 +1,8 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import '../../../core/models/creation_availability.dart';
+import '../../../core/navigation/creation_gate.dart';
 import '../../../modules/shared_budget/models/shared_budget_model.dart';
 import '../../../modules/shared_budget/screens/shared_budget_members_screen.dart';
 import '../../../modules/shared_budget/screens/shared_budget_screen.dart';
@@ -10,6 +12,8 @@ import '../../../modules/gub_calendar/screens/gub_calendar_screen.dart';
 import '../../../modules/proposals/screens/create_proposal_screen.dart';
 import '../../../modules/proposals/screens/proposal_details_screen.dart';
 import '../../../modules/proposals/models/proposal_model.dart';
+import '../../../modules/tasks/models/task_model.dart';
+import '../../../modules/tasks/screens/task_details_screen.dart';
 import '../../../modules/tasks/screens/tasks_screen.dart';
 import '../../../modules/organized_events/screens/gub_events_screen.dart';
 import '../../../modules/organized_events/services/gub_event_service.dart';
@@ -66,9 +70,11 @@ class _GubDashboardSectionState extends State<GubDashboardSection> {
           children: [
             _TodayCard(
               taskText: _taskText(summary, compact: false),
+              myTaskText: _myTaskText(summary),
               proposalText: _proposalText(summary, compact: false),
               eventText: _nextEventText(summary),
               onTasksTap: _openTasks,
+              onMyTaskTap: () => _showMyActiveTask(summary),
               onProposalsTap: () => _openProposals(summary.activeProposal),
               onCalendarTap: _openCalendar,
             ),
@@ -111,6 +117,129 @@ class _GubDashboardSectionState extends State<GubDashboardSection> {
     if (count == 0) return "No active tasks";
     if (compact) return "$count active";
     return "$count active task${count == 1 ? "" : "s"}";
+  }
+
+  String _myTaskText(GubDashboardSummary summary) {
+    if (!summary.tasksLoaded || (!_isOwner && !summary.taskCooldownLoaded)) {
+      return "Loading...";
+    }
+    if (summary.tasksFailed || (!_isOwner && summary.taskCooldownFailed)) {
+      return "Unable to load task availability";
+    }
+
+    final userId = FirebaseAuth.instance.currentUser?.uid;
+    if (userId == null) return "Unavailable";
+    final assignedCount = summary.activeTasks
+        .where((task) => task.assignedUserId == userId)
+        .length;
+    if (_isOwner) return "$assignedCount assigned to you · Unlimited";
+    final hasCreatedTask = summary.activeTasks.any(
+      (task) => task.creatorId == userId,
+    );
+    final cooldownActive = summary.taskCreationCooldown?.isActive == true;
+    final slotStatus = hasCreatedTask
+        ? "In use"
+        : cooldownActive
+        ? "Cooldown"
+        : "Available";
+    return "$assignedCount assigned to you · $slotStatus";
+  }
+
+  Future<void> _showMyActiveTask(GubDashboardSummary summary) async {
+    final userId = FirebaseAuth.instance.currentUser?.uid;
+    if (userId == null ||
+        !summary.tasksLoaded ||
+        (!_isOwner && !summary.taskCooldownLoaded)) {
+      return;
+    }
+
+    final assignedTasks = summary.activeTasks
+        .where((task) => task.assignedUserId == userId)
+        .toList(growable: false);
+    final createdTasks = summary.activeTasks
+        .where((task) => task.creatorId == userId)
+        .toList(growable: false);
+    final relevantTasks = <String, TaskModel>{
+      for (final task in assignedTasks) task.taskId: task,
+      for (final task in createdTasks) task.taskId: task,
+    }.values.toList(growable: false);
+    final cooldown = summary.taskCreationCooldown;
+    final cooldownActive = cooldown?.isActive == true;
+    final availabilityUnknown =
+        summary.tasksFailed || (!_isOwner && summary.taskCooldownFailed);
+    final slotUnavailable =
+        !_isOwner &&
+        (createdTasks.isNotEmpty || cooldownActive || availabilityUnknown);
+
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (sheetContext) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          padding: const EdgeInsets.fromLTRB(24, 4, 24, 24),
+          children: [
+            Text(
+              "My active task",
+              style: Theme.of(
+                sheetContext,
+              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 14),
+            Text("Active tasks assigned to you: ${assignedTasks.length}"),
+            Text("Active tasks created by you: ${createdTasks.length}"),
+            if (_isOwner)
+              const Text("Task creation: Unlimited")
+            else ...[
+              Text("Available creation slots: ${slotUnavailable ? 0 : 1}/1"),
+              Text("Unavailable creation slots: ${slotUnavailable ? 1 : 0}/1"),
+            ],
+            if (!_isOwner && createdTasks.isNotEmpty)
+              const Text("Reason: You already have an active task."),
+            if (!_isOwner && createdTasks.isEmpty && cooldownActive) ...[
+              const Text("Reason: Cooldown after a deleted task."),
+              Text(
+                "Time remaining: "
+                "${formatCooldownRemaining(cooldown!.remaining)}",
+              ),
+            ],
+            if (!_isOwner && availabilityUnknown)
+              const Text("Reason: Availability could not be verified."),
+            if (relevantTasks.isNotEmpty) ...[
+              const SizedBox(height: 18),
+              const Text(
+                "Active tasks",
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 6),
+              for (final task in relevantTasks)
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(task.title),
+                  subtitle: Text(
+                    task.creatorId == userId
+                        ? "Created by you"
+                        : "Assigned to you",
+                  ),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => TaskDetailsScreen(
+                          gubId: task.gubId,
+                          taskId: task.taskId,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+            ],
+          ],
+        ),
+      ),
+    );
   }
 
   String _proposalText(GubDashboardSummary summary, {required bool compact}) {
@@ -159,7 +288,15 @@ class _GubDashboardSectionState extends State<GubDashboardSection> {
     ).push(MaterialPageRoute(builder: (_) => TasksScreen(gubId: widget.gubId)));
   }
 
-  void _openProposals(ProposalModel? activeProposal) {
+  Future<void> _openProposals(ProposalModel? activeProposal) async {
+    if (activeProposal == null) {
+      final allowed = await CreationGate.ensureAvailable(
+        context: context,
+        gubId: widget.gubId,
+        moduleType: CreationModuleType.proposal,
+      );
+      if (!allowed || !mounted) return;
+    }
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => activeProposal == null
@@ -235,17 +372,21 @@ class _GubDashboardSectionState extends State<GubDashboardSection> {
 
 class _TodayCard extends StatelessWidget {
   final String taskText;
+  final String myTaskText;
   final String proposalText;
   final String? eventText;
   final VoidCallback onTasksTap;
+  final VoidCallback onMyTaskTap;
   final VoidCallback onProposalsTap;
   final VoidCallback? onCalendarTap;
 
   const _TodayCard({
     required this.taskText,
+    required this.myTaskText,
     required this.proposalText,
     required this.eventText,
     required this.onTasksTap,
+    required this.onMyTaskTap,
     required this.onProposalsTap,
     required this.onCalendarTap,
   });
@@ -270,6 +411,15 @@ class _TodayCard extends StatelessWidget {
               iconBackground: const Color(0xFFDBEAFE),
               text: taskText,
               onTap: onTasksTap,
+            ),
+            const Divider(height: 1, indent: 52),
+            _TodayRow(
+              icon: Icons.person_search_rounded,
+              iconColor: const Color(0xFF7C3AED),
+              iconBackground: const Color(0xFFEDE9FE),
+              title: "My active task",
+              text: myTaskText,
+              onTap: onMyTaskTap,
             ),
             const Divider(height: 1, indent: 52),
             _TodayRow(
@@ -301,6 +451,7 @@ class _TodayRow extends StatelessWidget {
   final Color iconColor;
   final Color iconBackground;
   final String text;
+  final String? title;
   final VoidCallback? onTap;
 
   const _TodayRow({
@@ -308,6 +459,7 @@ class _TodayRow extends StatelessWidget {
     required this.iconColor,
     required this.iconBackground,
     required this.text,
+    this.title,
     required this.onTap,
   });
 
@@ -327,17 +479,36 @@ class _TodayRow extends StatelessWidget {
             ),
             const SizedBox(width: 12),
             Expanded(
-              child: Text(
-                text,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: onTap == null
-                      ? const Color(0xFF94A3B8)
-                      : const Color(0xFF1E293B),
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  if (title != null)
+                    Text(
+                      title!,
+                      style: const TextStyle(
+                        color: Color(0xFF0F172A),
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  Text(
+                    text,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: onTap == null
+                          ? const Color(0xFF94A3B8)
+                          : title == null
+                          ? const Color(0xFF1E293B)
+                          : const Color(0xFF64748B),
+                      fontSize: title == null ? 15 : 13,
+                      fontWeight: title == null
+                          ? FontWeight.w600
+                          : FontWeight.w500,
+                    ),
+                  ),
+                ],
               ),
             ),
             const SizedBox(width: 8),

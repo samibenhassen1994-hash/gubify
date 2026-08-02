@@ -62,9 +62,16 @@ class SharedBudgetMemberRepository {
         .doc(uid);
 
     await _firestore.runTransaction((transaction) async {
+      final gubSnapshot = await transaction.get(
+        _firestore.collection('gubs').doc(gubId),
+      );
       final sharedBudgetSnapshot = await transaction.get(sharedBudgetReference);
       final memberSnapshot = await transaction.get(memberReference);
 
+      if (!gubSnapshot.exists ||
+          gubSnapshot.data()?['deletionStatus'] == 'deleting') {
+        throw StateError('This Gub is no longer available.');
+      }
       if (!sharedBudgetSnapshot.exists) {
         throw StateError("Shared Budget not found.");
       }
@@ -157,6 +164,9 @@ class SharedBudgetMemberRepository {
 
       if (!gubSnapshot.exists) {
         throw StateError("Gub not found.");
+      }
+      if (gubSnapshot.data()?['deletionStatus'] == 'deleting') {
+        throw StateError('This Gub is no longer available.');
       }
 
       if (!sharedBudgetSnapshot.exists) {

@@ -3,10 +3,12 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../../../widgets/gub_screen_background.dart';
+import '../../../core/models/deletion_context.dart';
 import '../../chat/widgets/gub_chat_overlay.dart';
 import '../models/shared_budget_model.dart';
 import '../services/shared_budget_member_service.dart';
 import '../services/shared_budget_service.dart';
+import '../widgets/delete_shared_budget_dialog.dart';
 import 'my_contribution_screen.dart';
 
 class SharedBudgetMembersScreen extends StatefulWidget {
@@ -29,6 +31,28 @@ class SharedBudgetMembersScreen extends StatefulWidget {
 class _SharedBudgetMembersScreenState extends State<SharedBudgetMembersScreen> {
   final Set<String> _confirmingMemberIds = {};
   bool _openingOriginalMessage = false;
+  late final Future<DeletionContext> _deletionContextFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _deletionContextFuture = SharedBudgetService.instance.deletionContext(
+      gubId: widget.gubId,
+      sharedBudgetId: widget.sharedBudgetId,
+    );
+  }
+
+  Future<void> _deleteSharedBudget() async {
+    final deletionContext = await _deletionContextFuture;
+    if (!mounted || !deletionContext.canDelete) return;
+    final deleted = await showDeleteSharedBudgetDialog(
+      context: context,
+      gubId: widget.gubId,
+      sharedBudgetId: widget.sharedBudgetId,
+      deletionContext: deletionContext,
+    );
+    if (deleted && mounted) Navigator.pop(context);
+  }
 
   Future<void> _openOriginalMessage(SharedBudgetModel sharedBudget) async {
     final messageId = sharedBudget.sourceId;
@@ -128,6 +152,18 @@ class _SharedBudgetMembersScreenState extends State<SharedBudgetMembersScreen> {
           surfaceTintColor: Colors.transparent,
           elevation: 0,
           scrolledUnderElevation: 0,
+          actions: [
+            FutureBuilder<DeletionContext>(
+              future: _deletionContextFuture,
+              builder: (context, snapshot) => snapshot.data?.canDelete == true
+                  ? IconButton(
+                      tooltip: 'Delete Shared Budget',
+                      onPressed: _deleteSharedBudget,
+                      icon: const Icon(Icons.delete_outline_rounded),
+                    )
+                  : const SizedBox.shrink(),
+            ),
+          ],
         ),
         body: StreamBuilder<SharedBudgetModel?>(
           stream: SharedBudgetService.instance.sharedBudgetStream(

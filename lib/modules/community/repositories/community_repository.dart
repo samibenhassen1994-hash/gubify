@@ -162,7 +162,7 @@ class CommunityRepository {
 
   Future<void> deleteCommunityClientSide({
     required String communityId,
-    required String confirmationName,
+    required String? confirmationName,
   }) async {
     final user = _auth.currentUser;
     if (user == null) {
@@ -170,7 +170,7 @@ class CommunityRepository {
     }
 
     final normalizedCommunityId = communityId.trim();
-    if (normalizedCommunityId.isEmpty || confirmationName.isEmpty) {
+    if (normalizedCommunityId.isEmpty) {
       throw const CommunityDeletionException(
         "The deletion was not completed. Keep the app open and try again.",
       );
@@ -221,7 +221,7 @@ class CommunityRepository {
 
   Future<String> _markCommunityForDeletion({
     required DocumentReference<Map<String, dynamic>> communityReference,
-    required String confirmationName,
+    required String? confirmationName,
     required String currentUserId,
   }) {
     return _firestore.runTransaction<String>((transaction) async {
@@ -239,18 +239,25 @@ class CommunityRepository {
           "Only the Community owner can delete it.",
         );
       }
-      if (data["name"] != confirmationName) {
+      final deleting = data['deletionStatus'] == 'deleting';
+      if (!deleting && data["name"] != confirmationName) {
         throw const CommunityDeletionException(
           "The Community name does not match.",
         );
       }
 
-      if (data["deletionStatus"] != "deleting") {
+      if (!deleting) {
         transaction.update(communityReference, {
           "deletionStatus": "deleting",
           "deletionStartedAt": FieldValue.serverTimestamp(),
           "deletionStartedBy": currentUserId,
+          "deletionRequestedBy": currentUserId,
         });
+      } else if (data['deletionRequestedBy'] != null &&
+          data['deletionRequestedBy'] != currentUserId) {
+        throw const CommunityDeletionException(
+          'Only the owner who started this deletion can resume it.',
+        );
       }
       return currentUserId;
     });
