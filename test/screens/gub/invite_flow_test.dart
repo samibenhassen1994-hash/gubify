@@ -82,12 +82,14 @@ void main() {
   testWidgets('Join Gub serializes double taps', (tester) async {
     final pending = Completer<String>();
     var calls = 0;
+    String? submittedCode;
     await tester.pumpWidget(
       MaterialApp(
         home: JoinGubScreen(
           showUserHeader: false,
           joinAction: ({required inviteCode}) {
             calls++;
+            submittedCode = inviteCode;
             return pending.future;
           },
         ),
@@ -101,6 +103,11 @@ void main() {
     await tester.pump();
 
     expect(calls, 1);
+    expect(submittedCode, 'K7M4P9Q2');
+    expect(
+      tester.widget<TextField>(find.byType(TextField)).controller!.text,
+      'K7M4-P9Q2',
+    );
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
 
     await tester.pumpWidget(const SizedBox.shrink());

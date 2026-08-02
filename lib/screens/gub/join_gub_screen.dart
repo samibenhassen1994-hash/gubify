@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
-import '../../config/app_limits.dart';
+import '../../core/invites/invite_code.dart';
+import '../../core/invites/invite_code_input_formatter.dart';
 import '../../services/gub_service.dart';
 import '../../widgets/gub_content_card.dart';
 import '../../widgets/gub_screen_background.dart';
@@ -73,9 +73,9 @@ class _JoinGubScreenState extends State<JoinGubScreen> {
 
   Future<void> _joinHub() async {
     if (_loading) return;
-    final inviteCode = _controller.text.trim();
+    final visibleInviteCode = _controller.text;
 
-    if (inviteCode.isEmpty) {
+    if (visibleInviteCode.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Please enter a Gub invite code.")),
       );
@@ -85,6 +85,7 @@ class _JoinGubScreenState extends State<JoinGubScreen> {
     setState(() => _loading = true);
 
     try {
+      final inviteCode = InviteCode.normalize(visibleInviteCode);
       final gubId = await (widget.joinAction ?? GubService().joinHub)(
         inviteCode: inviteCode,
       );
@@ -223,15 +224,13 @@ class _JoinGubScreenState extends State<JoinGubScreen> {
                                 child: TextField(
                                   controller: _controller,
                                   focusNode: _inviteCodeFocusNode,
-                                  maxLength: AppLimits.inviteCodeInputMaxLength,
+                                  maxLength: InviteCode.formattedLength,
                                   textCapitalization:
                                       TextCapitalization.characters,
                                   textInputAction: TextInputAction.done,
                                   onSubmitted: (_) => _joinHub(),
-                                  inputFormatters: [
-                                    FilteringTextInputFormatter.allow(
-                                      RegExp(r'[A-Za-z0-9\-\s]'),
-                                    ),
+                                  inputFormatters: const [
+                                    InviteCodeInputFormatter(),
                                   ],
                                   decoration: const InputDecoration(
                                     labelText: "Invitation Code",

@@ -24,11 +24,31 @@ class InviteCode {
   static bool isCanonical(String value) =>
       value.length == canonicalLength && _canonicalPattern.hasMatch(value);
 
+  static String filterSupportedInput(String input) {
+    final upper = input.toUpperCase();
+    final buffer = StringBuffer();
+    for (final character in upper.split('')) {
+      if (alphabet.contains(character)) buffer.write(character);
+      if (buffer.length == canonicalLength) break;
+    }
+    return buffer.toString();
+  }
+
+  static String formatPartial(String canonical) {
+    if (canonical.isEmpty) return '';
+    if (canonical.length > canonicalLength ||
+        canonical.split('').any((character) => !alphabet.contains(character))) {
+      throw const InvalidInviteCodeException();
+    }
+    if (canonical.length <= 4) return canonical;
+    return '${canonical.substring(0, 4)}-${canonical.substring(4)}';
+  }
+
   static String format(String canonical) {
     if (!isCanonical(canonical)) {
       throw const InvalidInviteCodeException();
     }
-    return '${canonical.substring(0, 4)}-${canonical.substring(4)}';
+    return formatPartial(canonical);
   }
 
   static String? tryFormat(String canonical) =>
