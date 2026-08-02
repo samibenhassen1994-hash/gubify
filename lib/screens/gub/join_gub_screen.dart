@@ -11,15 +11,21 @@ import 'gub_screen.dart';
 class JoinGubScreen extends StatefulWidget {
   final Future<String> Function({required String inviteCode})? joinAction;
   final bool showUserHeader;
+  final String? initialCode;
 
-  const JoinGubScreen({super.key, this.joinAction, this.showUserHeader = true});
+  const JoinGubScreen({
+    super.key,
+    this.joinAction,
+    this.showUserHeader = true,
+    this.initialCode,
+  });
 
   @override
   State<JoinGubScreen> createState() => _JoinGubScreenState();
 }
 
 class _JoinGubScreenState extends State<JoinGubScreen> {
-  final TextEditingController _controller = TextEditingController();
+  late final TextEditingController _controller;
   final FocusNode _inviteCodeFocusNode = FocusNode();
   final ScrollController _scrollController = ScrollController();
   final GlobalKey _inviteCodeFieldKey = GlobalKey();
@@ -33,11 +39,24 @@ class _JoinGubScreenState extends State<JoinGubScreen> {
   void initState() {
     super.initState();
 
+    _controller = TextEditingController(text: _formattedInitialCode());
+
     _inviteCodeFocusNode.addListener(() {
       if (_inviteCodeFocusNode.hasFocus) {
         _scheduleBringFieldIntoView();
       }
     });
+  }
+
+  String _formattedInitialCode() {
+    final initialCode = widget.initialCode;
+    if (initialCode == null) return '';
+
+    try {
+      return InviteCode.format(InviteCode.normalize(initialCode));
+    } on InvalidInviteCodeException {
+      return '';
+    }
   }
 
   void _scheduleBringFieldIntoView() {

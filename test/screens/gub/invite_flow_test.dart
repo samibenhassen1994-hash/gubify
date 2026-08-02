@@ -115,6 +115,55 @@ void main() {
     await tester.pump();
   });
 
+  testWidgets('Join Gub is unchanged without an initial code', (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(home: JoinGubScreen(showUserHeader: false)),
+    );
+
+    expect(
+      tester.widget<TextField>(find.byType(TextField)).controller!.text,
+      isEmpty,
+    );
+  });
+
+  testWidgets('Join Gub shows an editable initial code without auto-joining', (
+    tester,
+  ) async {
+    final pending = Completer<String>();
+    var calls = 0;
+    String? submittedCode;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: JoinGubScreen(
+          showUserHeader: false,
+          initialCode: 'k7m4p9q2',
+          joinAction: ({required inviteCode}) async {
+            calls++;
+            submittedCode = inviteCode;
+            return pending.future;
+          },
+        ),
+      ),
+    );
+
+    final field = find.byType(TextField);
+    expect(tester.widget<TextField>(field).controller!.text, 'K7M4-P9Q2');
+    expect(calls, 0);
+
+    await tester.enterText(field, 'r8t5-w3x6');
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(tester.widget<TextField>(field).controller!.text, 'R8T5-W3X6');
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Join Gub'));
+    await tester.pump();
+    expect(calls, 1);
+    expect(submittedCode, 'R8T5W3X6');
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    pending.complete('g1');
+    await tester.pump();
+  });
+
   testWidgets('Join Gub shows the generic invalid-token message', (
     tester,
   ) async {

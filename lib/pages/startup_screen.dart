@@ -7,7 +7,9 @@ import '../services/user_service.dart';
 import '../widgets/startup_artwork_background.dart';
 
 class StartupScreen extends StatefulWidget {
-  const StartupScreen({super.key});
+  final VoidCallback onNavigationReady;
+
+  const StartupScreen({super.key, required this.onNavigationReady});
 
   @override
   State<StartupScreen> createState() => _StartupScreenState();
@@ -24,9 +26,7 @@ class _StartupScreenState extends State<StartupScreen> {
   }
 
   Future<void> _start() async {
-    final minimumDisplayTime = Future<void>.delayed(
-      const Duration(seconds: 2),
-    );
+    final minimumDisplayTime = Future<void>.delayed(const Duration(seconds: 2));
 
     if (_auth.currentUser == null) {
       await _auth.signInAnonymously();
@@ -44,10 +44,16 @@ class _StartupScreenState extends State<StartupScreen> {
         context,
         MaterialPageRoute(builder: (_) => const WelcomeScreen()),
       );
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        widget.onNavigationReady();
+      });
     } else {
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (_) => const NameScreen()),
+        MaterialPageRoute(
+          builder: (_) =>
+              NameScreen(onNavigationReady: widget.onNavigationReady),
+        ),
       );
     }
   }
@@ -56,10 +62,7 @@ class _StartupScreenState extends State<StartupScreen> {
   Widget build(BuildContext context) {
     return const StartupArtworkBackground(
       child: Center(
-        child: CircularProgressIndicator(
-          color: Colors.white,
-          strokeWidth: 2.5,
-        ),
+        child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),
       ),
     );
   }
