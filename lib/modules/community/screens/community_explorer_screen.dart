@@ -125,8 +125,8 @@ class _CommunityExplorerScreenState extends State<CommunityExplorerScreen> {
     setState(() => _filters = filters);
   }
 
-  void _openCommunity(CommunityModel community, bool isJoined) {
-    Navigator.push(
+  Future<void> _openCommunity(CommunityModel community, bool isJoined) async {
+    await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => isJoined
@@ -134,6 +134,7 @@ class _CommunityExplorerScreenState extends State<CommunityExplorerScreen> {
             : CommunityPublicDetailsScreen(communityId: community.communityId),
       ),
     );
+    if (mounted) _retryInitialLoad();
   }
 
   @override

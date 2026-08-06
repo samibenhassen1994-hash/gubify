@@ -19,18 +19,14 @@ class CommunityPublicDetailsScreen extends StatefulWidget {
 
 class _CommunityPublicDetailsScreenState
     extends State<CommunityPublicDetailsScreen> {
-  late Future<CommunityPublicAccessState?> _stateFuture;
+  late final Stream<CommunityPublicAccessState?> _stateStream;
   bool _operationInProgress = false;
   bool _navigationInProgress = false;
 
   @override
   void initState() {
     super.initState();
-    _reload();
-  }
-
-  void _reload() {
-    _stateFuture = CommunityService.instance.loadPublicAccessState(
+    _stateStream = CommunityService.instance.publicAccessStateStream(
       widget.communityId,
     );
   }
@@ -40,8 +36,6 @@ class _CommunityPublicDetailsScreenState
     setState(() => _operationInProgress = true);
     try {
       await operation();
-      if (!mounted) return;
-      setState(_reload);
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -104,17 +98,14 @@ class _CommunityPublicDetailsScreenState
         ),
         body: SafeArea(
           top: false,
-          child: FutureBuilder<CommunityPublicAccessState?>(
-            future: _stateFuture,
+          child: StreamBuilder<CommunityPublicAccessState?>(
+            stream: _stateStream,
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const Center(child: CircularProgressIndicator());
               }
               if (snapshot.hasError) {
-                return _DetailsState(
-                  message: "Unable to load this Community.",
-                  onRetry: () => setState(_reload),
-                );
+                return _DetailsState(message: "Unable to load this Community.");
               }
               final state = snapshot.data;
               if (state == null) {
@@ -309,9 +300,8 @@ class _DetailChip extends StatelessWidget {
 
 class _DetailsState extends StatelessWidget {
   final String message;
-  final VoidCallback? onRetry;
 
-  const _DetailsState({required this.message, this.onRetry});
+  const _DetailsState({required this.message});
 
   @override
   Widget build(BuildContext context) => Center(
@@ -319,17 +309,7 @@ class _DetailsState extends StatelessWidget {
       padding: const EdgeInsets.all(24),
       child: Column(
         mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(message, textAlign: TextAlign.center),
-          if (onRetry != null) ...[
-            const SizedBox(height: 12),
-            OutlinedButton.icon(
-              onPressed: onRetry,
-              icon: const Icon(Icons.refresh_rounded),
-              label: const Text("Try again"),
-            ),
-          ],
-        ],
+        children: [Text(message, textAlign: TextAlign.center)],
       ),
     ),
   );

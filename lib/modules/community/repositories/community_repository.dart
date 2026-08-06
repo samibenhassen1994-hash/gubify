@@ -126,6 +126,121 @@ class CommunityRepository {
     return CommunityModel.fromFirestore(document);
   }
 
+  Stream<CommunityModel?> communityForMemberStream({
+    required String communityId,
+    required String userId,
+  }) {
+    final communityReference = _communities.doc(communityId);
+    final memberReference = communityReference
+        .collection("members")
+        .doc(userId);
+    return _combineCommunityAccessDocuments(
+      communityReference: communityReference,
+      memberReference: memberReference,
+      requireMembership: true,
+    ).map((state) => state?.community);
+  }
+
+  Stream<CommunityPublicAccessState?> publicAccessStateStream({
+    required String communityId,
+    required String userId,
+  }) {
+    final communityReference = _communities.doc(communityId);
+    return _combineCommunityAccessDocuments(
+      communityReference: communityReference,
+      memberReference: communityReference.collection("members").doc(userId),
+      requestReference: communityReference
+          .collection("joinRequests")
+          .doc(userId),
+      requireMembership: false,
+    );
+  }
+
+  Stream<CommunityPublicAccessState?> _combineCommunityAccessDocuments({
+    required DocumentReference<Map<String, dynamic>> communityReference,
+    required DocumentReference<Map<String, dynamic>> memberReference,
+    DocumentReference<Map<String, dynamic>>? requestReference,
+    required bool requireMembership,
+  }) {
+    late final StreamController<CommunityPublicAccessState?> controller;
+    StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? communitySub;
+    StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? memberSub;
+    StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? requestSub;
+    DocumentSnapshot<Map<String, dynamic>>? communitySnapshot;
+    DocumentSnapshot<Map<String, dynamic>>? memberSnapshot;
+    DocumentSnapshot<Map<String, dynamic>>? requestSnapshot;
+    var communityLoaded = false;
+    var memberLoaded = false;
+    var requestLoaded = requestReference == null;
+
+    void emit() {
+      if (!communityLoaded ||
+          !memberLoaded ||
+          !requestLoaded ||
+          controller.isClosed) {
+        return;
+      }
+      final communityDocument = communitySnapshot;
+      final memberDocument = memberSnapshot;
+      if (communityDocument == null || !communityDocument.exists) {
+        controller.add(null);
+        return;
+      }
+      final community = CommunityModel.fromFirestore(communityDocument);
+      final isMember =
+          memberDocument?.exists == true &&
+          memberDocument?.data()?["uid"] == memberReference.id;
+      if (requireMembership && !isMember) {
+        controller.add(null);
+        return;
+      }
+      controller.add(
+        CommunityPublicAccessState(
+          community: community,
+          isMember: isMember,
+          isOwner: community.ownerId == memberReference.id,
+          request: requestSnapshot?.exists == true
+              ? CommunityAccessRequestModel.fromFirestore(requestSnapshot!)
+              : null,
+        ),
+      );
+    }
+
+    void addError(Object error, StackTrace stackTrace) {
+      if (!controller.isClosed) controller.addError(error, stackTrace);
+    }
+
+    controller = StreamController<CommunityPublicAccessState?>(
+      onListen: () {
+        communitySub = communityReference.snapshots().listen((snapshot) {
+          communitySnapshot = snapshot;
+          communityLoaded = true;
+          emit();
+        }, onError: addError);
+        memberSub = memberReference.snapshots().listen((snapshot) {
+          memberSnapshot = snapshot;
+          memberLoaded = true;
+          emit();
+        }, onError: addError);
+        if (requestReference != null) {
+          requestSub = requestReference.snapshots().listen((snapshot) {
+            requestSnapshot = snapshot;
+            requestLoaded = true;
+            emit();
+          }, onError: addError);
+        }
+      },
+      onCancel: () async {
+        await Future.wait([
+          if (communitySub != null) communitySub!.cancel(),
+          if (memberSub != null) memberSub!.cancel(),
+          if (requestSub != null) requestSub!.cancel(),
+        ]);
+      },
+    );
+    return controller.stream;
+  }
+
   Future<CommunityModel?> getCommunityForMember({
     required String communityId,
     required String userId,
@@ -208,6 +323,11 @@ class CommunityRepository {
         ownerId: ownerId,
       );
 
+      await _deleteUserMembershipCopies(
+        communityId: normalizedCommunityId,
+        communityReference: communityReference,
+      );
+
       for (final subcollection in _knownCommunitySubcollections) {
         if (subcollection == _deletionMembersSubcollection) continue;
         await _deleteCollectionInBatches(
@@ -215,10 +335,6 @@ class CommunityRepository {
         );
       }
 
-      await _deleteUserMembershipCopies(
-        communityId: normalizedCommunityId,
-        communityReference: communityReference,
-      );
       await _deleteOwnershipAndCommunity(
         ownerId: ownerId,
         communityId: normalizedCommunityId,
@@ -832,6 +948,25 @@ class CommunityRepository {
       return firstMillis.compareTo(secondMillis);
     });
     return requests;
+  }
+
+  Stream<int> pendingJoinRequestCountStream(String communityId) {
+    return _communities
+        .doc(communityId)
+        .collection("joinRequests")
+        .where("status", isEqualTo: CommunityAccessRequestModel.pendingStatus)
+        .limit(100)
+        .snapshots()
+        .map(
+          (snapshot) => snapshot.docs.where((document) {
+            final data = document.data();
+            return data["status"] ==
+                    CommunityAccessRequestModel.pendingStatus &&
+                data["userId"] == document.id &&
+                data["displayName"] is String &&
+                (data["displayName"] as String).trim().isNotEmpty;
+          }).length,
+        );
   }
 
   Future<void> approveJoinRequest({

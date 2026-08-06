@@ -53,6 +53,14 @@ class _CommunityChatViewState extends State<CommunityChatView> {
     }
   }
 
+  void _dismissKeyboard() {
+    if (_messageFocusNode.hasFocus) {
+      _messageFocusNode.unfocus();
+    } else {
+      FocusManager.instance.primaryFocus?.unfocus();
+    }
+  }
+
   void _onScroll() {
     if (_isScrollingToPendingMessages || !_isAtBottom()) return;
 
@@ -160,6 +168,7 @@ class _CommunityChatViewState extends State<CommunityChatView> {
           !_isScrollingToPendingMessages) {
         return;
       }
+
       if (!_scrollController.hasClients) {
         setState(() => _isScrollingToPendingMessages = false);
         return;
@@ -186,10 +195,12 @@ class _CommunityChatViewState extends State<CommunityChatView> {
           !_isScrollingToPendingMessages) {
         return;
       }
+
       if (!_scrollController.hasClients) {
         setState(() => _isScrollingToPendingMessages = false);
         return;
       }
+
       if (!_isAtBottom()) {
         _schedulePendingScrollAttempt(generation);
         return;
@@ -221,7 +232,7 @@ class _CommunityChatViewState extends State<CommunityChatView> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text("Unable to send the message. Please try again."),
+          content: Text('Unable to send the message. Please try again.'),
         ),
       );
     } finally {
@@ -276,7 +287,13 @@ class _CommunityChatViewState extends State<CommunityChatView> {
               }
 
               final messages = snapshot.data ?? const [];
-              if (messages.isEmpty) return const _CommunityChatEmptyState();
+              if (messages.isEmpty) {
+                return GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: _dismissKeyboard,
+                  child: const _CommunityChatEmptyState(),
+                );
+              }
 
               _handleMessages(messages, currentUserId);
 
@@ -285,24 +302,28 @@ class _CommunityChatViewState extends State<CommunityChatView> {
                   SingleChildScrollView(
                     controller: _scrollController,
                     keyboardDismissBehavior:
-                        ScrollViewKeyboardDismissBehavior.manual,
+                        ScrollViewKeyboardDismissBehavior.onDrag,
                     padding: EdgeInsets.fromLTRB(
                       16,
                       16,
                       16,
                       _pendingReceivedMessageCount > 0 ? 72 : 12,
                     ),
-                    child: Column(
-                      children: [
-                        for (final message in messages)
-                          CommunityChatMessageBubble(
-                            key: ValueKey(message.messageId),
-                            message: message,
-                            isCurrentUser:
-                                currentUserId != null &&
-                                message.senderId == currentUserId,
-                          ),
-                      ],
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.translucent,
+                      onTap: _dismissKeyboard,
+                      child: Column(
+                        children: [
+                          for (final message in messages)
+                            CommunityChatMessageBubble(
+                              key: ValueKey(message.messageId),
+                              message: message,
+                              isCurrentUser:
+                                  currentUserId != null &&
+                                  message.senderId == currentUserId,
+                            ),
+                        ],
+                      ),
                     ),
                   ),
                   if (_pendingReceivedMessageCount > 0)
@@ -315,17 +336,19 @@ class _CommunityChatViewState extends State<CommunityChatView> {
                           button: true,
                           excludeSemantics: true,
                           label:
-                              "$_pendingReceivedMessageCount new "
-                              "${_pendingReceivedMessageCount == 1 ? 'message' : 'messages'}. "
-                              "Scroll to the latest messages.",
+                              '$_pendingReceivedMessageCount new '
+                              '${_pendingReceivedMessageCount == 1 ? 'message' : 'messages'}. '
+                              'Scroll to the latest messages.',
                           child: FilledButton.icon(
                             onPressed: _isScrollingToPendingMessages
                                 ? null
                                 : _scrollToPendingMessages,
-                            icon: const Icon(Icons.keyboard_arrow_down_rounded),
+                            icon: const Icon(
+                              Icons.keyboard_arrow_down_rounded,
+                            ),
                             label: Text(
-                              "$_pendingReceivedMessageCount new "
-                              "${_pendingReceivedMessageCount == 1 ? 'message' : 'messages'}",
+                              '$_pendingReceivedMessageCount new '
+                              '${_pendingReceivedMessageCount == 1 ? 'message' : 'messages'}',
                             ),
                             style: FilledButton.styleFrom(
                               backgroundColor: const Color(0xFF2563EB),
@@ -347,13 +370,16 @@ class _CommunityChatViewState extends State<CommunityChatView> {
           color: Colors.white,
           child: SafeArea(
             top: false,
-            child: ChatMessageComposer(
-              controller: _messageController,
-              focusNode: _messageFocusNode,
-              isSending: _isSending,
-              canSend: canSend,
-              maxLength: CommunityChatService.maxMessageLength,
-              onSend: _sendMessage,
+            child: TapRegion(
+              onTapOutside: (_) => _dismissKeyboard(),
+              child: ChatMessageComposer(
+                controller: _messageController,
+                focusNode: _messageFocusNode,
+                isSending: _isSending,
+                canSend: canSend,
+                maxLength: CommunityChatService.maxMessageLength,
+                onSend: _sendMessage,
+              ),
             ),
           ),
         ),
@@ -380,9 +406,12 @@ class _CommunityChatEmptyState extends StatelessWidget {
             ),
             SizedBox(height: 14),
             Text(
-              "No messages yet. Start the conversation!",
+              'No messages yet. Start the conversation!',
               textAlign: TextAlign.center,
-              style: TextStyle(color: Color(0xFF64748B), fontSize: 15),
+              style: TextStyle(
+                color: Color(0xFF64748B),
+                fontSize: 15,
+              ),
             ),
           ],
         ),
@@ -410,12 +439,15 @@ class _CommunityChatErrorState extends StatelessWidget {
               color: Color(0xFF64748B),
             ),
             const SizedBox(height: 12),
-            const Text("Unable to load the chat.", textAlign: TextAlign.center),
+            const Text(
+              'Unable to load the chat.',
+              textAlign: TextAlign.center,
+            ),
             const SizedBox(height: 12),
             OutlinedButton.icon(
               onPressed: onRetry,
               icon: const Icon(Icons.refresh_rounded),
-              label: const Text("Try again"),
+              label: const Text('Try again'),
             ),
           ],
         ),

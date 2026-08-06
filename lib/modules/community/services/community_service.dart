@@ -125,6 +125,21 @@ class CommunityService {
     }
   }
 
+  Stream<CommunityModel?> currentMemberCommunityStream(String communityId) {
+    final user = _auth.currentUser;
+    if (user == null) {
+      return Stream.error(
+        StateError("You must be signed in to view a community."),
+      );
+    }
+    final normalizedId = communityId.trim();
+    if (normalizedId.isEmpty) return const Stream.empty();
+    return CommunityRepository.instance.communityForMemberStream(
+      communityId: normalizedId,
+      userId: user.uid,
+    );
+  }
+
   Future<CommunityExplorerPage> loadPublicCommunitiesPage({
     CommunityExplorerCursor? after,
   }) {
@@ -151,6 +166,23 @@ class CommunityService {
     } on FirebaseException catch (error) {
       throw Exception(_firebaseErrorMessage(error));
     }
+  }
+
+  Stream<CommunityPublicAccessState?> publicAccessStateStream(
+    String communityId,
+  ) {
+    final user = _auth.currentUser;
+    if (user == null) {
+      return Stream.error(
+        StateError("You must be signed in to view a community."),
+      );
+    }
+    final normalizedId = communityId.trim();
+    if (normalizedId.isEmpty) return const Stream.empty();
+    return CommunityRepository.instance.publicAccessStateStream(
+      communityId: normalizedId,
+      userId: user.uid,
+    );
   }
 
   Stream<Set<String>> joinedCommunityIdsStream() {
@@ -322,6 +354,15 @@ class CommunityService {
     }
     return CommunityRepository.instance.pendingJoinRequests(
       communityId: normalizedId,
+    );
+  }
+
+  Stream<int> pendingJoinRequestCountStream(String communityId) {
+    _requireUser("manage community requests");
+    final normalizedId = communityId.trim();
+    if (normalizedId.isEmpty) return Stream.value(0);
+    return CommunityRepository.instance.pendingJoinRequestCountStream(
+      normalizedId,
     );
   }
 
