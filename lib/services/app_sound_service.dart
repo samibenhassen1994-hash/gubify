@@ -35,6 +35,7 @@ class AppSoundService {
   final Map<AppSound, AudioPlayer> _players = {
     for (final sound in AppSound.values) sound: AudioPlayer(),
   };
+  final Map<String, Set<String>> _knownUnreadNotificationIdsByGub = {};
 
   late final Future<void> _loadFuture;
 
@@ -74,6 +75,26 @@ class AppSoundService {
       await prefs.setBool(_enabledPreferenceKey, enabled);
     } catch (error) {
       debugPrint('Unable to save app sound preference: $error');
+    }
+  }
+
+  void handleUnreadNotifications({
+    required String gubId,
+    required Iterable<String> unreadIds,
+  }) {
+    final normalizedGubId = gubId.trim();
+    if (normalizedGubId.isEmpty) return;
+
+    final currentIds = unreadIds.toSet();
+    final previousIds = _knownUnreadNotificationIdsByGub[normalizedGubId];
+    _knownUnreadNotificationIdsByGub[normalizedGubId] = currentIds;
+
+    // The first snapshot establishes a baseline. Existing notifications must
+    // not all make a sound when a Gub screen is opened.
+    if (previousIds == null) return;
+
+    if (currentIds.difference(previousIds).isNotEmpty) {
+      unawaited(playNotification());
     }
   }
 
