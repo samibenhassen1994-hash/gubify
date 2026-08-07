@@ -1,5 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+
+import '../../../services/app_sound_service.dart';
 
 class ChatMessageComposer extends StatelessWidget {
   final TextEditingController controller;
@@ -59,7 +63,12 @@ class ChatMessageComposer extends StatelessWidget {
             const SizedBox(width: 8),
             IconButton.filled(
               tooltip: "Send message",
-              onPressed: canSend && !isSending ? onSend : null,
+              onPressed: canSend && !isSending
+                  ? () {
+                      unawaited(AppSoundService.instance.playMessageSent());
+                      onSend();
+                    }
+                  : null,
               icon: isSending
                   ? const SizedBox.square(
                       dimension: 20,
