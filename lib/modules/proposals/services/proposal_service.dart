@@ -5,6 +5,7 @@ import '../../../core/models/creation_availability.dart';
 import '../../../core/models/deletion_context.dart';
 import '../../../repositories/creation_cooldown_repository.dart';
 import '../../../repositories/gub_repository.dart';
+import '../../../services/app_sound_service.dart';
 import '../models/proposal_model.dart';
 import '../repositories/proposal_repository.dart';
 import 'proposal_engine.dart';
@@ -110,6 +111,7 @@ class ProposalService {
       }
 
       await ProposalRepository.instance.createProposal(proposal);
+      await AppSoundService.instance.playCreated();
 
       await NotificationService.instance.send(
         gubId: proposal.gubId,
