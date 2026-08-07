@@ -141,6 +141,7 @@ class GubEventRepository {
     required String gubId,
     required String eventId,
     required String userId,
+    required String senderName,
     required bool completed,
   }) => _db.runTransaction((tx) async {
     final ref = _events(gubId).doc(eventId);
