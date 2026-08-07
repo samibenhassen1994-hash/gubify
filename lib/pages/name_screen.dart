@@ -34,7 +34,7 @@ class _NameScreenState extends State<NameScreen> {
     final mediaQuery = MediaQuery.of(context);
     final isKeyboardVisible = mediaQuery.viewInsets.bottom > 0;
     final topSpacing = isKeyboardVisible
-        ? 16.0
+        ? 64.0
         : mediaQuery.size.height * 0.52;
 
     return StartupArtworkBackground(
