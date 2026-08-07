@@ -8,6 +8,7 @@ import '../modules/notifications/models/notification_model.dart';
 import '../modules/profile/screens/personal_profile_screen.dart';
 import '../modules/profile/screens/user_profile_screen.dart';
 import '../repositories/user_repository.dart';
+import '../services/app_sound_service.dart';
 import 'gub_content_card.dart';
 
 class UserHeader extends StatefulWidget {
@@ -125,7 +126,7 @@ class _UserHeaderState extends State<UserHeader> {
                 builder: (context, snapshot) {
                   final docs = snapshot.data?.docs ?? [];
 
-                  final count = docs.where((doc) {
+                  final unreadNotifications = docs.where((doc) {
                     final data = doc.data();
                     if (!NotificationModel.targetsUser(data, user.uid)) {
                       return false;
@@ -151,7 +152,14 @@ class _UserHeaderState extends State<UserHeader> {
                     }
 
                     return senderId != user.uid;
-                  }).length;
+                  }).toList(growable: false);
+
+                  AppSoundService.instance.handleUnreadNotifications(
+                    gubId: widget.gubId!,
+                    unreadIds: unreadNotifications.map((doc) => doc.id),
+                  );
+
+                  final count = unreadNotifications.length;
 
                   return SizedBox(
                     width: 56,
