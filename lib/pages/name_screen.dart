@@ -31,14 +31,25 @@ class _NameScreenState extends State<NameScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final mediaQuery = MediaQuery.of(context);
+    final isKeyboardVisible = mediaQuery.viewInsets.bottom > 0;
+    final topSpacing = isKeyboardVisible
+        ? 16.0
+        : mediaQuery.size.height * 0.52;
+
     return StartupArtworkBackground(
       child: SafeArea(
         child: Center(
           child: SingleChildScrollView(
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
             padding: const EdgeInsets.symmetric(horizontal: 30),
             child: Column(
               children: [
-                SizedBox(height: MediaQuery.of(context).size.height * 0.52),
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 220),
+                  curve: Curves.easeOut,
+                  height: topSpacing,
+                ),
                 Container(
                   padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
                   decoration: BoxDecoration(
@@ -63,14 +74,12 @@ class _NameScreenState extends State<NameScreen> {
                         ),
                         textCapitalization: TextCapitalization.words,
                         maxLength: 22,
-
                         inputFormatters: [
                           LengthLimitingTextInputFormatter(22),
                           FilteringTextInputFormatter.allow(
                             RegExp(r"[a-zA-ZÀ-ÖØ-öø-ÿ0-9 ]"),
                           ),
                         ],
-
                         decoration: InputDecoration(
                           prefixIcon: const Icon(
                             Icons.person_outline_rounded,
@@ -92,7 +101,6 @@ class _NameScreenState extends State<NameScreen> {
                         ),
                       ),
                       const SizedBox(height: 1),
-
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -111,9 +119,7 @@ class _NameScreenState extends State<NameScreen> {
                               },
                             ),
                           ),
-
                           const SizedBox(width: 4),
-
                           Expanded(
                             child: Padding(
                               padding: const EdgeInsets.only(top: 12),
@@ -128,7 +134,6 @@ class _NameScreenState extends State<NameScreen> {
                                     const TextSpan(
                                       text: 'I agree to the ',
                                     ),
-
                                     TextSpan(
                                       text: 'Terms of Service',
                                       style: const TextStyle(
@@ -147,11 +152,9 @@ class _NameScreenState extends State<NameScreen> {
                                           );
                                         },
                                     ),
-
                                     const TextSpan(
                                       text: ' and acknowledge the ',
                                     ),
-
                                     TextSpan(
                                       text: 'Privacy Policy',
                                       style: const TextStyle(
@@ -170,7 +173,6 @@ class _NameScreenState extends State<NameScreen> {
                                           );
                                         },
                                     ),
-
                                     const TextSpan(text: '.'),
                                   ],
                                 ),
@@ -179,7 +181,6 @@ class _NameScreenState extends State<NameScreen> {
                           ),
                         ],
                       ),
-
                       const SizedBox(height: 14),
                       SizedBox(
                         width: double.infinity,
@@ -308,14 +309,14 @@ class _NameScreenState extends State<NameScreen> {
                           ),
                         ),
                       ),
-                    ], // children della Column interna
-                  ), // Column interna
-                ), // Container
-              ], // children della Column esterna
-            ), // Column esterna
-          ), // SingleChildScrollView
-        ), // Center
-      ), // SafeArea
-    ); // StartupArtworkBackground
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
