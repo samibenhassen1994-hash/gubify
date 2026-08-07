@@ -126,11 +126,11 @@ class _NameScreenState extends State<NameScreen> {
                                   ),
                                   children: [
                                     const TextSpan(
-                                      text: 'I have read and accept the ',
+                                      text: 'I agree to the ',
                                     ),
 
                                     TextSpan(
-                                      text: 'Terms & Conditions',
+                                      text: 'Terms of Service',
                                       style: const TextStyle(
                                         color: Color(0xFF4DA3FF),
                                         fontWeight: FontWeight.w600,
@@ -148,7 +148,9 @@ class _NameScreenState extends State<NameScreen> {
                                         },
                                     ),
 
-                                    const TextSpan(text: ' and '),
+                                    const TextSpan(
+                                      text: ' and acknowledge the ',
+                                    ),
 
                                     TextSpan(
                                       text: 'Privacy Policy',
