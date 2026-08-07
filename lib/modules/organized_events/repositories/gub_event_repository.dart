@@ -4,7 +4,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../../../core/models/creation_availability.dart';
 import '../../../core/models/deletion_context.dart';
 import '../../../repositories/creation_cooldown_repository.dart';
-import '../../notifications/models/notification_model.dart';
 import '../models/gub_event_model.dart';
 
 class GubEventRepository {
@@ -142,7 +141,6 @@ class GubEventRepository {
     required String gubId,
     required String eventId,
     required String userId,
-    required String senderName,
     required bool completed,
   }) => _db.runTransaction((tx) async {
     final ref = _events(gubId).doc(eventId);
@@ -162,48 +160,11 @@ class GubEventRepository {
     final allDone =
         assignments.isNotEmpty &&
         assignments.every((e) => e['isCompleted'] == true);
-    final completedAt = allDone ? Timestamp.now() : null;
     tx.update(ref, {
       'assignments': assignments,
       'status': allDone ? 'completed' : 'active',
-      'completedAt': completedAt,
+      'completedAt': allDone ? Timestamp.now() : null,
     });
-
-    if (allDone) {
-      final recipientIds = <String>{
-        if (data['createdBy'] is String) data['createdBy'] as String,
-        for (final assignment in assignments)
-          if (assignment['userId'] is String) assignment['userId'] as String,
-      }..removeWhere((id) => id.isEmpty || id == userId);
-
-      if (recipientIds.isNotEmpty) {
-        final notificationId = 'organized_event_completed_$eventId';
-        final notification = NotificationModel(
-          notificationId: notificationId,
-          title: 'Event completed',
-          body: '"${data['title'] ?? 'Event'}" has been completed.',
-          type: 'organized_event_completed',
-          senderId: userId,
-          senderName: senderName,
-          createdAt: completedAt!,
-          readBy: [userId],
-          data: {
-            'module': 'organized_events',
-            'gubId': gubId,
-            'eventId': eventId,
-            'organizedEventId': eventId,
-            'recipientIds': recipientIds.toList(growable: false),
-          },
-        );
-        final notificationReference = _db
-            .collection('gubs')
-            .doc(gubId)
-            .collection('notifications')
-            .doc(notificationId);
-        tx.set(notificationReference, notification.toFirestore());
-      }
-    }
-
     return allDone;
   });
 
