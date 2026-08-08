@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../modules/chat/widgets/chat_user_avatar.dart';
+import '../modules/chat/widgets/gub_chat_overlay.dart';
 import '../modules/notifications/screens/notifications_screen.dart';
 import '../modules/notifications/models/notification_model.dart';
 import '../modules/profile/screens/personal_profile_screen.dart';
@@ -60,13 +61,22 @@ class _UserHeaderState extends State<UserHeader> {
         : UserRepository.instance.getUser(currentUserId);
   }
 
-  void _openSettings() {
-    showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      useSafeArea: true,
-      builder: (_) => const _UserSettingsSheet(),
-    );
+  Future<void> _openSettings() async {
+    Future<void> showSettings() {
+      return showModalBottomSheet<void>(
+        context: context,
+        showDragHandle: true,
+        useSafeArea: true,
+        builder: (_) => const _UserSettingsSheet(),
+      );
+    }
+
+    if (widget.gubId == null) {
+      await showSettings();
+      return;
+    }
+
+    await GubChatOverlay.runWithChatOverlayHidden(showSettings);
   }
 
   @override
