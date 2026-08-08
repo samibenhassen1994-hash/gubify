@@ -1,3 +1,5 @@
+import 'dart:developer' as developer;
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
@@ -60,6 +62,7 @@ class GubEventService {
   ).map((events) => events.where((event) => event.status == 'active').length);
   Stream<GubEventModel?> eventStream(String gubId, String id) =>
       GubEventRepository.instance.eventStream(gubId, id);
+
   Future<List<Map<String, String>>> members(String gubId) async {
     final s = await _db
         .collection('gubs')
@@ -182,14 +185,45 @@ class GubEventService {
     if (user == null) {
       throw StateError('Sign in required.');
     }
+
     final becameCompleted = await GubEventRepository.instance.setOwnCompletion(
       gubId: event.gubId,
       eventId: event.eventId,
       userId: user.uid,
-      senderName: user.displayName ?? 'User',
       completed: completed,
     );
     if (!becameCompleted) return;
+
+    final recipientIds = <String>{
+      event.createdBy,
+      for (final assignment in event.assignments) assignment.userId,
+    }..removeWhere((id) => id.isEmpty || id == user.uid);
+
+    if (recipientIds.isEmpty) return;
+
+    try {
+      await NotificationService.instance.send(
+        gubId: event.gubId,
+        title: 'Event completed',
+        body: '"${event.title}" has been completed.',
+        type: 'organized_event_completed',
+        senderId: user.uid,
+        senderName: user.displayName ?? 'User',
+        data: {
+          'module': 'organized_events',
+          'eventId': event.eventId,
+          'organizedEventId': event.eventId,
+          'recipientIds': recipientIds.toList(growable: false),
+        },
+      );
+    } catch (error, stackTrace) {
+      developer.log(
+        'Unable to send the organized event completion notification.',
+        name: 'GubEventService.setOwnCompletion',
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
   }
 
   Future<void> delete({required String gubId, required String eventId}) async {
