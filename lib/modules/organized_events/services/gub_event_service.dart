@@ -6,6 +6,7 @@ import '../../../core/models/creation_availability.dart';
 import '../../../core/models/deletion_context.dart';
 import '../../../repositories/creation_cooldown_repository.dart';
 import '../../../repositories/gub_repository.dart';
+import '../../../services/app_sound_service.dart';
 import '../../notifications/services/notification_service.dart';
 import '../models/gub_event_model.dart';
 import '../repositories/gub_event_repository.dart';
@@ -143,6 +144,8 @@ class GubEventService {
       }
 
       await GubEventRepository.instance.create(event);
+      await AppSoundService.instance.playCreated();
+
       final recipientIds = assignments
           .map((assignment) => assignment.userId)
           .where((userId) => userId.isNotEmpty && userId != user.uid)

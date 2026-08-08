@@ -3,11 +3,13 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../modules/chat/widgets/chat_user_avatar.dart';
+import '../modules/chat/widgets/gub_chat_overlay.dart';
 import '../modules/notifications/screens/notifications_screen.dart';
 import '../modules/notifications/models/notification_model.dart';
 import '../modules/profile/screens/personal_profile_screen.dart';
 import '../modules/profile/screens/user_profile_screen.dart';
 import '../repositories/user_repository.dart';
+import '../services/app_sound_service.dart';
 import 'gub_content_card.dart';
 
 class UserHeader extends StatefulWidget {
@@ -57,6 +59,24 @@ class _UserHeaderState extends State<UserHeader> {
     _userFuture = currentUserId == null
         ? Future.value(null)
         : UserRepository.instance.getUser(currentUserId);
+  }
+
+  Future<void> _openSettings() async {
+    Future<void> showSettings() {
+      return showModalBottomSheet<void>(
+        context: context,
+        showDragHandle: true,
+        useSafeArea: true,
+        builder: (_) => const _UserSettingsSheet(),
+      );
+    }
+
+    if (widget.gubId == null) {
+      await showSettings();
+      return;
+    }
+
+    await GubChatOverlay.runWithChatOverlayHidden(showSettings);
   }
 
   @override
@@ -125,7 +145,7 @@ class _UserHeaderState extends State<UserHeader> {
                 builder: (context, snapshot) {
                   final docs = snapshot.data?.docs ?? [];
 
-                  final count = docs.where((doc) {
+                  final unreadNotifications = docs.where((doc) {
                     final data = doc.data();
                     if (!NotificationModel.targetsUser(data, user.uid)) {
                       return false;
@@ -151,7 +171,14 @@ class _UserHeaderState extends State<UserHeader> {
                     }
 
                     return senderId != user.uid;
-                  }).length;
+                  }).toList(growable: false);
+
+                  AppSoundService.instance.handleUnreadNotifications(
+                    gubId: widget.gubId!,
+                    unreadIds: unreadNotifications.map((doc) => doc.id),
+                  );
+
+                  final count = unreadNotifications.length;
 
                   return SizedBox(
                     width: 56,
@@ -231,9 +258,8 @@ class _UserHeaderState extends State<UserHeader> {
               ),
 
             IconButton(
-              onPressed: () {
-                // TODO: Settings
-              },
+              tooltip: "Settings",
+              onPressed: _openSettings,
               icon: Icon(
                 Icons.settings_outlined,
                 size: 26,
@@ -264,6 +290,50 @@ class _UserHeaderState extends State<UserHeader> {
       child: widget.showCard
           ? _UserHeaderCard(dark: widget.darkCard, child: placeholder)
           : placeholder,
+    );
+  }
+}
+
+class _UserSettingsSheet extends StatelessWidget {
+  const _UserSettingsSheet();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text(
+            "Settings",
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF0F172A),
+            ),
+          ),
+          const SizedBox(height: 12),
+          ValueListenableBuilder<bool>(
+            valueListenable: AppSoundService.instance.enabledListenable,
+            builder: (context, enabled, _) {
+              return SwitchListTile.adaptive(
+                contentPadding: EdgeInsets.zero,
+                secondary: const Icon(Icons.volume_up_outlined),
+                title: const Text(
+                  "App sounds",
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+                subtitle: const Text(
+                  "Play sounds for messages, notifications and actions.",
+                ),
+                value: enabled,
+                onChanged: AppSoundService.instance.setEnabled,
+              );
+            },
+          ),
+        ],
+      ),
     );
   }
 }

@@ -1,8 +1,13 @@
-import 'package:flutter/material.dart';
+import 'dart:async';
+
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../screens/gub/my_gubs_screen.dart';
+import '../../../services/app_sound_service.dart';
 import '../../../widgets/gub_screen_background.dart';
+import '../models/community_access_request_model.dart';
 import '../models/community_model.dart';
 import '../services/community_service.dart';
 import '../widgets/community_home_content.dart';
@@ -29,6 +34,8 @@ class _GubCommunityHomeScreenState extends State<GubCommunityHomeScreen> {
   late final Stream<CommunityModel?> _communityStream;
   late final Stream<int> _pendingRequestCountStream;
   bool _unavailableNavigationScheduled = false;
+  bool _pendingRequestCountInitialized = false;
+  int _previousPendingRequestCount = 0;
 
   @override
   void initState() {
@@ -37,7 +44,58 @@ class _GubCommunityHomeScreenState extends State<GubCommunityHomeScreen> {
       widget.communityId,
     );
     _pendingRequestCountStream = CommunityService.instance
-        .pendingJoinRequestCountStream(widget.communityId);
+        .pendingJoinRequestCountStream(widget.communityId)
+        .map((count) {
+          _observePendingRequestCount(count);
+          return count;
+        });
+    unawaited(_playApprovalJoinSoundIfNeeded());
+  }
+
+  Future<void> _playApprovalJoinSoundIfNeeded() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+
+      final state = await CommunityService.instance.loadPublicAccessState(
+        widget.communityId,
+      );
+      final request = state?.request;
+
+      if (state == null ||
+          state.isOwner ||
+          !state.isMember ||
+          request?.status != CommunityAccessRequestModel.approvedStatus) {
+        return;
+      }
+
+      final requestVersion =
+          request!.createdAt?.millisecondsSinceEpoch.toString() ?? 'unknown';
+      final preferenceKey =
+          'communityApprovalJoinSound:${user.uid}:${widget.communityId}:$requestVersion';
+      final preferences = await SharedPreferences.getInstance();
+
+      if (preferences.getBool(preferenceKey) == true) return;
+
+      await preferences.setBool(preferenceKey, true);
+      await AppSoundService.instance.playJoined();
+    } catch (error) {
+      debugPrint('Unable to play Community approval join sound: $error');
+    }
+  }
+
+  void _observePendingRequestCount(int count) {
+    if (!_pendingRequestCountInitialized) {
+      _pendingRequestCountInitialized = true;
+      _previousPendingRequestCount = count;
+      return;
+    }
+
+    if (count > _previousPendingRequestCount) {
+      unawaited(AppSoundService.instance.playNotification());
+    }
+
+    _previousPendingRequestCount = count;
   }
 
   void _leaveUnavailableCommunity() {

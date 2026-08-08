@@ -2,6 +2,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 import '../../../config/app_limits.dart';
 import '../../../repositories/user_repository.dart';
+import '../../../services/app_sound_service.dart';
 import '../models/community_access_request_model.dart';
 import '../models/community_model.dart';
 import '../repositories/community_repository.dart';
@@ -81,6 +82,7 @@ class CommunityService {
       if (community == null) {
         throw const CommunityCreationLimitException();
       }
+      await AppSoundService.instance.playCreated();
       return community;
     } on FirebaseException catch (error) {
       throw Exception(_firebaseErrorMessage(error));
@@ -304,12 +306,14 @@ class CommunityService {
     try {
       final identity = await _currentIdentity(user);
 
-      return await CommunityRepository.instance.joinCommunity(
+      final community = await CommunityRepository.instance.joinCommunity(
         communityId: normalizedCommunityId,
         userId: user.uid,
         displayName: identity.displayName,
         photoUrl: identity.photoUrl,
       );
+      await AppSoundService.instance.playJoined();
+      return community;
     } on FirebaseException catch (error) {
       throw Exception(_firebaseErrorMessage(error));
     }

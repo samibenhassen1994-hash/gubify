@@ -7,6 +7,7 @@ import '../core/models/member_option.dart';
 import '../repositories/gub_invite_repository.dart';
 import '../repositories/member_repository.dart';
 import '../repositories/user_repository.dart';
+import 'app_sound_service.dart';
 
 class GubService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -38,7 +39,7 @@ class GubService {
     final displayName = userData?["displayName"] ?? "User";
 
     final gubId = _inviteRepository.newGubId();
-    return reserveUniqueInviteCode<String>(
+    final createdGubId = await reserveUniqueInviteCode<String>(
       generator: _inviteCodeGenerator,
       tryReserve: (candidate) async {
         final created = await _inviteRepository.tryCreateGubWithToken(
@@ -52,6 +53,9 @@ class GubService {
         return created ? gubId : null;
       },
     );
+
+    await AppSoundService.instance.playCreated();
+    return createdGubId;
   }
 
   Future<String> joinHub({required String inviteCode}) async {
@@ -117,6 +121,7 @@ class GubService {
         displayName: displayName,
         photoUrl: user.photoURL,
       );
+      await AppSoundService.instance.playJoined();
       return token.gubId;
     } on FirebaseException catch (error) {
       if (error.code == 'permission-denied') {

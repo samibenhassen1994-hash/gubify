@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 
 import '../../../repositories/user_repository.dart';
+import '../../../services/app_sound_service.dart';
 import '../models/chat_message_model.dart';
 import '../repositories/chat_repository.dart';
 
@@ -58,5 +59,6 @@ class ChatService {
       senderName: senderName,
       text: normalizedText,
     );
+    await AppSoundService.instance.playMessageSent();
   }
 }

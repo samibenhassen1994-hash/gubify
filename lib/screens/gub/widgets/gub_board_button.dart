@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
+import '../../../services/app_sound_service.dart';
 import '../../../services/board_read_service.dart';
 import '../board_screen.dart';
 
@@ -14,23 +17,35 @@ class GubBoardButton extends StatefulWidget {
 
 class _GubBoardButtonState extends State<GubBoardButton> {
   late Stream<int> _unreadCountStream;
+  bool _unreadCountInitialized = false;
+  int _lastUnreadCount = 0;
 
   @override
   void initState() {
     super.initState();
-    _unreadCountStream = BoardReadService.instance.unreadCountStream(
-      widget.gubId,
-    );
+    _unreadCountStream = _buildUnreadCountStream();
   }
 
   @override
   void didUpdateWidget(covariant GubBoardButton oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.gubId != widget.gubId) {
-      _unreadCountStream = BoardReadService.instance.unreadCountStream(
-        widget.gubId,
-      );
+      _unreadCountInitialized = false;
+      _lastUnreadCount = 0;
+      _unreadCountStream = _buildUnreadCountStream();
     }
+  }
+
+  Stream<int> _buildUnreadCountStream() {
+    return BoardReadService.instance.unreadCountStream(widget.gubId).map((count) {
+      if (_unreadCountInitialized && count > _lastUnreadCount) {
+        unawaited(AppSoundService.instance.playNotification());
+      }
+
+      _unreadCountInitialized = true;
+      _lastUnreadCount = count;
+      return count;
+    });
   }
 
   @override

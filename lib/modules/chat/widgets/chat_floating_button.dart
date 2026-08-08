@@ -1,4 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+
+import '../../../services/app_sound_service.dart';
 
 class ChatFloatingButton extends StatelessWidget {
   final VoidCallback onPressed;
@@ -25,7 +29,10 @@ class ChatFloatingButton extends StatelessWidget {
         FloatingActionButton(
           heroTag: null,
           tooltip: tooltip,
-          onPressed: onPressed,
+          onPressed: () {
+            unawaited(AppSoundService.instance.playChatOpen());
+            onPressed();
+          },
           backgroundColor: const Color(0xFF2563EB),
           foregroundColor: Colors.white,
           child: const Icon(Icons.chat_bubble_rounded),
