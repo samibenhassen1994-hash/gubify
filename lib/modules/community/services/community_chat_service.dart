@@ -2,6 +2,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 import '../../../config/app_limits.dart';
 import '../../../repositories/user_repository.dart';
+import '../../../services/app_sound_service.dart';
 import '../models/community_chat_message_model.dart';
 import '../repositories/community_chat_repository.dart';
 
@@ -57,5 +58,6 @@ class CommunityChatService {
       senderName: senderName,
       text: normalizedText,
     );
+    await AppSoundService.instance.playMessageSent();
   }
 }
