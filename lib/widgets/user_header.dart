@@ -60,6 +60,15 @@ class _UserHeaderState extends State<UserHeader> {
         : UserRepository.instance.getUser(currentUserId);
   }
 
+  void _openSettings() {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      useSafeArea: true,
+      builder: (_) => const _UserSettingsSheet(),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
@@ -239,9 +248,8 @@ class _UserHeaderState extends State<UserHeader> {
               ),
 
             IconButton(
-              onPressed: () {
-                // TODO: Settings
-              },
+              tooltip: "Settings",
+              onPressed: _openSettings,
               icon: Icon(
                 Icons.settings_outlined,
                 size: 26,
@@ -272,6 +280,50 @@ class _UserHeaderState extends State<UserHeader> {
       child: widget.showCard
           ? _UserHeaderCard(dark: widget.darkCard, child: placeholder)
           : placeholder,
+    );
+  }
+}
+
+class _UserSettingsSheet extends StatelessWidget {
+  const _UserSettingsSheet();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text(
+            "Settings",
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF0F172A),
+            ),
+          ),
+          const SizedBox(height: 12),
+          ValueListenableBuilder<bool>(
+            valueListenable: AppSoundService.instance.enabledListenable,
+            builder: (context, enabled, _) {
+              return SwitchListTile.adaptive(
+                contentPadding: EdgeInsets.zero,
+                secondary: const Icon(Icons.volume_up_outlined),
+                title: const Text(
+                  "App sounds",
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+                subtitle: const Text(
+                  "Play sounds for messages, notifications and actions.",
+                ),
+                value: enabled,
+                onChanged: AppSoundService.instance.setEnabled,
+              );
+            },
+          ),
+        ],
+      ),
     );
   }
 }
