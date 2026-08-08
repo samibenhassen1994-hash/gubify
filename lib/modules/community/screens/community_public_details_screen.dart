@@ -1,8 +1,5 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 
-import '../../../services/app_sound_service.dart';
 import '../../../widgets/gub_content_card.dart';
 import '../../../widgets/gub_screen_background.dart';
 import '../models/community_access_request_model.dart';
@@ -25,47 +22,13 @@ class _CommunityPublicDetailsScreenState
   late final Stream<CommunityPublicAccessState?> _stateStream;
   bool _operationInProgress = false;
   bool _navigationInProgress = false;
-  bool _memberStateInitialized = false;
-  bool _wasMember = false;
-  bool _sawPendingJoinRequest = false;
-  bool _approvalJoinSoundPlayed = false;
 
   @override
   void initState() {
     super.initState();
-    _stateStream = CommunityService.instance
-        .publicAccessStateStream(widget.communityId)
-        .map((state) {
-          if (state != null) {
-            _observeAccessState(state);
-          }
-          return state;
-        });
-  }
-
-  void _observeAccessState(CommunityPublicAccessState state) {
-    final requestStatus = state.request?.status;
-
-    if (requestStatus == CommunityAccessRequestModel.pendingStatus) {
-      _sawPendingJoinRequest = true;
-    }
-
-    final becameMember =
-        _memberStateInitialized && !_wasMember && state.isMember;
-    final joinedAfterApproval =
-        becameMember &&
-        !state.isOwner &&
-        _sawPendingJoinRequest &&
-        requestStatus == CommunityAccessRequestModel.approvedStatus &&
-        !_approvalJoinSoundPlayed;
-
-    _memberStateInitialized = true;
-    _wasMember = state.isMember;
-
-    if (joinedAfterApproval) {
-      _approvalJoinSoundPlayed = true;
-      unawaited(AppSoundService.instance.playJoined());
-    }
+    _stateStream = CommunityService.instance.publicAccessStateStream(
+      widget.communityId,
+    );
   }
 
   Future<void> _runOperation(Future<void> Function() operation) async {
