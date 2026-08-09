@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../modules/chat/widgets/gub_chat_overlay.dart';
 import '../../services/gub_deletion_service.dart';
+import '../../services/member_service.dart';
+import '../../widgets/banned_users_screen.dart';
 import '../../widgets/gub_content_card.dart';
 import '../../widgets/gub_screen_background.dart';
 import 'widgets/delete_gub_dialog.dart';
@@ -59,20 +61,6 @@ class _ManageGubScreenState extends State<ManageGubScreen> {
         body: ListView(
           padding: const EdgeInsets.all(20),
           children: [
-            const Text(
-              'General',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 12),
-            GubContentCard(
-              padding: EdgeInsets.zero,
-              child: const ListTile(
-                leading: Icon(Icons.edit),
-                title: Text('Rename Gub'),
-                subtitle: Text('Coming soon'),
-                trailing: Icon(Icons.arrow_forward_ios, size: 16),
-              ),
-            ),
             FutureBuilder<GubDeletionAccess>(
               future: _accessFuture,
               builder: (context, snapshot) {
@@ -82,6 +70,20 @@ class _ManageGubScreenState extends State<ManageGubScreen> {
                 }
                 return _DeleteGubSection(
                   onDelete: () => _confirmDeletion(access!),
+                  onShowBannedUsers: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => BannedUsersScreen(
+                        title: 'Banned users',
+                        bannedUsersStream: MemberService.instance
+                            .bannedUsersStream(widget.gubId),
+                        onUnban: (uid) => MemberService.instance.unbanMember(
+                          gubId: widget.gubId,
+                          uid: uid,
+                        ),
+                      ),
+                    ),
+                  ),
                 );
               },
             ),
@@ -94,13 +96,28 @@ class _ManageGubScreenState extends State<ManageGubScreen> {
 
 class _DeleteGubSection extends StatelessWidget {
   final VoidCallback onDelete;
+  final VoidCallback onShowBannedUsers;
 
-  const _DeleteGubSection({required this.onDelete});
+  const _DeleteGubSection({
+    required this.onDelete,
+    required this.onShowBannedUsers,
+  });
 
   @override
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
+      const SizedBox(height: 30),
+      GubContentCard(
+        padding: EdgeInsets.zero,
+        child: ListTile(
+          leading: const Icon(Icons.block_rounded, color: Colors.red),
+          title: const Text('Banned users'),
+          subtitle: const Text('View members banned from this Gub.'),
+          trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+          onTap: onShowBannedUsers,
+        ),
+      ),
       const SizedBox(height: 30),
       const Text(
         'Danger Zone',

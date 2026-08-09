@@ -102,6 +102,13 @@ class GubService {
       throw const InvalidInviteCodeException();
     }
 
+    if (await _inviteRepository.isUserBanned(
+      gubId: token.gubId,
+      userId: user.uid,
+    )) {
+      throw Exception('You were banned from this Gub by an administrator.');
+    }
+
     final existingMembership = await _inviteRepository.getOwnMembership(
       gubId: token.gubId,
       userId: user.uid,
@@ -137,6 +144,42 @@ class GubService {
           );
         }
         throw const InvalidInviteCodeException();
+      }
+      rethrow;
+    }
+  }
+
+  Future<String> regenerateInvite({required String gubId}) async {
+    final user = _auth.currentUser;
+    if (user == null) throw Exception('User not authenticated.');
+    final normalizedId = gubId.trim();
+    if (normalizedId.isEmpty) throw ArgumentError('Gub ID cannot be empty.');
+    final cooldown = await _inviteRepository.inviteRegenerationCooldown(
+      normalizedId,
+    );
+    if (cooldown != null) {
+      throw InviteRegenerationCooldownException(cooldown.inSeconds + 1);
+    }
+    try {
+      return reserveUniqueInviteCode<String>(
+        generator: _inviteCodeGenerator,
+        tryReserve: (candidate) async {
+          final regenerated = await _inviteRepository.tryRegenerateInvite(
+            gubId: normalizedId,
+            ownerId: user.uid,
+            canonicalCode: candidate,
+          );
+          return regenerated ? candidate : null;
+        },
+      );
+    } on FirebaseException catch (error) {
+      if (error.code == 'permission-denied') {
+        final remaining = await _inviteRepository.inviteRegenerationCooldown(
+          normalizedId,
+        );
+        if (remaining != null) {
+          throw InviteRegenerationCooldownException(remaining.inSeconds + 1);
+        }
       }
       rethrow;
     }
@@ -202,4 +245,14 @@ class GubService {
       );
     }).toList();
   }
+}
+
+class InviteRegenerationCooldownException implements Exception {
+  final int remainingSeconds;
+  InviteRegenerationCooldownException(int seconds)
+    : remainingSeconds = seconds < 1 ? 1 : seconds;
+
+  @override
+  String toString() =>
+      'You can regenerate the invite again in $remainingSeconds seconds.';
 }

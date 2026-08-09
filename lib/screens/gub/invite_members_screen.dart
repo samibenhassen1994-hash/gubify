@@ -1,3 +1,4 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../../repositories/gub_repository.dart';
@@ -7,7 +8,7 @@ import '../../widgets/gub_screen_background.dart';
 import '../../widgets/user_header.dart';
 import 'widgets/invite_code_panel.dart';
 
-class InviteMembersScreen extends StatelessWidget {
+class InviteMembersScreen extends StatefulWidget {
   final String gubId;
   final Future<Map<String, dynamic>?> Function(String gubId)? loadGub;
   final bool showUserHeader;
@@ -18,6 +19,13 @@ class InviteMembersScreen extends StatelessWidget {
     this.loadGub,
     this.showUserHeader = true,
   });
+
+  @override
+  State<InviteMembersScreen> createState() => _InviteMembersScreenState();
+}
+
+class _InviteMembersScreenState extends State<InviteMembersScreen> {
+  String? _currentInviteCode;
 
   @override
   Widget build(BuildContext context) {
@@ -33,7 +41,9 @@ class InviteMembersScreen extends StatelessWidget {
           scrolledUnderElevation: 0,
         ),
         body: FutureBuilder<Map<String, dynamic>?>(
-          future: (loadGub ?? GubRepository.instance.getHub)(gubId),
+          future: (widget.loadGub ?? GubRepository.instance.getHubAuthoritatively)(
+            widget.gubId,
+          ),
           builder: (context, hubSnapshot) {
             if (hubSnapshot.connectionState == ConnectionState.waiting) {
               return const Center(child: CircularProgressIndicator());
@@ -54,8 +64,10 @@ class InviteMembersScreen extends StatelessWidget {
 
             final hub = hubSnapshot.data!;
             final gubName = hub["name"] as String? ?? "";
-            final inviteTokenId = hub["inviteTokenId"] as String? ?? "";
+            final inviteTokenId = _currentInviteCode ?? (hub["inviteTokenId"] as String? ?? "");
             final inviteAvailable = hub["deletionStatus"] != "deleting";
+            final isOwner =
+                hub['ownerId'] == FirebaseAuth.instance.currentUser?.uid;
 
             return SafeArea(
               top: false,
@@ -64,7 +76,7 @@ class InviteMembersScreen extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    if (showUserHeader) UserHeader(gubId: gubId),
+                    if (widget.showUserHeader) UserHeader(gubId: widget.gubId),
                     GubContentCard(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -79,6 +91,57 @@ class InviteMembersScreen extends StatelessWidget {
                             canonicalCode: inviteTokenId,
                             inviteAvailable: inviteAvailable,
                           ),
+                          if (isOwner && inviteAvailable) ...[
+                            const SizedBox(height: 16),
+                            OutlinedButton.icon(
+                              onPressed: () async {
+                                final confirmed = await showDialog<bool>(
+                                  context: context,
+                                  builder: (context) => AlertDialog(
+                                    title: const Text('Regenerate invite?'),
+                                    content: const Text(
+                                      'Old invite links will stop working. Existing members will stay in this Gub.',
+                                    ),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: () =>
+                                            Navigator.pop(context, false),
+                                        child: const Text('Cancel'),
+                                      ),
+                                      FilledButton(
+                                        onPressed: () =>
+                                            Navigator.pop(context, true),
+                                        child: const Text('Regenerate invite'),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                                if (confirmed != true || !context.mounted) {
+                                  return;
+                                }
+                                try {
+                                  final newCode = await GubService().regenerateInvite(
+                                    gubId: widget.gubId,
+                                  );
+                                  if (!context.mounted) return;
+                                  setState(() => _currentInviteCode = newCode);
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('Invite regenerated.'),
+                                    ),
+                                  );
+                                } catch (error) {
+                                  if (context.mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(content: Text('$error')),
+                                    );
+                                  }
+                                }
+                              },
+                              icon: const Icon(Icons.refresh_rounded),
+                              label: const Text('Regenerate invite'),
+                            ),
+                          ],
                         ],
                       ),
                     ),
@@ -92,7 +155,7 @@ class InviteMembersScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 15),
                     StreamBuilder(
-                      stream: GubService().rawMembersStream(gubId),
+                      stream: GubService().rawMembersStream(widget.gubId),
                       builder: (context, snapshot) {
                         if (snapshot.connectionState ==
                             ConnectionState.waiting) {

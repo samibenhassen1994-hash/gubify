@@ -294,6 +294,207 @@ class CommunityRepository {
     return role is String && role.trim().isNotEmpty ? role.trim() : "member";
   }
 
+  Stream<List<CommunityMemberModel>> communityMembersStream(
+    String communityId,
+  ) {
+    return _communities.doc(communityId).collection('members').snapshots().map((
+      snapshot,
+    ) {
+      final members = snapshot.docs.map((document) {
+        final data = document.data();
+        final displayName = data['displayName'];
+        final photoUrl = data['photoUrl'];
+        final role = data['role'];
+        return CommunityMemberModel(
+          userId: document.id,
+          displayName: displayName is String && displayName.trim().isNotEmpty
+              ? displayName.trim()
+              : 'User',
+          photoUrl: photoUrl is String && photoUrl.trim().isNotEmpty
+              ? photoUrl.trim()
+              : null,
+          role: role is String && role.trim().isNotEmpty
+              ? role.trim()
+              : 'member',
+          joinedAt: _timestampValue(data['joinedAt']),
+        );
+      }).toList();
+      members.sort((first, second) {
+        final roleComparison = (first.role == 'owner' ? 0 : 1).compareTo(
+          second.role == 'owner' ? 0 : 1,
+        );
+        if (roleComparison != 0) return roleComparison;
+        final joinedComparison = (first.joinedAt?.millisecondsSinceEpoch ?? 0)
+            .compareTo(second.joinedAt?.millisecondsSinceEpoch ?? 0);
+        if (joinedComparison != 0) return joinedComparison;
+        return first.displayName.toLowerCase().compareTo(
+          second.displayName.toLowerCase(),
+        );
+      });
+      return members;
+    });
+  }
+
+  Stream<List<Map<String, dynamic>>> bannedUsersStream(String communityId) =>
+      _communities
+          .doc(communityId)
+          .collection('bans')
+          .snapshots()
+          .asyncMap(
+            (snapshot) => Future.wait(
+              snapshot.docs.map((document) async {
+                final data = <String, dynamic>{
+                  ...document.data(),
+                  'uid': document.id,
+                };
+                final name = data['displayName'];
+                if (name is String && name.trim().isNotEmpty) return data;
+                final profile = await _firestore
+                    .collection('users')
+                    .doc(document.id)
+                    .get();
+                final profileName = profile.data()?['displayName'];
+                if (profileName is String && profileName.trim().isNotEmpty) {
+                  data['displayName'] = profileName.trim();
+                }
+                return data;
+              }),
+            ),
+          );
+
+  Future<CommunityMemberModel?> getCommunityMember({
+    required String communityId,
+    required String userId,
+  }) async {
+    final member = await _communities
+        .doc(communityId)
+        .collection('members')
+        .doc(userId)
+        .get();
+    if (!member.exists) return null;
+    final data = member.data()!;
+    final displayName = data['displayName'];
+    final photoUrl = data['photoUrl'];
+    final role = data['role'];
+    return CommunityMemberModel(
+      userId: member.id,
+      displayName: displayName is String && displayName.trim().isNotEmpty
+          ? displayName.trim()
+          : 'User',
+      photoUrl: photoUrl is String && photoUrl.trim().isNotEmpty
+          ? photoUrl.trim()
+          : null,
+      role: role is String && role.trim().isNotEmpty ? role.trim() : 'member',
+      joinedAt: _timestampValue(data['joinedAt']),
+    );
+  }
+
+  Future<void> leaveCommunity({
+    required String communityId,
+    required String userId,
+  }) async {
+    return removeCommunityMember(
+      communityId: communityId,
+      userId: userId,
+      actorId: userId,
+    );
+  }
+
+  Future<void> removeCommunityMember({
+    required String communityId,
+    required String userId,
+    required String actorId,
+  }) async {
+    final communityReference = _communities.doc(communityId);
+    final memberReference = communityReference
+        .collection('members')
+        .doc(userId);
+    final userCommunityReference = _firestore
+        .collection('users')
+        .doc(userId)
+        .collection('communities')
+        .doc(communityId);
+    await _firestore.runTransaction((transaction) async {
+      final community = await transaction.get(communityReference);
+      final member = await transaction.get(memberReference);
+      if (!community.exists ||
+          community.data()?['deletionStatus'] == 'deleting') {
+        throw StateError('This Community is no longer available.');
+      }
+      if (!member.exists || member.data()?['uid'] != userId) {
+        throw StateError('You are no longer a member of this Community.');
+      }
+      final ownerId = community.data()?['ownerId'] as String?;
+      if (ownerId == userId) {
+        throw StateError(
+          'The Community owner cannot leave their own Community.',
+        );
+      }
+      if (actorId != userId && actorId != ownerId) {
+        throw StateError('Only the Community owner can remove members.');
+      }
+      final memberCount =
+          (community.data()?['memberCount'] as num?)?.toInt() ?? 1;
+      transaction.delete(memberReference);
+      transaction.delete(userCommunityReference);
+      transaction.update(communityReference, {
+        'memberCount': (memberCount - 1).clamp(1, memberCount),
+      });
+    });
+  }
+
+  Future<void> banCommunityMember({
+    required String communityId,
+    required String userId,
+    required String ownerId,
+  }) async {
+    final communityReference = _communities.doc(communityId);
+    final memberReference = communityReference
+        .collection('members')
+        .doc(userId);
+    final copyReference = _firestore
+        .collection('users')
+        .doc(userId)
+        .collection('communities')
+        .doc(communityId);
+    final banReference = communityReference.collection('bans').doc(userId);
+    await _firestore.runTransaction((transaction) async {
+      final community = await transaction.get(communityReference);
+      final member = await transaction.get(memberReference);
+      if (!community.exists ||
+          community.data()?['ownerId'] != ownerId ||
+          !member.exists ||
+          userId == ownerId) {
+        throw StateError('This member cannot be banned.');
+      }
+      final count = (community.data()?['memberCount'] as num?)?.toInt() ?? 1;
+      transaction.set(banReference, {
+        'userId': userId,
+        'displayName': member.data()?['displayName'] ?? 'User',
+        'photoUrl': member.data()?['photoUrl'],
+        'bannedBy': ownerId,
+        'bannedAt': FieldValue.serverTimestamp(),
+      });
+      transaction.delete(memberReference);
+      transaction.delete(copyReference);
+      transaction.update(communityReference, {
+        'memberCount': (count - 1).clamp(1, count),
+      });
+    });
+  }
+
+  Future<void> unbanMember({
+    required String communityId,
+    required String uid,
+  }) => _communities.doc(communityId).collection('bans').doc(uid).delete();
+
+  Future<bool> isUserBanned({
+    required String communityId,
+    required String userId,
+  }) async =>
+      (await _communities.doc(communityId).collection('bans').doc(userId).get())
+          .exists;
+
   Future<void> deleteCommunityClientSide({
     required String communityId,
     required String? confirmationName,
@@ -778,7 +979,6 @@ class CommunityRepository {
         .doc(userId)
         .collection("communities")
         .doc(communityId);
-
     return _firestore.runTransaction((transaction) async {
       final communitySnapshot = await transaction.get(communityReference);
       if (!communitySnapshot.exists) {
@@ -795,7 +995,6 @@ class CommunityRepository {
       if (community.accessMode != CommunityModel.openAccessMode) {
         throw StateError("This Community requires owner approval.");
       }
-
       final userCommunitySnapshot = await transaction.get(
         userCommunityReference,
       );
@@ -898,15 +1097,27 @@ class CommunityRepository {
         throw StateError("This Community does not require approval.");
       }
       if (member.exists) throw StateError("You are already a member.");
-      if (request.exists) {
+      final existingRequestStatus = request.data()?['status'];
+      final canResetExistingRequest =
+          existingRequestStatus == CommunityAccessRequestModel.rejectedStatus ||
+          existingRequestStatus == CommunityAccessRequestModel.approvedStatus;
+      if (request.exists && !canResetExistingRequest) {
         throw StateError("A request for this Community already exists.");
       }
-      transaction.set(requestReference, {
-        "userId": userId,
-        "displayName": displayName,
-        "status": CommunityAccessRequestModel.pendingStatus,
-        "createdAt": FieldValue.serverTimestamp(),
-      });
+      if (request.exists) {
+        transaction.update(requestReference, {
+          "status": CommunityAccessRequestModel.pendingStatus,
+          "resolvedAt": FieldValue.delete(),
+          "resolvedBy": FieldValue.delete(),
+        });
+      } else {
+        transaction.set(requestReference, {
+          "userId": userId,
+          "displayName": displayName,
+          "status": CommunityAccessRequestModel.pendingStatus,
+          "createdAt": FieldValue.serverTimestamp(),
+        });
+      }
     });
   }
 
@@ -989,7 +1200,6 @@ class CommunityRepository {
     final mutationReference = communityReference
         .collection("membershipMutations")
         .doc("current");
-
     return _firestore.runTransaction((transaction) async {
       final communitySnapshot = await transaction.get(communityReference);
       final requestSnapshot = await transaction.get(requestReference);
@@ -1010,7 +1220,6 @@ class CommunityRepository {
       if (memberSnapshot.exists) {
         throw StateError("This user is already a member.");
       }
-
       final requestData = requestSnapshot.data()!;
       final displayName = requestData["displayName"] as String? ?? "User";
       final updatedMemberCount = community.memberCount + 1;

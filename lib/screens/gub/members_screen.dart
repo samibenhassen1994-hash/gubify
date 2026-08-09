@@ -5,12 +5,48 @@ import 'package:flutter/material.dart';
 import '../../services/member_service.dart';
 import '../../widgets/gub_content_card.dart';
 import '../../widgets/gub_screen_background.dart';
+import 'my_gubs_screen.dart';
 
 class MembersScreen extends StatelessWidget {
   final String gubId;
   final String ownerId;
 
   const MembersScreen({super.key, required this.gubId, required this.ownerId});
+
+  Future<void> _leaveGub(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Leave Gub?'),
+        content: const Text('You will lose access to this Gub.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Leave'),
+          ),
+        ],
+      ),
+    );
+    if (!context.mounted || confirmed != true) return;
+    try {
+      await MemberService.instance.leaveGub(gubId: gubId);
+      if (!context.mounted) return;
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const MyGubsScreen()),
+        (_) => false,
+      );
+    } catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error.toString())));
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -72,10 +108,15 @@ class MembersScreen extends StatelessWidget {
                     title: Text(member["displayName"] ?? "User"),
                     subtitle: Text(isMe ? "You" : (member["role"] ?? "Member")),
 
-                    trailing: isOwner && !isMe
+                    trailing: isMe && !isOwner
+                        ? TextButton(
+                            onPressed: () => _leaveGub(context),
+                            child: const Text('Leave'),
+                          )
+                        : isOwner && !isMe
                         ? PopupMenuButton<String>(
                             onSelected: (value) async {
-                              if (value != "remove") {
+                              if (value != "remove" && value != 'ban') {
                                 return;
                               }
 
@@ -85,7 +126,7 @@ class MembersScreen extends StatelessWidget {
                                     builder: (_) => AlertDialog(
                                       title: const Text("Remove member"),
                                       content: Text(
-                                        "Remove ${member["displayName"]} from this Gub?",
+                                        "${value == 'ban' ? 'Ban' : 'Remove'} ${member["displayName"]} from this Gub?",
                                       ),
                                       actions: [
                                         TextButton(
@@ -98,7 +139,9 @@ class MembersScreen extends StatelessWidget {
                                           onPressed: () {
                                             Navigator.pop(context, true);
                                           },
-                                          child: const Text("Remove"),
+                                          child: Text(
+                                            value == 'ban' ? 'Ban' : 'Remove',
+                                          ),
                                         ),
                                       ],
                                     ),
@@ -107,12 +150,20 @@ class MembersScreen extends StatelessWidget {
 
                               if (!confirm) return;
 
-                              await MemberService.instance.removeMember(
-                                gubId: gubId,
-                                uid: uid,
-                                ownerId: ownerId,
-                                currentUserId: currentUser.uid,
-                              );
+                              if (value == 'ban') {
+                                await MemberService.instance.banMember(
+                                  gubId: gubId,
+                                  uid: uid,
+                                  currentUserId: currentUser.uid,
+                                );
+                              } else {
+                                await MemberService.instance.removeMember(
+                                  gubId: gubId,
+                                  uid: uid,
+                                  ownerId: ownerId,
+                                  currentUserId: currentUser.uid,
+                                );
+                              }
 
                               if (context.mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
@@ -135,6 +186,19 @@ class MembersScreen extends StatelessWidget {
                                     ),
                                     SizedBox(width: 10),
                                     Text("Remove member"),
+                                  ],
+                                ),
+                              ),
+                              PopupMenuItem(
+                                value: 'ban',
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      Icons.block_rounded,
+                                      color: Colors.red,
+                                    ),
+                                    SizedBox(width: 10),
+                                    Text('Ban'),
                                   ],
                                 ),
                               ),

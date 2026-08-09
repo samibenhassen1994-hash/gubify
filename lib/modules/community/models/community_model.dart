@@ -184,3 +184,19 @@ class CommunityMembershipModel {
 
   DateTime? get joinedAtDate => joinedAt?.toDate();
 }
+
+class CommunityMemberModel {
+  final String userId;
+  final String displayName;
+  final String? photoUrl;
+  final String role;
+  final Timestamp? joinedAt;
+
+  const CommunityMemberModel({
+    required this.userId,
+    required this.displayName,
+    required this.photoUrl,
+    required this.role,
+    required this.joinedAt,
+  });
+}

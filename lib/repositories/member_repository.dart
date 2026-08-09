@@ -28,24 +28,117 @@ class MemberRepository {
           .collection('members')
           .snapshots();
 
+  Stream<List<Map<String, dynamic>>> bannedUsersStream(String gubId) =>
+      _firestore
+          .collection('gubs')
+          .doc(gubId)
+          .collection('bans')
+          .snapshots()
+          .asyncMap(
+            (snapshot) => Future.wait(
+              snapshot.docs.map((document) async {
+                final data = <String, dynamic>{
+                  ...document.data(),
+                  'uid': document.id,
+                };
+                final name = data['displayName'];
+                if (name is String && name.trim().isNotEmpty) return data;
+                final profile = await _firestore
+                    .collection('users')
+                    .doc(document.id)
+                    .get();
+                final profileName = profile.data()?['displayName'];
+                if (profileName is String && profileName.trim().isNotEmpty) {
+                  data['displayName'] = profileName.trim();
+                }
+                return data;
+              }),
+            ),
+          );
+
   Future<void> removeMember({
     required String gubId,
     required String uid,
+    required String actorId,
   }) async {
-    final batch = _firestore.batch();
+    final gubReference = _firestore.collection("gubs").doc(gubId);
+    final memberReference = gubReference.collection("members").doc(uid);
+    final userGubReference = _firestore
+        .collection("users")
+        .doc(uid)
+        .collection("gubs")
+        .doc(gubId);
 
-    // Rimuove il membro dal gruppo
-    batch.delete(
-      _firestore.collection("gubs").doc(gubId).collection("members").doc(uid),
-    );
+    await _firestore.runTransaction((transaction) async {
+      final gub = await transaction.get(gubReference);
+      final member = await transaction.get(memberReference);
+      if (!gub.exists || gub.data()?['deletionStatus'] == 'deleting') {
+        throw StateError('This Gub is no longer available.');
+      }
+      if (!member.exists) {
+        throw StateError('This member is no longer in the Gub.');
+      }
 
-    // Rimuove il gruppo dalla lista personale dell'utente
-    batch.delete(
-      _firestore.collection("users").doc(uid).collection("gubs").doc(gubId),
-    );
+      final ownerId = gub.data()?['ownerId'] as String?;
+      if (ownerId == null || uid == ownerId) {
+        throw StateError('The Gub owner cannot leave or be removed.');
+      }
+      if (actorId != uid && actorId != ownerId) {
+        throw StateError('Only the Gub owner can remove members.');
+      }
 
-    await batch.commit();
+      final memberCount = (gub.data()?['memberCount'] as num?)?.toInt() ?? 1;
+      transaction.delete(memberReference);
+      transaction.delete(userGubReference);
+      transaction.update(gubReference, {
+        'memberCount': (memberCount - 1).clamp(1, memberCount),
+      });
+    });
   }
+
+  Future<void> banMember({
+    required String gubId,
+    required String uid,
+    required String ownerId,
+  }) async {
+    final gubReference = _firestore.collection('gubs').doc(gubId);
+    final memberReference = gubReference.collection('members').doc(uid);
+    final banReference = gubReference.collection('bans').doc(uid);
+    final copyReference = _firestore
+        .collection('users')
+        .doc(uid)
+        .collection('gubs')
+        .doc(gubId);
+    await _firestore.runTransaction((transaction) async {
+      final gub = await transaction.get(gubReference);
+      final member = await transaction.get(memberReference);
+      if (!gub.exists || gub.data()?['ownerId'] != ownerId || !member.exists) {
+        throw StateError('This member is no longer available.');
+      }
+      if (uid == ownerId) throw StateError('The Gub owner cannot be banned.');
+      final count = (gub.data()?['memberCount'] as num?)?.toInt() ?? 1;
+      transaction.set(banReference, {
+        'userId': uid,
+        'displayName': member.data()?['displayName'] ?? 'User',
+        'photoUrl': member.data()?['photoUrl'],
+        'bannedBy': ownerId,
+        'bannedAt': FieldValue.serverTimestamp(),
+      });
+      transaction.delete(memberReference);
+      transaction.delete(copyReference);
+      transaction.update(gubReference, {
+        'memberCount': (count - 1).clamp(1, count),
+      });
+    });
+  }
+
+  Future<void> unbanMember({required String gubId, required String uid}) =>
+      _firestore
+          .collection('gubs')
+          .doc(gubId)
+          .collection('bans')
+          .doc(uid)
+          .delete();
 
   Future<void> updateMemberCount({
     required String gubId,

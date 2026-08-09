@@ -180,6 +180,32 @@ class TaskRepository {
     );
   }
 
+  Future<void> unassignActiveTasksForMember({
+    required String gubId,
+    required String uid,
+  }) async {
+    final snapshot = await tasksCollection(
+      gubId,
+    ).where('assignedUserId', isEqualTo: uid).get();
+    final activeTasks = snapshot.docs.where(
+      (document) => document.data()['status'] == 'active',
+    );
+    final batch = _firestore.batch();
+    var count = 0;
+    for (final task in activeTasks) {
+      batch.update(task.reference, {
+        'assignedUserId': null,
+        'assignedUserName': null,
+      });
+      count++;
+      if (count == 400) {
+        await batch.commit();
+        return unassignActiveTasksForMember(gubId: gubId, uid: uid);
+      }
+    }
+    if (count > 0) await batch.commit();
+  }
+
   String? _nonEmptyString(Object? value) {
     if (value is! String || value.trim().isEmpty) return null;
     return value;
