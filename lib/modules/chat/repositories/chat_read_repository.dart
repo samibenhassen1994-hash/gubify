@@ -36,6 +36,7 @@ class ChatReadRepository {
   Stream<int> unreadCountStream({
     required String gubId,
     required String userId,
+    required Timestamp membershipBoundary,
   }) {
     StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>?
     readSubscription;
@@ -67,9 +68,8 @@ class ChatReadRepository {
           .collection("messages")
           .orderBy("createdAt");
 
-      if (lastReadAt != null) {
-        query = query.where("createdAt", isGreaterThan: lastReadAt);
-      }
+      final effectiveStart = _latestTimestamp(membershipBoundary, lastReadAt);
+      query = query.where("createdAt", isGreaterThan: effectiveStart);
 
       messagesSubscription = query.snapshots().listen(
         (snapshot) {
@@ -143,5 +143,15 @@ class ChatReadRepository {
     );
 
     return controller.stream;
+  }
+
+  Timestamp _latestTimestamp(Timestamp first, Timestamp? second) {
+    if (second == null ||
+        first.seconds > second.seconds ||
+        (first.seconds == second.seconds &&
+            first.nanoseconds >= second.nanoseconds)) {
+      return first;
+    }
+    return second;
   }
 }

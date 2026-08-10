@@ -1,5 +1,7 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
+import '../../../services/gub_service.dart';
 import '../repositories/chat_read_repository.dart';
 
 class ChatReadService {
@@ -18,10 +20,28 @@ class ChatReadService {
       );
     }
 
-    return ChatReadRepository.instance.unreadCountStream(
-      gubId: gubId,
-      userId: user.uid,
+    return _withMembershipBoundary(
+      gubId,
+      (boundary) => ChatReadRepository.instance.unreadCountStream(
+        gubId: gubId,
+        userId: user.uid,
+        membershipBoundary: boundary,
+      ),
     );
+  }
+
+  Stream<int> _withMembershipBoundary(
+    String gubId,
+    Stream<int> Function(Timestamp boundary) build,
+  ) async* {
+    final boundary = (await GubService().currentMembershipHistoryBoundary(
+      gubId,
+    ))?.membershipStartedAt;
+    if (boundary == null) {
+      yield 0;
+      return;
+    }
+    yield* build(boundary);
   }
 
   Future<void> markAsRead(String gubId) {

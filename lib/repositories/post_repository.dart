@@ -33,8 +33,12 @@ class PostRepository {
     });
   }
 
-  Stream<List<BoardPostModel>> postsStream(String gubId) {
+  Stream<List<BoardPostModel>> postsStream({
+    required String gubId,
+    required Timestamp membershipBoundary,
+  }) {
     return postsCollection(gubId)
+        .where('createdAt', isGreaterThanOrEqualTo: membershipBoundary)
         .orderBy('createdAt', descending: true)
         .limit(25)
         .snapshots()
@@ -48,8 +52,10 @@ class PostRepository {
   Stream<List<BoardPostModel>> postsAfterStream({
     required String gubId,
     required Timestamp lastReadAt,
+    required Timestamp membershipBoundary,
   }) {
     return postsCollection(gubId)
+        .where('createdAt', isGreaterThanOrEqualTo: membershipBoundary)
         .orderBy('createdAt')
         .where('createdAt', isGreaterThan: lastReadAt)
         .snapshots()

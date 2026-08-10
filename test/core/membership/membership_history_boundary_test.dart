@@ -65,4 +65,18 @@ void main() {
     expect(boundary.membershipStartedAt, isNull);
     expect(boundary.hasKnownStart, isFalse);
   });
+
+  test('a current membership boundary dominates an older read marker', () {
+    final boundary = MembershipHistoryBoundary.fromAuthoritativeMembership(
+      spaceId: 'gub-1',
+      spaceType: MembershipSpaceType.privateGub,
+      userId: 'user-1',
+      membership: {'joinedAt': newerStart},
+    );
+    final olderRead = Timestamp.fromDate(DateTime.utc(2026, 8, 10, 8));
+    final newerRead = Timestamp.fromDate(DateTime.utc(2026, 8, 10, 11));
+
+    expect(boundary.effectiveReadStart(olderRead), newerStart);
+    expect(boundary.effectiveReadStart(newerRead), newerRead);
+  });
 }

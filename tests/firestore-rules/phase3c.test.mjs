@@ -16,6 +16,8 @@ import {
   serverTimestamp,
   setDoc,
   updateDoc,
+  query,
+  where,
   writeBatch,
 } from 'firebase/firestore';
 
@@ -165,7 +167,11 @@ async function markGubDeleting(id = 'g1', ownerId = uid.ownerGub, overrides = {}
 }
 async function deleteCollection(clientDb, path) {
   while (true) {
-    const snapshot = await getDocs(collection(clientDb, ...path));
+    const collectionReference = collection(clientDb, ...path);
+    const historicalCollection = path.at(-1) === 'messages' || path.at(-1) === 'posts';
+    const snapshot = await getDocs(historicalCollection
+      ? query(collectionReference, where('createdAt', '>=', ts()))
+      : collectionReference);
     if (snapshot.empty) return;
     const batch = writeBatch(clientDb);
     for (const item of snapshot.docs) batch.delete(item.ref);

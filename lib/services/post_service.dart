@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../models/board_post_model.dart';
 import '../repositories/post_repository.dart';
 import '../repositories/gub_repository.dart';
+import 'gub_service.dart';
 
 class PostService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -36,6 +37,26 @@ class PostService {
   }
 
   Stream<List<BoardPostModel>> postsStream(String gubId) {
-    return PostRepository.instance.postsStream(gubId);
+    return _withMembershipBoundary(
+      gubId,
+      (boundary) => PostRepository.instance.postsStream(
+        gubId: gubId,
+        membershipBoundary: boundary,
+      ),
+    );
+  }
+
+  Stream<List<BoardPostModel>> _withMembershipBoundary(
+    String gubId,
+    Stream<List<BoardPostModel>> Function(Timestamp boundary) build,
+  ) async* {
+    final boundary = (await GubService().currentMembershipHistoryBoundary(
+      gubId,
+    ))?.membershipStartedAt;
+    if (boundary == null) {
+      yield const <BoardPostModel>[];
+      return;
+    }
+    yield* build(boundary);
   }
 }

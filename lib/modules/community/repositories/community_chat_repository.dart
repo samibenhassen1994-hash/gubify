@@ -51,8 +51,12 @@ class CommunityChatRepository {
     });
   }
 
-  Stream<List<CommunityChatMessageModel>> messagesStream(String communityId) {
+  Stream<List<CommunityChatMessageModel>> messagesStream({
+    required String communityId,
+    required Timestamp membershipBoundary,
+  }) {
     return messagesCollection(communityId)
+        .where("createdAt", isGreaterThanOrEqualTo: membershipBoundary)
         .orderBy("createdAt", descending: true)
         .limit(_messageLimit)
         .snapshots()

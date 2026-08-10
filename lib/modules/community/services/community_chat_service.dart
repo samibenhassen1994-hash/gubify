@@ -1,8 +1,10 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import '../../../config/app_limits.dart';
 import '../../../repositories/user_repository.dart';
 import '../../../services/app_sound_service.dart';
+import 'community_service.dart';
 import '../models/community_chat_message_model.dart';
 import '../repositories/community_chat_repository.dart';
 
@@ -16,7 +18,27 @@ class CommunityChatService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
   Stream<List<CommunityChatMessageModel>> messagesStream(String communityId) {
-    return CommunityChatRepository.instance.messagesStream(communityId);
+    return _withMembershipBoundary(
+      communityId,
+      (boundary) => CommunityChatRepository.instance.messagesStream(
+        communityId: communityId,
+        membershipBoundary: boundary,
+      ),
+    );
+  }
+
+  Stream<List<CommunityChatMessageModel>> _withMembershipBoundary(
+    String communityId,
+    Stream<List<CommunityChatMessageModel>> Function(Timestamp boundary) build,
+  ) async* {
+    final lookup = await CommunityService.instance
+        .currentMembershipHistoryBoundary(communityId);
+    final boundary = lookup.boundary?.membershipStartedAt;
+    if (boundary == null) {
+      yield const <CommunityChatMessageModel>[];
+      return;
+    }
+    yield* build(boundary);
   }
 
   Future<void> sendMessage({

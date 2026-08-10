@@ -22,6 +22,17 @@ class MembershipHistoryBoundary {
 
   bool get hasKnownStart => membershipStartedAt != null;
 
+  /// Prevents a persisted read marker from widening the current membership
+  /// history window after a member leaves and later rejoins.
+  Timestamp effectiveReadStart(Timestamp? lastReadAt) {
+    final start = membershipStartedAt;
+    if (start == null) {
+      throw StateError('A membership history boundary is required.');
+    }
+    if (lastReadAt == null || _isAfter(start, lastReadAt)) return start;
+    return lastReadAt;
+  }
+
   factory MembershipHistoryBoundary.fromAuthoritativeMembership({
     required String spaceId,
     required MembershipSpaceType spaceType,
@@ -41,6 +52,11 @@ class MembershipHistoryBoundary {
 
   static Timestamp? _timestamp(Object? value) =>
       value is Timestamp ? value : null;
+
+  static bool _isAfter(Timestamp first, Timestamp second) =>
+      first.seconds > second.seconds ||
+      (first.seconds == second.seconds &&
+          first.nanoseconds > second.nanoseconds);
 }
 
 /// Keeps a public Community that exists distinct from a Community membership.

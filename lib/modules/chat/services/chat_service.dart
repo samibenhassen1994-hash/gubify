@@ -1,6 +1,8 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import '../../../repositories/user_repository.dart';
+import '../../../services/gub_service.dart';
 import '../../../services/app_sound_service.dart';
 import '../models/chat_message_model.dart';
 import '../repositories/chat_repository.dart';
@@ -15,17 +17,43 @@ class ChatService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
   Stream<List<ChatMessageModel>> messagesStream(String gubId) {
-    return ChatRepository.instance.messagesStream(gubId);
+    return _withMembershipBoundary(
+      gubId,
+      (boundary) => ChatRepository.instance.messagesStream(
+        gubId: gubId,
+        membershipBoundary: boundary,
+      ),
+    );
   }
 
   Future<ChatMessageModel?> getMessage({
     required String gubId,
     required String messageId,
-  }) {
+  }) async {
+    final boundary = await _membershipBoundary(gubId);
+    if (boundary == null) return null;
     return ChatRepository.instance.getMessage(
       gubId: gubId,
       messageId: messageId,
+      membershipBoundary: boundary,
     );
+  }
+
+  Stream<List<ChatMessageModel>> _withMembershipBoundary(
+    String gubId,
+    Stream<List<ChatMessageModel>> Function(Timestamp boundary) build,
+  ) async* {
+    final boundary = await _membershipBoundary(gubId);
+    if (boundary == null) {
+      yield const <ChatMessageModel>[];
+      return;
+    }
+    yield* build(boundary);
+  }
+
+  Future<Timestamp?> _membershipBoundary(String gubId) async {
+    final boundary = await GubService().currentMembershipHistoryBoundary(gubId);
+    return boundary?.membershipStartedAt;
   }
 
   Future<void> sendMessage({

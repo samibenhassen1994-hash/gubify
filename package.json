@@ -6,8 +6,10 @@
     "test:rules:phase3c": "node --test tests/firestore-rules/phase3c.test.mjs",
     "test:rules:phase3d": "node --test tests/firestore-rules/phase3d.test.mjs",
     "test:rules:phase4a2": "node --test tests/firestore-rules/phase4a2.test.mjs",
+    "test:rules:history-boundaries": "node --test tests/firestore-rules/membership-history-architecture.test.mjs",
+    "test:rules:history-production": "node --test tests/firestore-rules/membership-history-boundaries.test.mjs",
     "test:rules:phase2a": "node --test tests/firestore-rules/phase2a.test.mjs",
-    "test:rules:all": "node --test --test-concurrency=1 tests/firestore-rules/structural-smoke.test.mjs tests/firestore-rules/phase2a.test.mjs tests/firestore-rules/phase3a.test.mjs tests/firestore-rules/phase3b.test.mjs tests/firestore-rules/phase3c.test.mjs tests/firestore-rules/phase3d.test.mjs tests/firestore-rules/phase4a2.test.mjs"
+    "test:rules:all": "node --test --test-concurrency=1 tests/firestore-rules/structural-smoke.test.mjs tests/firestore-rules/phase2a.test.mjs tests/firestore-rules/phase3a.test.mjs tests/firestore-rules/phase3b.test.mjs tests/firestore-rules/phase3c.test.mjs tests/firestore-rules/phase3d.test.mjs tests/firestore-rules/phase4a2.test.mjs tests/firestore-rules/membership-history-architecture.test.mjs tests/firestore-rules/membership-history-boundaries.test.mjs"
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "^5.0.1",
