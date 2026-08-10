@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
+import '../../../core/membership/membership_history_boundary.dart';
 import '../models/community_access_request_model.dart';
 import '../models/community_model.dart';
 
@@ -124,6 +125,37 @@ class CommunityRepository {
     if (!document.exists) return null;
 
     return CommunityModel.fromFirestore(document);
+  }
+
+  /// Reads the Community root and the user's authoritative membership
+  /// separately so an existing public Community is not confused with access.
+  Future<CommunityMembershipBoundaryLookup> getMembershipHistoryBoundary({
+    required String communityId,
+    required String userId,
+  }) async {
+    final communityReference = _communities.doc(communityId);
+    final community = await communityReference.get();
+    if (!community.exists) {
+      return const CommunityMembershipBoundaryLookup.notFound();
+    }
+
+    final member = await communityReference
+        .collection('members')
+        .doc(userId)
+        .get();
+    final membership = member.data();
+    if (!member.exists || membership == null) {
+      return const CommunityMembershipBoundaryLookup.notMember();
+    }
+
+    return CommunityMembershipBoundaryLookup.member(
+      MembershipHistoryBoundary.fromAuthoritativeMembership(
+        spaceId: communityId,
+        spaceType: MembershipSpaceType.community,
+        userId: userId,
+        membership: membership,
+      ),
+    );
   }
 
   Stream<CommunityModel?> communityForMemberStream({

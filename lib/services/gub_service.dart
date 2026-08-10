@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 import '../config/app_limits.dart';
 import '../core/invites/invite_code.dart';
+import '../core/membership/membership_history_boundary.dart';
 import '../core/models/member_option.dart';
 import '../repositories/gub_invite_repository.dart';
 import '../repositories/member_repository.dart';
@@ -14,6 +15,22 @@ class GubService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final GubInviteRepository _inviteRepository = GubInviteRepository();
   final InviteCodeGenerator _inviteCodeGenerator = InviteCodeGenerator.secure();
+
+  Future<MembershipHistoryBoundary?> currentMembershipHistoryBoundary(
+    String gubId,
+  ) async {
+    final user = _auth.currentUser;
+    if (user == null) {
+      throw StateError('You must be signed in to view Gub history.');
+    }
+
+    final normalizedId = gubId.trim();
+    if (normalizedId.isEmpty) return null;
+    return _inviteRepository.getMembershipHistoryBoundary(
+      gubId: normalizedId,
+      userId: user.uid,
+    );
+  }
 
   Future<String> createHub({required String name}) async {
     final user = _auth.currentUser;

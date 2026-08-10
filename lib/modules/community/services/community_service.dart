@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 
 import '../../../config/app_limits.dart';
+import '../../../core/membership/membership_history_boundary.dart';
 import '../../../repositories/user_repository.dart';
 import '../../../services/app_sound_service.dart';
 import '../models/community_access_request_model.dart';
@@ -101,6 +102,28 @@ class CommunityService {
 
     try {
       return await CommunityRepository.instance.getCommunity(normalizedId);
+    } on FirebaseException catch (error) {
+      throw Exception(_firebaseErrorMessage(error));
+    }
+  }
+
+  Future<CommunityMembershipBoundaryLookup> currentMembershipHistoryBoundary(
+    String communityId,
+  ) async {
+    final user = _auth.currentUser;
+    if (user == null) {
+      throw StateError('You must be signed in to view Community history.');
+    }
+
+    final normalizedId = communityId.trim();
+    if (normalizedId.isEmpty) {
+      return const CommunityMembershipBoundaryLookup.notFound();
+    }
+    try {
+      return await CommunityRepository.instance.getMembershipHistoryBoundary(
+        communityId: normalizedId,
+        userId: user.uid,
+      );
     } on FirebaseException catch (error) {
       throw Exception(_firebaseErrorMessage(error));
     }

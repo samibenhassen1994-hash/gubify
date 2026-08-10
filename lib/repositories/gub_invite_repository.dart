@@ -1,5 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../core/membership/membership_history_boundary.dart';
+
 class InviteTokenData {
   final String code;
   final String gubId;
@@ -170,6 +172,29 @@ class GubInviteRepository {
         .doc(userId)
         .get();
     return snapshot.data();
+  }
+
+  /// Returns a boundary only from the authoritative private Gub membership.
+  /// A user copy is intentionally never used to grant historical access.
+  Future<MembershipHistoryBoundary?> getMembershipHistoryBoundary({
+    required String gubId,
+    required String userId,
+  }) async {
+    final snapshot = await _firestore
+        .collection('gubs')
+        .doc(gubId)
+        .collection('members')
+        .doc(userId)
+        .get();
+    final membership = snapshot.data();
+    if (!snapshot.exists || membership == null) return null;
+
+    return MembershipHistoryBoundary.fromAuthoritativeMembership(
+      spaceId: gubId,
+      spaceType: MembershipSpaceType.privateGub,
+      userId: userId,
+      membership: membership,
+    );
   }
 
   Future<Map<String, dynamic>?> getOwnCopy({
