@@ -1,10 +1,12 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../../core/errors/active_creation_limit_exception.dart';
 import '../../../core/models/creation_availability.dart';
 import '../../../core/models/deletion_context.dart';
 import '../../../repositories/creation_cooldown_repository.dart';
 import '../../../repositories/gub_repository.dart';
+import '../../../services/gub_service.dart';
 import '../../../services/app_sound_service.dart';
 import '../models/proposal_model.dart';
 import '../repositories/proposal_repository.dart';
@@ -56,7 +58,17 @@ class ProposalService {
   }
 
   Stream<List<ProposalModel>> proposalsStream(String gubId) {
-    return ProposalRepository.instance.proposalsStream(gubId);
+    return Stream.fromFuture(
+      GubService().currentMembershipHistoryBoundary(gubId),
+    ).asyncExpand((boundary) {
+      if (boundary?.membershipStartedAt case final timestamp?) {
+        return ProposalRepository.instance.proposalsStream(
+          gubId,
+          membershipBoundary: timestamp,
+        );
+      }
+      return Stream.value(const <ProposalModel>[]);
+    });
   }
 
   Stream<ProposalModel?> proposalStream({
@@ -188,6 +200,7 @@ class ProposalService {
         yesVotes: yesVotes,
         noVotes: noVotes,
         status: "approved",
+        resolvedAt: Timestamp.now(),
         resultProcessed: true,
       );
 
@@ -212,6 +225,7 @@ class ProposalService {
         yesVotes: yesVotes,
         noVotes: noVotes,
         status: "rejected",
+        resolvedAt: Timestamp.now(),
         resultProcessed: true,
       );
 

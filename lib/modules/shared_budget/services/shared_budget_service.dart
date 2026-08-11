@@ -9,6 +9,7 @@ import '../../../core/models/creation_availability.dart';
 import '../../../core/models/deletion_context.dart';
 import '../../../repositories/creation_cooldown_repository.dart';
 import '../../../repositories/gub_repository.dart';
+import '../../../services/gub_service.dart';
 import '../../../services/app_sound_service.dart';
 import '../models/shared_budget_member_model.dart';
 import '../models/shared_budget_model.dart';
@@ -167,15 +168,28 @@ class SharedBudgetService {
 
   /// Stream in tempo reale
   Stream<List<SharedBudgetModel>> activeSharedBudgetsStream(String gubId) {
-    return SharedBudgetRepository.instance.activeSharedBudgetsStream(gubId);
+    return sharedBudgetsStream(
+      gubId,
+    ).map((budgets) => budgets.where((budget) => !budget.isCompleted).toList());
   }
 
-  Stream<List<SharedBudgetModel>> sharedBudgetsStream(String gubId) {
-    return SharedBudgetRepository.instance.sharedBudgetsStream(gubId);
-  }
+  Stream<List<SharedBudgetModel>> sharedBudgetsStream(String gubId) =>
+      Stream.fromFuture(
+        GubService().currentMembershipHistoryBoundary(gubId),
+      ).asyncExpand((boundary) {
+        if (boundary?.membershipStartedAt case final timestamp?) {
+          return SharedBudgetRepository.instance.sharedBudgetsStream(
+            gubId,
+            membershipBoundary: timestamp,
+          );
+        }
+        return Stream.value(const <SharedBudgetModel>[]);
+      });
 
   Stream<List<SharedBudgetModel>> completedSharedBudgetsStream(String gubId) {
-    return SharedBudgetRepository.instance.completedSharedBudgetsStream(gubId);
+    return sharedBudgetsStream(
+      gubId,
+    ).map((budgets) => budgets.where((budget) => budget.isCompleted).toList());
   }
 
   Future<void> deleteSharedBudget({

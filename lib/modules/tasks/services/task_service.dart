@@ -6,6 +6,7 @@ import '../../../core/models/creation_availability.dart';
 import '../../../core/models/deletion_context.dart';
 import '../../../repositories/creation_cooldown_repository.dart';
 import '../../../repositories/gub_repository.dart';
+import '../../../services/gub_service.dart';
 import '../../../services/app_sound_service.dart';
 import '../models/task_model.dart';
 import '../repositories/task_repository.dart';
@@ -56,7 +57,17 @@ class TaskService {
   }
 
   Stream<List<TaskModel>> tasksStream(String gubId) {
-    return TaskRepository.instance.tasksStream(gubId);
+    return Stream.fromFuture(
+      GubService().currentMembershipHistoryBoundary(gubId),
+    ).asyncExpand((boundary) {
+      if (boundary?.membershipStartedAt case final timestamp?) {
+        return TaskRepository.instance.tasksStream(
+          gubId,
+          membershipBoundary: timestamp,
+        );
+      }
+      return Stream.value(const <TaskModel>[]);
+    });
   }
 
   Stream<TaskModel?> taskStream({

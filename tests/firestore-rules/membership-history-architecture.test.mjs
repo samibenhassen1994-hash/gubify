@@ -13,9 +13,11 @@ const rules = `
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /spaces/{spaceId}/messages/{messageId} {
+    match /spaces/{spaceId}/items/{itemId} {
       allow read: if request.auth != null
-        && resource.data.createdAt >= get(/databases/$(database)/documents/spaces/$(spaceId)/members/$(request.auth.uid)).data.joinedAt;
+        && (resource.data.status == 'active'
+          || (resource.data.status == 'completed'
+            && resource.data.completedAt >= get(/databases/$(database)/documents/spaces/$(spaceId)/members/$(request.auth.uid)).data.joinedAt));
     }
   }
 }`;
@@ -42,23 +44,33 @@ beforeEach(async () => {
     batch.set(doc(database, 'spaces', 'dynamic', 'members', 'member'), {
       joinedAt: at(100),
     });
-    batch.set(doc(database, 'spaces', 'dynamic', 'messages', 'before'), {
-      createdAt: at(99),
+    batch.set(doc(database, 'spaces', 'dynamic', 'items', 'active-before'), {
+      status: 'active',
+      completedAt: null,
     });
-    batch.set(doc(database, 'spaces', 'dynamic', 'messages', 'after'), {
-      createdAt: at(101),
+    batch.set(doc(database, 'spaces', 'dynamic', 'items', 'completed-before'), {
+      status: 'completed',
+      completedAt: at(99),
+    });
+    batch.set(doc(database, 'spaces', 'dynamic', 'items', 'completed-after'), {
+      status: 'completed',
+      completedAt: at(101),
     });
     await batch.commit();
   });
 });
 
 describe('membership history architecture gate', () => {
-  test('authorizes the exact boundary and rejects queries that could expose history', async () => {
-    const messages = collection(db('member'), 'spaces', 'dynamic', 'messages');
+  test('proves separate current and bounded-history queries', async () => {
+    const items = collection(db('member'), 'spaces', 'dynamic', 'items');
 
-    await assertSucceeds(getDocs(query(messages, where('createdAt', '>=', at(100)))));
-    await assertFails(getDocs(messages));
-    await assertFails(getDocs(query(messages, where('createdAt', '>=', at(99)))));
-    await assertSucceeds(getDocs(query(messages, where('createdAt', '>=', at(101)))));
+    await assertSucceeds(getDocs(query(items, where('status', '==', 'active'))));
+    await assertSucceeds(getDocs(query(
+      items,
+      where('status', '==', 'completed'),
+      where('completedAt', '>=', at(100)),
+    )));
+    await assertFails(getDocs(query(items, where('status', '==', 'completed'))));
+    await assertFails(getDocs(items));
   });
 });

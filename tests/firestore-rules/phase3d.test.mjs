@@ -91,7 +91,7 @@ beforeEach(async () => {
     batch.set(doc(d, 'gubs', 'g1', 'posts', 'post1'), { gubId: 'g1', authorId: uid.member, authorName: uid.member, authorPhoto: null, message: 'Post', likes: 0, comments: 0, createdAt: now(), updatedAt: now() });
     batch.set(doc(d, 'gubs', 'g1', 'tasks', 'task1'), task('g1'));
     batch.set(doc(d, 'gubs', 'g2', 'tasks', 'foreignTask'), task('g2', 'foreignTask'));
-    batch.set(doc(d, 'gubs', 'g1', 'events', 'event1'), { gubId: 'g1', eventId: 'event1', proposalId: 'proposal1', title: 'Proposal', description: 'Description', type: 'custom', creatorId: uid.member, creatorName: uid.member, eventDate: new Date('2026-03-01T00:00:00Z'), createdAt: now(), status: 'scheduled' });
+    batch.set(doc(d, 'gubs', 'g1', 'events', 'event1'), { gubId: 'g1', eventId: 'event1', proposalId: 'proposal1', title: 'Proposal', description: 'Description', type: 'custom', creatorId: uid.member, creatorName: uid.member, eventDate: new Date('2030-03-01T00:00:00Z'), createdAt: now(), status: 'scheduled' });
     batch.set(doc(d, 'gubs', 'g1', 'organizedEvents', 'organized1'), { eventId: 'organized1', gubId: 'g1', title: 'Organized', description: null, location: null, scheduledAt: null, createdBy: uid.member, createdByName: uid.member, createdAt: now(), status: 'active', completedAt: null, sourceType: 'manual', sourceId: null, sourcePreview: null, originUserId: null, sourceAuthorName: null, assignments: [{ userId: uid.second, userName: uid.second, taskText: 'Work', isCompleted: false, completedAt: null }] });
     batch.set(doc(d, 'gubs', 'g1', 'proposals', 'proposal1'), proposal('g1', 'proposal1', { status: 'approved', yesVotes: 3, resultProcessed: true }));
     batch.set(doc(d, 'gubs', 'g1', 'proposals', 'proposal1', 'votes', uid.member), { uid: uid.member, vote: 'yes', votedAt: now() });
@@ -125,8 +125,8 @@ describe('real query compatibility', () => {
     const memberDb = db(uid.member); const outsiderDb = db(uid.outsider);
     for (const [name, constraints] of [
       ['messages', [where('createdAt', '>=', now()), orderBy('createdAt', 'desc'), limit(50)]], ['posts', [where('createdAt', '>=', now()), orderBy('createdAt', 'desc'), limit(25)]],
-      ['tasks', [orderBy('createdAt', 'desc')]], ['events', [orderBy('eventDate')]],
-      ['organizedEvents', [orderBy('createdAt', 'desc')]], ['proposals', [orderBy('createdAt', 'desc')]],
+      ['tasks', [where('status', '==', 'active')]], ['events', [where('eventDate', '>=', now()), orderBy('eventDate')]],
+      ['organizedEvents', [orderBy('createdAt', 'desc')]], ['proposals', [where('status', '==', 'voting')]],
     ]) {
       await assertSucceeds(getDocs(query(collection(memberDb, 'gubs', 'g1', name), ...constraints)));
       await assertFails(getDocs(query(collection(outsiderDb, 'gubs', 'g1', name), ...constraints)));

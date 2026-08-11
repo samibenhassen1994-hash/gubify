@@ -183,9 +183,20 @@ class ProposalRepository {
     });
   }
 
-  Stream<List<ProposalModel>> proposalsStream(String gubId) {
+  Stream<List<ProposalModel>> proposalsStream(
+    String gubId, {
+    required Timestamp membershipBoundary,
+  }) {
     return proposalsCollection(gubId)
-        .orderBy("createdAt", descending: true)
+        .where(
+          Filter.or(
+            Filter('status', isEqualTo: 'voting'),
+            Filter.and(
+              Filter('status', whereIn: const ['approved', 'rejected']),
+              Filter('resolvedAt', isGreaterThanOrEqualTo: membershipBoundary),
+            ),
+          ),
+        )
         .snapshots()
         .map(
           (snapshot) => snapshot.docs
@@ -195,14 +206,10 @@ class ProposalRepository {
         );
   }
 
-  Stream<List<ProposalModel>> profileActivityCandidatesStream(String gubId) {
-    return proposalsCollection(gubId).snapshots().map(
-      (snapshot) => snapshot.docs
-          .where((doc) => !_isDeleted(doc.data()))
-          .map((doc) => ProposalModel.fromFirestore(doc.data()))
-          .toList(growable: false),
-    );
-  }
+  Stream<List<ProposalModel>> profileActivityCandidatesStream(
+    String gubId, {
+    required Timestamp membershipBoundary,
+  }) => proposalsStream(gubId, membershipBoundary: membershipBoundary);
 
   Future<void> vote({
     required String gubId,

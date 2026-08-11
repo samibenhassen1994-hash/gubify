@@ -54,9 +54,12 @@ class EventRepository {
     });
   }
 
-  Stream<List<EventModel>> eventsStream(String gubId) {
+  Stream<List<EventModel>> eventsStream(
+    String gubId, {
+    required Timestamp membershipBoundary,
+  }) {
     return eventsCollection(gubId)
-        .orderBy("eventDate")
+        .where('eventDate', isGreaterThanOrEqualTo: membershipBoundary)
         .snapshots()
         .map(
           (snapshot) => snapshot.docs
@@ -65,11 +68,8 @@ class EventRepository {
         );
   }
 
-  Stream<List<EventModel>> profileActivityCandidatesStream(String gubId) {
-    return eventsCollection(gubId).snapshots().map(
-      (snapshot) => snapshot.docs
-          .map((doc) => EventModel.fromFirestore(doc.data()))
-          .toList(growable: false),
-    );
-  }
+  Stream<List<EventModel>> profileActivityCandidatesStream(
+    String gubId, {
+    required Timestamp membershipBoundary,
+  }) => eventsStream(gubId, membershipBoundary: membershipBoundary);
 }

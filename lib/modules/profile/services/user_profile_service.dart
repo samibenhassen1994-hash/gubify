@@ -1,8 +1,10 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../../repositories/member_repository.dart';
 import '../../../repositories/shared_budget_repository.dart';
 import '../../../repositories/gub_repository.dart';
+import '../../../services/gub_service.dart';
 import '../../../repositories/user_repository.dart';
 import '../../community/models/community_model.dart';
 import '../../community/services/community_service.dart';
@@ -180,62 +182,85 @@ class UserProfileService {
     required String userId,
     required UserActivityType type,
   }) {
-    return switch (type) {
-      UserActivityType.tasks => _taskActivityStream(gubId, userId),
-      UserActivityType.proposals => _proposalActivityStream(gubId, userId),
-      UserActivityType.events => _eventActivityStream(gubId, userId),
-      UserActivityType.sharedBudget => _sharedBudgetActivityStream(
-        gubId,
-        userId,
-      ),
-    };
+    return Stream.fromFuture(
+      GubService().currentMembershipHistoryBoundary(gubId),
+    ).asyncExpand((boundary) {
+      final timestamp = boundary?.membershipStartedAt;
+      if (timestamp == null) return Stream.value(const <UserActivityEntry>[]);
+      return switch (type) {
+        UserActivityType.tasks => _taskActivityStream(gubId, userId, timestamp),
+        UserActivityType.proposals => _proposalActivityStream(
+          gubId,
+          userId,
+          timestamp,
+        ),
+        UserActivityType.events => _eventActivityStream(
+          gubId,
+          userId,
+          timestamp,
+        ),
+        UserActivityType.sharedBudget => _sharedBudgetActivityStream(
+          gubId,
+          userId,
+          timestamp,
+        ),
+      };
+    });
   }
 
   Stream<List<UserActivityEntry>> _taskActivityStream(
     String gubId,
     String userId,
+    Timestamp membershipBoundary,
   ) {
-    return TaskRepository.instance.profileActivityCandidatesStream(gubId).map((
-      tasks,
-    ) {
-      final activities = <UserActivityEntry>[];
+    return TaskRepository.instance
+        .profileActivityCandidatesStream(
+          gubId,
+          membershipBoundary: membershipBoundary,
+        )
+        .map((tasks) {
+          final activities = <UserActivityEntry>[];
 
-      for (final task in tasks) {
-        final kind = task.completedBy == userId
-            ? UserActivityKind.taskCompleted
-            : task.creatorId == userId
-            ? UserActivityKind.taskCreated
-            : task.assignedUserId == userId
-            ? UserActivityKind.taskAssigned
-            : null;
-        if (kind == null) continue;
+          for (final task in tasks) {
+            final kind = task.completedBy == userId
+                ? UserActivityKind.taskCompleted
+                : task.creatorId == userId
+                ? UserActivityKind.taskCreated
+                : task.assignedUserId == userId
+                ? UserActivityKind.taskAssigned
+                : null;
+            if (kind == null) continue;
 
-        activities.add(
-          UserActivityEntry(
-            id: task.taskId,
-            title: task.title,
-            status: task.status,
-            kind: kind,
-            occurredAt: kind == UserActivityKind.taskCompleted
-                ? task.completedAt ?? task.createdAt
-                : task.createdAt,
-            task: task,
-          ),
-        );
-      }
+            activities.add(
+              UserActivityEntry(
+                id: task.taskId,
+                title: task.title,
+                status: task.status,
+                kind: kind,
+                occurredAt: kind == UserActivityKind.taskCompleted
+                    ? task.completedAt ?? task.createdAt
+                    : task.createdAt,
+                task: task,
+              ),
+            );
+          }
 
-      return _sortActivities(activities);
-    });
+          return _visibleActivities(activities, membershipBoundary);
+        });
   }
 
   Stream<List<UserActivityEntry>> _proposalActivityStream(
     String gubId,
     String userId,
+    Timestamp membershipBoundary,
   ) {
     return ProposalRepository.instance
-        .profileActivityCandidatesStream(gubId)
+        .profileActivityCandidatesStream(
+          gubId,
+          membershipBoundary: membershipBoundary,
+        )
         .map(
-          (proposals) => _sortActivities([
+          (proposals) => _visibleActivities([
             for (final proposal in proposals)
               if (proposal.creatorId == userId)
                 UserActivityEntry(
@@ -246,18 +271,22 @@ class UserProfileService {
                   occurredAt: proposal.createdAt,
                   proposal: proposal,
                 ),
-          ]),
+          ], membershipBoundary),
         );
   }
 
   Stream<List<UserActivityEntry>> _eventActivityStream(
     String gubId,
     String userId,
+    Timestamp membershipBoundary,
   ) {
     return EventRepository.instance
-        .profileActivityCandidatesStream(gubId)
+        .profileActivityCandidatesStream(
+          gubId,
+          membershipBoundary: membershipBoundary,
+        )
         .map(
-          (events) => _sortActivities([
+          (events) => _visibleActivities([
             for (final event in events)
               if (event.creatorId == userId)
                 UserActivityEntry(
@@ -268,18 +297,22 @@ class UserProfileService {
                   occurredAt: event.createdAt,
                   event: event,
                 ),
-          ]),
+          ], membershipBoundary),
         );
   }
 
   Stream<List<UserActivityEntry>> _sharedBudgetActivityStream(
     String gubId,
     String userId,
+    Timestamp membershipBoundary,
   ) {
     return SharedBudgetRepository.instance
-        .profileActivityCandidatesStream(gubId)
+        .profileActivityCandidatesStream(
+          gubId,
+          membershipBoundary: membershipBoundary,
+        )
         .map(
-          (sharedBudgets) => _sortActivities([
+          (sharedBudgets) => _visibleActivities([
             for (final sharedBudget in sharedBudgets)
               if (sharedBudget.ownerId == userId)
                 UserActivityEntry(
@@ -290,7 +323,7 @@ class UserProfileService {
                   occurredAt: sharedBudget.createdAt,
                   sharedBudget: sharedBudget,
                 ),
-          ]),
+          ], membershipBoundary),
         );
   }
 
@@ -303,6 +336,17 @@ class UserProfileService {
     });
     return activities;
   }
+
+  List<UserActivityEntry> _visibleActivities(
+    List<UserActivityEntry> activities,
+    Timestamp membershipBoundary,
+  ) => _sortActivities(
+    activities
+        .where(
+          (activity) => activity.occurredAt.compareTo(membershipBoundary) >= 0,
+        )
+        .toList(growable: false),
+  );
 
   String? _firstNonEmptyString(List<Object?> values) {
     for (final value in values) {

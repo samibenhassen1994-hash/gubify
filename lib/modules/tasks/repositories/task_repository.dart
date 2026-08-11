@@ -161,9 +161,20 @@ class TaskRepository {
     });
   }
 
-  Stream<List<TaskModel>> tasksStream(String gubId) {
+  Stream<List<TaskModel>> tasksStream(
+    String gubId, {
+    required Timestamp membershipBoundary,
+  }) {
     return tasksCollection(gubId)
-        .orderBy("createdAt", descending: true)
+        .where(
+          Filter.or(
+            Filter('status', isEqualTo: 'active'),
+            Filter.and(
+              Filter('status', isEqualTo: 'completed'),
+              Filter('completedAt', isGreaterThanOrEqualTo: membershipBoundary),
+            ),
+          ),
+        )
         .snapshots()
         .map(
           (snapshot) => snapshot.docs
@@ -172,13 +183,10 @@ class TaskRepository {
         );
   }
 
-  Stream<List<TaskModel>> profileActivityCandidatesStream(String gubId) {
-    return tasksCollection(gubId).snapshots().map(
-      (snapshot) => snapshot.docs
-          .map((doc) => TaskModel.fromFirestore(doc.data()))
-          .toList(growable: false),
-    );
-  }
+  Stream<List<TaskModel>> profileActivityCandidatesStream(
+    String gubId, {
+    required Timestamp membershipBoundary,
+  }) => tasksStream(gubId, membershipBoundary: membershipBoundary);
 
   Future<void> unassignActiveTasksForMember({
     required String gubId,

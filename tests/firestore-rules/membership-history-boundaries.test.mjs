@@ -33,6 +33,10 @@ const db = (uid) => env.authenticatedContext(uid).firestore();
 const privateMessages = (uid) => collection(db(uid), 'gubs', 'g1', 'messages');
 const communityMessages = (uid) => collection(db(uid), 'communities', 'c1', 'messages');
 const posts = (uid) => collection(db(uid), 'gubs', 'g1', 'posts');
+const tasks = (uid) => collection(db(uid), 'gubs', 'g1', 'tasks');
+const proposals = (uid) => collection(db(uid), 'gubs', 'g1', 'proposals');
+const goals = (uid) => collection(db(uid), 'gubs', 'g1', 'goals');
+const events = (uid) => collection(db(uid), 'gubs', 'g1', 'events');
 
 before(async () => {
   env = await initializeTestEnvironment({
@@ -81,6 +85,17 @@ beforeEach(async () => {
       [['communities', 'c1', 'messages', 'new'], { messageId: 'new', communityId: 'c1', senderId: ids.communityMember, senderName: ids.communityMember, text: 'new', createdAt: afterJoin }],
       [['gubs', 'g1', 'posts', 'old'], { gubId: 'g1', authorId: ids.privateMember, authorName: ids.privateMember, authorPhoto: null, message: 'old', likes: 0, comments: 0, createdAt: beforeJoin, updatedAt: beforeJoin }],
       [['gubs', 'g1', 'posts', 'new'], { gubId: 'g1', authorId: ids.privateMember, authorName: ids.privateMember, authorPhoto: null, message: 'new', likes: 0, comments: 0, createdAt: afterJoin, updatedAt: afterJoin }],
+      [['gubs', 'g1', 'tasks', 'active'], { status: 'active', completedAt: null }],
+      [['gubs', 'g1', 'tasks', 'old'], { status: 'completed', completedAt: beforeJoin }],
+      [['gubs', 'g1', 'tasks', 'new'], { status: 'completed', completedAt: afterJoin }],
+      [['gubs', 'g1', 'proposals', 'active'], { status: 'voting', resolvedAt: null }],
+      [['gubs', 'g1', 'proposals', 'old'], { status: 'approved', resolvedAt: beforeJoin }],
+      [['gubs', 'g1', 'proposals', 'new'], { status: 'rejected', resolvedAt: afterJoin }],
+      [['gubs', 'g1', 'goals', 'active'], { status: 'active', archived: false, completedAt: null }],
+      [['gubs', 'g1', 'goals', 'old'], { status: 'completed', archived: false, completedAt: beforeJoin }],
+      [['gubs', 'g1', 'goals', 'new'], { status: 'completed', archived: false, completedAt: afterJoin }],
+      [['gubs', 'g1', 'events', 'past'], { eventDate: beforeJoin }],
+      [['gubs', 'g1', 'events', 'future'], { eventDate: new Date('2030-01-01T00:00:00Z') }],
     ]) {
       batch.set(doc(database, ...path), data);
     }
@@ -129,5 +144,24 @@ describe('production membership history boundaries', () => {
       messageId: 'sent', communityId: 'c1', senderId: ids.communityMember,
       senderName: ids.communityMember, text: 'sent', createdAt: serverTimestamp(),
     }));
+  });
+
+  test('collaborative state exposes current items and only bounded history', async () => {
+    await assertSucceeds(getDocs(query(tasks(ids.privateMember), where('status', '==', 'active'))));
+    await assertSucceeds(getDocs(query(tasks(ids.privateMember), where('status', '==', 'completed'), where('completedAt', '>=', joinedAt))));
+    await assertFails(getDoc(doc(db(ids.privateMember), 'gubs', 'g1', 'tasks', 'old')));
+    await assertSucceeds(getDoc(doc(db(ids.privateMember), 'gubs', 'g1', 'tasks', 'new')));
+
+    await assertSucceeds(getDocs(query(proposals(ids.privateMember), where('status', '==', 'voting'))));
+    await assertSucceeds(getDocs(query(proposals(ids.privateMember), where('status', '==', 'approved'), where('resolvedAt', '>=', joinedAt))));
+    await assertFails(getDoc(doc(db(ids.privateMember), 'gubs', 'g1', 'proposals', 'old')));
+
+    await assertSucceeds(getDocs(query(goals(ids.privateMember), where('status', '==', 'active'), where('archived', '==', false))));
+    await assertSucceeds(getDocs(query(goals(ids.privateMember), where('status', '==', 'completed'), where('completedAt', '>=', joinedAt))));
+    await assertFails(getDoc(doc(db(ids.privateMember), 'gubs', 'g1', 'goals', 'old')));
+
+    await assertFails(getDoc(doc(db(ids.privateMember), 'gubs', 'g1', 'events', 'past')));
+    await assertSucceeds(getDoc(doc(db(ids.privateMember), 'gubs', 'g1', 'events', 'future')));
+    await assertFails(getDocs(query(events(ids.outsider), where('eventDate', '>=', joinedAt))));
   });
 });

@@ -162,21 +162,35 @@ class SharedBudgetRepository {
   }
 
   /// Stream degli Shared Budget non archiviati
-  Stream<List<SharedBudgetModel>> sharedBudgetsStream(String gubId) {
-    return sharedBudgetsCollection(gubId).snapshots().map(
-      (snapshot) => _sharedBudgetsFromDocs(
-        snapshot.docs,
-      ).where((sharedBudget) => !sharedBudget.archived).toList(growable: false),
-    );
+  Stream<List<SharedBudgetModel>> sharedBudgetsStream(
+    String gubId, {
+    required Timestamp membershipBoundary,
+  }) {
+    return sharedBudgetsCollection(gubId)
+        .where(
+          Filter.or(
+            Filter.and(
+              Filter('status', isEqualTo: 'active'),
+              Filter('archived', isEqualTo: false),
+            ),
+            Filter.and(
+              Filter('status', isEqualTo: 'completed'),
+              Filter('completedAt', isGreaterThanOrEqualTo: membershipBoundary),
+            ),
+          ),
+        )
+        .snapshots()
+        .map(
+          (snapshot) => _sharedBudgetsFromDocs(snapshot.docs)
+              .where((sharedBudget) => !sharedBudget.archived)
+              .toList(growable: false),
+        );
   }
 
   Stream<List<SharedBudgetModel>> profileActivityCandidatesStream(
-    String gubId,
-  ) {
-    return sharedBudgetsCollection(
-      gubId,
-    ).snapshots().map((snapshot) => _sharedBudgetsFromDocs(snapshot.docs));
-  }
+    String gubId, {
+    required Timestamp membershipBoundary,
+  }) => sharedBudgetsStream(gubId, membershipBoundary: membershipBoundary);
 
   /// Restituisce lo Shared Budget attivo (Future)
   Future<SharedBudgetModel?> getActiveSharedBudget(String gubId) async {
@@ -196,7 +210,7 @@ class SharedBudgetRepository {
 
   /// Stream degli Shared Budget attivi
   Stream<List<SharedBudgetModel>> activeSharedBudgetsStream(String gubId) {
-    return sharedBudgetsStream(gubId).map(
+    return sharedBudgetsStream(gubId, membershipBoundary: Timestamp(0, 0)).map(
       (sharedBudgets) => sharedBudgets
           .where((sharedBudget) => !sharedBudget.isCompleted)
           .toList(growable: false),
@@ -204,7 +218,7 @@ class SharedBudgetRepository {
   }
 
   Stream<List<SharedBudgetModel>> completedSharedBudgetsStream(String gubId) {
-    return sharedBudgetsStream(gubId).map(
+    return sharedBudgetsStream(gubId, membershipBoundary: Timestamp(0, 0)).map(
       (sharedBudgets) => sharedBudgets
           .where((sharedBudget) => sharedBudget.isCompleted)
           .toList(growable: false),

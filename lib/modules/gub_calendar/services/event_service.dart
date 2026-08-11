@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import '../../../repositories/gub_repository.dart';
+import '../../../services/gub_service.dart';
 import '../../proposals/models/proposal_model.dart';
 import '../../proposals/repositories/proposal_repository.dart';
 import '../models/event_model.dart';
@@ -13,7 +14,17 @@ class EventService {
   static final EventService instance = EventService._();
 
   Stream<List<EventModel>> eventsStream(String gubId) =>
-      EventRepository.instance.eventsStream(gubId);
+      Stream.fromFuture(
+        GubService().currentMembershipHistoryBoundary(gubId),
+      ).asyncExpand((boundary) {
+        if (boundary?.membershipStartedAt case final timestamp?) {
+          return EventRepository.instance.eventsStream(
+            gubId,
+            membershipBoundary: timestamp,
+          );
+        }
+        return Stream.value(const <EventModel>[]);
+      });
 
   Stream<EventModel?> eventStream({
     required String gubId,

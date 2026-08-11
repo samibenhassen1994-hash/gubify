@@ -168,10 +168,20 @@ async function markGubDeleting(id = 'g1', ownerId = uid.ownerGub, overrides = {}
 async function deleteCollection(clientDb, path) {
   while (true) {
     const collectionReference = collection(clientDb, ...path);
-    const historicalCollection = path.at(-1) === 'messages' || path.at(-1) === 'posts';
-    const snapshot = await getDocs(historicalCollection
-      ? query(collectionReference, where('createdAt', '>=', ts()))
-      : collectionReference);
+    const collectionName = path.at(-1);
+    const snapshot = await getDocs(
+      collectionName === 'messages' || collectionName === 'posts'
+        ? query(collectionReference, where('createdAt', '>=', ts()))
+        : collectionName === 'tasks'
+        ? query(collectionReference, where('status', '==', 'active'))
+        : collectionName === 'proposals'
+        ? query(collectionReference, where('status', '==', 'voting'))
+        : collectionName === 'goals'
+        ? query(collectionReference, where('status', '==', 'active'), where('archived', '==', false))
+        : collectionName === 'events'
+        ? query(collectionReference, where('eventDate', '>=', ts()))
+        : collectionReference,
+    );
     if (snapshot.empty) return;
     const batch = writeBatch(clientDb);
     for (const item of snapshot.docs) batch.delete(item.ref);
@@ -185,7 +195,12 @@ async function cleanupGub(clientDb, id = 'g1') {
   await updateDoc(rootRef, { deletionMemberIds: memberIds });
   await updateDoc(rootRef, { deletionPhase: 'preparing', deletionUpdatedAt: serverTimestamp() });
   for (const [parents, children] of [['proposals', 'votes'], ['goals', 'members']]) {
-    const parentSnapshot = await getDocs(collection(clientDb, 'gubs', id, parents));
+    const parentCollection = collection(clientDb, 'gubs', id, parents);
+    const parentSnapshot = await getDocs(
+      parents === 'proposals'
+        ? query(parentCollection, where('status', '==', 'voting'))
+        : query(parentCollection, where('status', '==', 'active'), where('archived', '==', false)),
+    );
     for (const parent of parentSnapshot.docs) await deleteCollection(clientDb, ['gubs', id, parents, parent.id, children]);
     const batch = writeBatch(clientDb); for (const parent of parentSnapshot.docs) batch.delete(parent.ref); await batch.commit();
   }

@@ -12,10 +12,12 @@ import {
   getDoc,
   getDocs,
   runTransaction,
+  query,
   serverTimestamp,
   setDoc,
   updateDoc,
   writeBatch,
+  where,
 } from 'firebase/firestore';
 
 const projectId = 'demo-gubify';
@@ -368,7 +370,7 @@ describe('Calendar Events created from Proposals', () => {
   });
   test('member reads Calendar; outsider cannot read or create', async () => {
     await seed(['gubs', 'g1', 'events', 'event1'], calendarEventData());
-    await assertSucceeds(getDocs(collection(db(uid.secondMember), 'gubs', 'g1', 'events')));
+    await assertSucceeds(getDocs(query(collection(db(uid.secondMember), 'gubs', 'g1', 'events'), where('eventDate', '>=', timestamp()))));
     await assertFails(getDocs(collection(db(uid.outsider), 'gubs', 'g1', 'events')));
     await assertFails(setDoc(doc(db(uid.outsider), 'gubs', 'g1', 'events', 'out'), calendarEventData('out', { creatorId: uid.outsider, creatorName: uid.outsider })));
   });
@@ -522,7 +524,7 @@ describe('Proposals, votes, and client aggregates', () => {
   });
   test('mathematically valid result transition and eventCreated flag are allowed only on approved Proposal', async () => {
     await seed(['gubs', 'g1', 'proposals', 'proposal1'], proposalData('proposal1', uid.creatorTask, { yesVotes: 3, noVotes: 0 }));
-    await assertSucceeds(updateDoc(doc(db(uid.assigneeTask), 'gubs', 'g1', 'proposals', 'proposal1'), { ...proposalData('proposal1', uid.creatorTask, { yesVotes: 3, noVotes: 0 }), status: 'approved', resultProcessed: true }));
+    await assertSucceeds(updateDoc(doc(db(uid.assigneeTask), 'gubs', 'g1', 'proposals', 'proposal1'), { ...proposalData('proposal1', uid.creatorTask, { yesVotes: 3, noVotes: 0 }), status: 'approved', resultProcessed: true, resolvedAt: serverTimestamp() }));
     await assertSucceeds(updateDoc(doc(db(uid.assigneeTask), 'gubs', 'g1', 'proposals', 'proposal1'), { eventCreated: true }));
   });
   test('creator and owner soft-delete Proposal with cooldown; unauthorized member fails', async () => {

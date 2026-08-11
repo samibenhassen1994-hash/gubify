@@ -18,6 +18,7 @@ class ProposalModel {
 
   final Timestamp createdAt;
   final Timestamp expiresAt;
+  final Timestamp? resolvedAt;
 
   /// Data dell'evento che verrà creato se approvata
   final Timestamp? eventDate;
@@ -61,6 +62,7 @@ class ProposalModel {
 
     required this.createdAt,
     required this.expiresAt,
+    this.resolvedAt,
 
     this.eventDate,
 
@@ -99,6 +101,7 @@ class ProposalModel {
 
       createdAt: createdAt is Timestamp ? createdAt : Timestamp(0, 0),
       expiresAt: expiresAt is Timestamp ? expiresAt : Timestamp(0, 0),
+      resolvedAt: json['resolvedAt'] as Timestamp?,
 
       eventDate: json["eventDate"] as Timestamp?,
 
@@ -136,6 +139,7 @@ class ProposalModel {
 
       "createdAt": createdAt,
       "expiresAt": expiresAt,
+      "resolvedAt": resolvedAt,
 
       "eventDate": eventDate,
 
@@ -160,6 +164,7 @@ class ProposalModel {
   ProposalModel copyWith({
     String? gubId,
     String? status,
+    Timestamp? resolvedAt,
     int? yesVotes,
     int? noVotes,
     bool? resultProcessed,
@@ -185,6 +190,7 @@ class ProposalModel {
 
       createdAt: createdAt,
       expiresAt: expiresAt,
+      resolvedAt: resolvedAt ?? this.resolvedAt,
 
       eventDate: eventDate,
 
