@@ -27,19 +27,24 @@ class NotificationRepository {
   }
 
   Stream<QuerySnapshot<Map<String, dynamic>>> notificationsStream(
-    String gubId,
-  ) {
-    return notificationsCollection(
-      gubId,
-    ).orderBy("createdAt", descending: true).snapshots();
+    String gubId, {
+    required Timestamp membershipBoundary,
+  }) {
+    return notificationsCollection(gubId)
+        .where('createdAt', isGreaterThanOrEqualTo: membershipBoundary)
+        .orderBy("createdAt", descending: true)
+        .snapshots();
   }
 
   Future<void> markAllAsRead({
     required String gubId,
     required String uid,
+    required Timestamp membershipBoundary,
   }) async {
     await GubRepository.instance.ensureActive(gubId);
-    final snapshot = await notificationsCollection(gubId).get();
+    final snapshot = await notificationsCollection(
+      gubId,
+    ).where('createdAt', isGreaterThanOrEqualTo: membershipBoundary).get();
 
     final batch = _firestore.batch();
 

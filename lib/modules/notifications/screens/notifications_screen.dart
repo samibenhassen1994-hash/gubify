@@ -9,6 +9,7 @@ import '../../../widgets/gub_content_card.dart';
 import '../../../widgets/gub_screen_background.dart';
 import '../models/notification_model.dart';
 import '../repositories/notification_repository.dart';
+import '../services/notification_service.dart';
 
 class NotificationsScreen extends StatefulWidget {
   final String gubId;
@@ -30,7 +31,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       final user = FirebaseAuth.instance.currentUser;
 
       if (user != null) {
-        NotificationRepository.instance.markAllAsRead(
+        NotificationService.instance.markAllAsRead(
           gubId: widget.gubId,
           uid: user.uid,
         );
@@ -54,7 +55,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           scrolledUnderElevation: 0,
         ),
         body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-          stream: NotificationRepository.instance.notificationsStream(
+          stream: NotificationService.instance.notificationsStream(
             widget.gubId,
           ),
           builder: (context, snapshot) {
