@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import '../../../repositories/user_repository.dart';
@@ -14,18 +15,41 @@ class ChatService {
 
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
-  Stream<List<ChatMessageModel>> messagesStream(String gubId) {
-    return ChatRepository.instance.messagesStream(gubId);
-  }
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+
+  Stream<List<ChatMessageModel>> messagesStream(String gubId) =>
+      Stream.fromFuture(_membershipBoundary(gubId)).asyncExpand((boundary) {
+        if (boundary == null) return Stream.value(const <ChatMessageModel>[]);
+        return ChatRepository.instance.messagesStream(
+          gubId: gubId,
+          membershipBoundary: boundary,
+        );
+      });
 
   Future<ChatMessageModel?> getMessage({
     required String gubId,
     required String messageId,
-  }) {
+  }) async {
+    final boundary = await _membershipBoundary(gubId);
+    if (boundary == null) return null;
     return ChatRepository.instance.getMessage(
       gubId: gubId,
       messageId: messageId,
+      membershipBoundary: boundary,
     );
+  }
+
+  Future<Timestamp?> _membershipBoundary(String gubId) async {
+    final user = _auth.currentUser;
+    if (user == null) return null;
+    final membership = await _firestore
+        .collection('gubs')
+        .doc(gubId)
+        .collection('members')
+        .doc(user.uid)
+        .get(const GetOptions(source: Source.server));
+    final joinedAt = membership.data()?['joinedAt'];
+    return membership.exists && joinedAt is Timestamp ? joinedAt : null;
   }
 
   Future<void> sendMessage({

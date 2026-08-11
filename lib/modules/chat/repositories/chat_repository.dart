@@ -38,8 +38,12 @@ class ChatRepository {
     await messageReference.set(data);
   }
 
-  Stream<List<ChatMessageModel>> messagesStream(String gubId) {
+  Stream<List<ChatMessageModel>> messagesStream({
+    required String gubId,
+    required Timestamp membershipBoundary,
+  }) {
     return messagesCollection(gubId)
+        .where('createdAt', isGreaterThanOrEqualTo: membershipBoundary)
         .orderBy("createdAt", descending: true)
         .limit(_messageLimit)
         .snapshots()
@@ -60,6 +64,7 @@ class ChatRepository {
   Future<ChatMessageModel?> getMessage({
     required String gubId,
     required String messageId,
+    required Timestamp membershipBoundary,
   }) async {
     final document = await messagesCollection(gubId).doc(messageId).get();
     if (!document.exists) return null;

@@ -708,7 +708,10 @@ describe('Gub chat, read states, and Board', () => {
   });
   test('member can read messages; outsider and anonymous cannot', async () => {
     await env.withSecurityRulesDisabled(async (context) => setDoc(doc(context.firestore(), 'gubs', 'g1', 'messages', 'm1'), { ...gubMessage('m1', ids.ownerGub), createdAt: new Date() }));
-    await assertSucceeds(getDocs(collection(db(ids.memberGub), 'gubs', 'g1', 'messages')));
+    await assertSucceeds(getDocs(query(
+      collection(db(ids.memberGub), 'gubs', 'g1', 'messages'),
+      where('createdAt', '>=', new Date('2026-01-01T00:00:00Z')),
+    )));
     await assertFails(getDocs(collection(db(ids.outsider), 'gubs', 'g1', 'messages')));
     await assertFails(getDocs(collection(anonymousDb(), 'gubs', 'g1', 'messages')));
   });
@@ -823,7 +826,10 @@ describe('Community chat', () => {
     await assertSucceeds(setDoc(doc(db(ids.memberCommunity), 'communities', 'c1', 'messages', 'm-member'), communityMessage('m-member', ids.memberCommunity)));
   });
   test('member can read Community chat; public outsider and anonymous cannot', async () => {
-    await assertSucceeds(getDocs(collection(db(ids.memberCommunity), 'communities', 'c1', 'messages')));
+    await assertSucceeds(getDocs(query(
+      collection(db(ids.memberCommunity), 'communities', 'c1', 'messages'),
+      where('createdAt', '>=', new Date('2026-01-01T00:00:00Z')),
+    )));
     await assertFails(getDocs(collection(db(ids.communityOutsider), 'communities', 'c1', 'messages')));
     await assertFails(getDocs(collection(anonymousDb(), 'communities', 'c1', 'messages')));
   });

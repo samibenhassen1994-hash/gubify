@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import '../../../config/app_limits.dart';
@@ -15,8 +16,33 @@ class CommunityChatService {
 
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
-  Stream<List<CommunityChatMessageModel>> messagesStream(String communityId) {
-    return CommunityChatRepository.instance.messagesStream(communityId);
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+
+  Stream<List<CommunityChatMessageModel>> messagesStream(String communityId) =>
+      Stream.fromFuture(_membershipBoundary(communityId)).asyncExpand((
+        boundary,
+      ) {
+        if (boundary == null) {
+          return Stream.value(const <CommunityChatMessageModel>[]);
+        }
+        return CommunityChatRepository.instance.messagesStream(
+          communityId: communityId,
+          membershipBoundary: boundary,
+        );
+      });
+
+  Future<Timestamp?> _membershipBoundary(String communityId) async {
+    final user = _auth.currentUser;
+    if (user == null) return null;
+
+    final membership = await _firestore
+        .collection('communities')
+        .doc(communityId)
+        .collection('members')
+        .doc(user.uid)
+        .get(const GetOptions(source: Source.server));
+    final joinedAt = membership.data()?['joinedAt'];
+    return membership.exists && joinedAt is Timestamp ? joinedAt : null;
   }
 
   Future<void> sendMessage({

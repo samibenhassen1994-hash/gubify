@@ -8,6 +8,32 @@ class ChatReadRepository {
 
   static final ChatReadRepository instance = ChatReadRepository._();
 
+  static Timestamp effectiveUnreadAfter({
+    required Timestamp membershipBoundary,
+    Timestamp? lastReadAt,
+  }) {
+    if (lastReadAt == null) return membershipBoundary;
+    if (lastReadAt.seconds > membershipBoundary.seconds ||
+        (lastReadAt.seconds == membershipBoundary.seconds &&
+            lastReadAt.nanoseconds >= membershipBoundary.nanoseconds)) {
+      return lastReadAt;
+    }
+    return membershipBoundary;
+  }
+
+  static bool shouldCountUnreadMessage({
+    required Object? createdAt,
+    required Object? senderId,
+    required String userId,
+    required Timestamp unreadAfter,
+  }) {
+    if (createdAt is! Timestamp || senderId == userId) return false;
+
+    return createdAt.seconds > unreadAfter.seconds ||
+        (createdAt.seconds == unreadAfter.seconds &&
+            createdAt.nanoseconds > unreadAfter.nanoseconds);
+  }
+
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   DocumentReference<Map<String, dynamic>> chatReadDocument({
@@ -36,6 +62,7 @@ class ChatReadRepository {
   Stream<int> unreadCountStream({
     required String gubId,
     required String userId,
+    required Timestamp membershipBoundary,
   }) {
     StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>?
     readSubscription;
@@ -67,9 +94,13 @@ class ChatReadRepository {
           .collection("messages")
           .orderBy("createdAt");
 
-      if (lastReadAt != null) {
-        query = query.where("createdAt", isGreaterThan: lastReadAt);
-      }
+      query = query.where(
+        "createdAt",
+        isGreaterThan: effectiveUnreadAfter(
+          membershipBoundary: membershipBoundary,
+          lastReadAt: lastReadAt,
+        ),
+      );
 
       messagesSubscription = query.snapshots().listen(
         (snapshot) {
@@ -82,7 +113,15 @@ class ChatReadRepository {
             final createdAt = data["createdAt"];
             final senderId = data["senderId"];
 
-            if (createdAt is Timestamp && senderId != userId) {
+            if (shouldCountUnreadMessage(
+              createdAt: createdAt,
+              senderId: senderId,
+              userId: userId,
+              unreadAfter: effectiveUnreadAfter(
+                membershipBoundary: membershipBoundary,
+                lastReadAt: lastReadAt,
+              ),
+            )) {
               unreadCount++;
             }
           }

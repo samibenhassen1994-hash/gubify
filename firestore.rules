@@ -832,7 +832,9 @@ service cloud.firestore {
         allow delete: if isGubOwner(id);
       }
       match /messages/{messageId} {
-        allow read: if isGubMember(id) || gubDeletingOwner(id);
+        allow read: if gubDeletingOwner(id);
+        allow read: if isGubMember(id)
+          && resource.data.createdAt >= get(/databases/$(database)/documents/gubs/$(id)/members/$(request.auth.uid)).data.joinedAt;
         allow create: if isGubMember(id) && gubActive(id)
           && request.resource.data.keys().hasOnly(['messageId','gubId','senderId','senderName','text','createdAt'])
           && request.resource.data.messageId == messageId
@@ -1013,7 +1015,9 @@ service cloud.firestore {
         allow delete: if isCommunityOwner(id);
       }
       match /messages/{messageId} {
-        allow read: if isCommunityMember(id) || communityDeletingOwner(id);
+        allow read: if communityDeletingOwner(id);
+        allow read: if isCommunityMember(id)
+          && resource.data.createdAt >= get(/databases/$(database)/documents/communities/$(id)/members/$(request.auth.uid)).data.joinedAt;
         allow create: if isCommunityMember(id) && communityActive(id)
           && request.resource.data.keys().hasOnly(['messageId','communityId','senderId','senderName','text','createdAt'])
           && request.resource.data.messageId == messageId
