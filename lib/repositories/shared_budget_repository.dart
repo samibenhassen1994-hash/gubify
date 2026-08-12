@@ -64,6 +64,12 @@ class SharedBudgetRepository {
 
     for (final sharedBudget in sharedBudgets.docs) {
       final sharedBudgetId = sharedBudget.id;
+      final sharedBudgetData = sharedBudget.data();
+      if (sharedBudgetData['status'] != 'active' ||
+          sharedBudgetData['archived'] == true ||
+          _isDeleted(sharedBudgetData)) {
+        continue;
+      }
 
       final memberRef = sharedBudgetsCollection(
         gubId,
@@ -71,7 +77,7 @@ class SharedBudgetRepository {
 
       final memberDoc = await memberRef.get();
 
-      if (memberDoc.exists) {
+      if (memberDoc.exists && memberDoc.data()?['confirmed'] != true) {
         await memberRef.delete();
 
         await recalculateSharedBudgetProgress(

@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../screens/gub/my_gubs_screen.dart';
+import '../repositories/gub_invite_repository.dart';
 
 class GubAccessGuard extends StatefulWidget {
   final String gubId;
@@ -41,6 +42,8 @@ class _GubAccessGuardState extends State<GubAccessGuard> {
   ) async {
     if (snapshot.exists) return;
 
+    final uid = FirebaseAuth.instance.currentUser!.uid;
+
     if (_dialogShown) return;
 
     final gub = await FirebaseFirestore.instance
@@ -51,9 +54,11 @@ class _GubAccessGuardState extends State<GubAccessGuard> {
       return;
     }
 
+    final banned = await GubInviteRepository().isUserBanned(
+      gubId: widget.gubId,
+      userId: uid,
+    );
     _dialogShown = true;
-
-    final uid = FirebaseAuth.instance.currentUser!.uid;
 
     // Elimina eventuale riferimento rimasto
     await FirebaseFirestore.instance
@@ -71,7 +76,11 @@ class _GubAccessGuardState extends State<GubAccessGuard> {
           barrierDismissible: false,
           builder: (_) => AlertDialog(
             title: const Text("Removed from Hub"),
-            content: const Text("An administrator removed you from this Hub."),
+            content: Text(
+              banned
+                  ? 'You were banned from this Gub by an administrator.'
+                  : 'An administrator removed you from this Hub.',
+            ),
             actions: [
               FilledButton(
                 onPressed: () {

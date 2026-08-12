@@ -8,7 +8,7 @@ import '../../../core/navigation/notification_router.dart';
 import '../../../widgets/gub_content_card.dart';
 import '../../../widgets/gub_screen_background.dart';
 import '../models/notification_model.dart';
-import '../repositories/notification_repository.dart';
+import '../services/notification_service.dart';
 
 class NotificationsScreen extends StatefulWidget {
   final String gubId;
@@ -27,14 +27,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     super.initState();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final user = FirebaseAuth.instance.currentUser;
-
-      if (user != null) {
-        NotificationRepository.instance.markAllAsRead(
-          gubId: widget.gubId,
-          uid: user.uid,
-        );
-      }
+      NotificationService.instance.markAllAsRead(widget.gubId);
     });
   }
 
@@ -53,8 +46,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           elevation: 0,
           scrolledUnderElevation: 0,
         ),
-        body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-          stream: NotificationRepository.instance.notificationsStream(
+        body: StreamBuilder<List<NotificationModel>>(
+          stream: NotificationService.instance.notificationsStream(
             widget.gubId,
           ),
           builder: (context, snapshot) {
@@ -85,14 +78,15 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               );
             }
 
-            final notifications = snapshot.data!.docs.where((doc) {
-              final data = doc.data();
-              if (!NotificationModel.targetsUser(data, currentUser.uid)) {
+            final notifications = snapshot.data!.where((notification) {
+              if (!NotificationModel.targetsUser({
+                "data": notification.data,
+              }, currentUser.uid)) {
                 return false;
               }
 
-              final String type = data["type"] ?? "";
-              final String senderId = data["senderId"] ?? "";
+              final type = notification.type;
+              final senderId = notification.senderId;
 
               // Le notifiche di esito devono essere visibili a tutti,
               // compreso il creatore della proposta.
@@ -121,8 +115,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               itemCount: notifications.length,
               itemBuilder: (context, index) {
                 final notification = notifications[index];
-                final data = notification.data();
-                final isOpening = _openingNotificationId == notification.id;
+                final isOpening =
+                    _openingNotificationId == notification.notificationId;
 
                 return Card(
                   color: Colors.white,
@@ -130,22 +124,19 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   child: ListTile(
                     onTap: _openingNotificationId != null
                         ? null
-                        : () => _openNotification(
-                            notification: notification,
-                            uid: currentUser.uid,
-                          ),
+                        : () => _openNotification(notification: notification),
                     leading: const CircleAvatar(
                       child: Icon(Icons.notifications),
                     ),
-                    title: Text(data["title"] ?? ""),
-                    subtitle: Text(data["body"] ?? ""),
+                    title: Text(notification.title),
+                    subtitle: Text(notification.body),
                     trailing: isOpening
                         ? const SizedBox.square(
                             dimension: 18,
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
                         : Text(
-                            _formatDate(data["createdAt"]),
+                            _formatDate(notification.createdAt),
                             style: const TextStyle(
                               fontSize: 11,
                               color: Colors.grey,
@@ -162,17 +153,17 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 
   Future<void> _openNotification({
-    required QueryDocumentSnapshot<Map<String, dynamic>> notification,
-    required String uid,
+    required NotificationModel notification,
   }) async {
     if (_openingNotificationId != null) return;
 
-    setState(() => _openingNotificationId = notification.id);
+    setState(() => _openingNotificationId = notification.notificationId);
 
-    final documentData = notification.data();
-    final routingData = Map<String, dynamic>.from(
-      documentData["data"] ?? const <String, dynamic>{},
-    );
+    final routingData = Map<String, dynamic>.from(notification.data);
+    final documentData = <String, dynamic>{
+      "type": notification.type,
+      "gubId": widget.gubId,
+    };
 
     for (final key in const [
       "type",
@@ -193,10 +184,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     }
 
     try {
-      await NotificationRepository.instance.markAsRead(
+      await NotificationService.instance.markAsRead(
         gubId: widget.gubId,
-        notificationId: notification.id,
-        uid: uid,
+        notificationId: notification.notificationId,
       );
     } catch (error, stackTrace) {
       developer.log(

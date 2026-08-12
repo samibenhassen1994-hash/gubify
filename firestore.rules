@@ -15,6 +15,7 @@ service cloud.firestore {
     function gubDoc(id) { return get(gubPath(id)); }
     function gubAfter(id) { return getAfter(gubPath(id)); }
     function gubMemberPath(id, uid) { return /databases/$(database)/documents/gubs/$(id)/members/$(uid); }
+    function gubBanPath(id, uid) { return /databases/$(database)/documents/gubs/$(id)/bans/$(uid); }
     function userGubPath(uid, id) { return /databases/$(database)/documents/users/$(uid)/gubs/$(id); }
     function inviteTokenPath(code) { return /databases/$(database)/documents/inviteTokens/$(code); }
     function isGubMember(id) { return signedIn() && exists(gubMemberPath(id, request.auth.uid)); }
@@ -114,6 +115,7 @@ service cloud.firestore {
       let token = get(inviteTokenPath(member.joinedViaInviteToken)).data;
       return exists(gubPath(id))
         && !exists(gubMemberPath(id, uid))
+        && !exists(gubBanPath(id, uid))
         && gubActive(id)
         && gubAfter(id).data.diff(gubDoc(id).data).affectedKeys().hasOnly(['memberCount'])
         && gubAfter(id).data.memberCount == gubDoc(id).data.memberCount + 1
@@ -171,6 +173,26 @@ service cloud.firestore {
         && request.resource.data.active == false
         && afterRoot.deletionStatus == 'deleting'
         && afterRoot.deletionRequestedBy == request.auth.uid;
+    }
+    function validInviteRegeneration(id) {
+      let root = gubDoc(id).data;
+      let afterRoot = gubAfter(id).data;
+      let oldCode = root.inviteTokenId;
+      let newCode = afterRoot.inviteTokenId;
+      return isGubOwner(id) && gubActive(id)
+        && afterRoot.diff(root).affectedKeys().hasOnly(['inviteTokenId','inviteRegeneratedAt'])
+        && validInviteTokenCode(newCode) && newCode != oldCode
+        && afterRoot.inviteRegeneratedAt == request.time
+        && (!root.keys().hasAny(['inviteRegeneratedAt'])
+          || request.time >= root.inviteRegeneratedAt + duration.value(60, 's'))
+        && existsAfter(inviteTokenPath(newCode));
+    }
+    function validInviteTokenRegeneration(code) {
+      let data = resource.data;
+      return signedIn() && data.ownerId == request.auth.uid && data.active == true
+        && request.resource.data.diff(data).affectedKeys().hasOnly(['active'])
+        && request.resource.data.active == false
+        && validInviteRegeneration(data.gubId);
     }
     function inviteTokenRevokedAfter(id, code) {
       return !existsAfter(inviteTokenPath(code))
@@ -243,6 +265,16 @@ service cloud.firestore {
         && (resource.data.assignedUserId == null
           || resource.data.assignedUserId == ''
           || resource.data.assignedUserId == request.auth.uid);
+    }
+    function validTaskSelfUnassignment(id) {
+      return isGubMember(id) && gubActive(id)
+        && resource.data.status == 'active'
+        && resource.data.assignedUserId == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'assignedUserId','assignedUserName'
+        ])
+        && request.resource.data.assignedUserId == null
+        && request.resource.data.assignedUserName == null;
     }
 
     function validCalendarEventCreate(id, eventId) {
@@ -428,6 +460,18 @@ service cloud.firestore {
             && request.resource.data.currentAmount == resource.data.targetAmount
             && request.resource.data.completedAt is timestamp));
     }
+    function validGoalMemberDepartureProgress(id, goalId) {
+      return signedIn() && isGubMember(id) && gubActive(id)
+        && resource.data.status == 'active' && resource.data.archived == false
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'currentAmount','completedMembers','totalMembers'
+        ])
+        && request.resource.data.currentAmount == resource.data.currentAmount
+        && request.resource.data.completedMembers == resource.data.completedMembers
+        && request.resource.data.totalMembers == resource.data.totalMembers - 1
+        && request.resource.data.totalMembers >= 0
+        && !exists(goalMemberPath(id, goalId, request.auth.uid));
+    }
 
     function validSoftDelete(id, creatorId, moduleType, itemId) {
       return gubActive(id) && (request.auth.uid == creatorId || isGubOwner(id))
@@ -523,10 +567,16 @@ service cloud.firestore {
     function communityDoc(id) { return get(communityPath(id)); }
     function communityAfter(id) { return getAfter(communityPath(id)); }
     function communityMemberPath(id, uid) { return /databases/$(database)/documents/communities/$(id)/members/$(uid); }
+    function communityBanPath(id, uid) { return /databases/$(database)/documents/communities/$(id)/bans/$(uid); }
     function userCommunityPath(uid, id) { return /databases/$(database)/documents/users/$(uid)/communities/$(id); }
     function communityJoinRequestPath(id, uid) { return /databases/$(database)/documents/communities/$(id)/joinRequests/$(uid); }
     function communityMembershipMutationPath(id) { return /databases/$(database)/documents/communities/$(id)/membershipMutations/current; }
     function ownershipPath(uid) { return /databases/$(database)/documents/communityOwnership/$(uid); }
+    function communityOwnerRemovingMember(id, uid) {
+      return isCommunityOwner(id) && uid != request.auth.uid
+        && exists(communityMemberPath(id, uid))
+        && !existsAfter(communityMemberPath(id, uid));
+    }
     function isCommunityMember(id) { return signedIn() && exists(communityMemberPath(id, request.auth.uid)); }
     function isCommunityOwner(id) { return signedIn() && communityDoc(id).data.ownerId == request.auth.uid; }
     function communityActive(id) { return communityDoc(id).data.get('deletionStatus', 'active') != 'deleting'; }
@@ -586,6 +636,7 @@ service cloud.firestore {
     function validCommunityJoin(id, uid) {
       return exists(communityPath(id))
         && !exists(communityMemberPath(id, uid))
+        && !exists(communityBanPath(id, uid))
         && communityActive(id)
         && communityDoc(id).data.visibility == 'public'
         && communityDoc(id).data.get('accessMode','approval') == 'open'
@@ -643,6 +694,7 @@ service cloud.firestore {
     function validCommunityApprovalMember(id, uid) {
       let member = getAfter(communityMemberPath(id, uid));
       return !exists(communityMemberPath(id, uid))
+        && !exists(communityBanPath(id, uid))
         && validCommunityMemberData(member.data, uid, 'member')
         && member.data.displayName == get(communityJoinRequestPath(id, uid)).data.displayName
         && member.data.joinedAt == request.time;
@@ -693,7 +745,8 @@ service cloud.firestore {
           ))
           || (validCommunityApprovalSignal(id, uid)
             && validCommunityCopyData(request.resource.data, id, uid, 'member'));
-        allow delete: if own(uid) || communityDeletingOwner(id);
+        allow delete: if own(uid) || communityDeletingOwner(id)
+          || communityOwnerRemovingMember(id, uid);
       }
     }
 
@@ -702,7 +755,8 @@ service cloud.firestore {
       allow list: if false;
       allow create: if !exists(inviteTokenPath(canonicalCode))
         && validInviteTokenCreate(canonicalCode);
-      allow update: if validInviteTokenRevocation(canonicalCode);
+      allow update: if validInviteTokenRevocation(canonicalCode)
+        || validInviteTokenRegeneration(canonicalCode);
       allow delete: if gubDeletingOwner(resource.data.gubId)
         && resource.data.ownerId == request.auth.uid
         && resource.data.gubName == gubDoc(resource.data.gubId).data.name
@@ -716,12 +770,17 @@ service cloud.firestore {
         && validGubOwnerMember(id, request.auth.uid)
         && validGubMemberAndCopy(id, request.auth.uid, 'owner');
       allow update: if (
-        (signedIn() && gubActive(id) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memberCount'])
+        validInviteRegeneration(id)
+        || (signedIn() && gubActive(id) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memberCount'])
           && (request.resource.data.memberCount == resource.data.memberCount + 1
             || request.resource.data.memberCount == resource.data.memberCount - 1)
           && ((request.resource.data.memberCount == resource.data.memberCount + 1
               && validGubMemberAndCopy(id, request.auth.uid, 'member'))
-            || (request.resource.data.memberCount == resource.data.memberCount - 1 && isGubOwner(id))))
+            || (request.resource.data.memberCount == resource.data.memberCount - 1
+              && (isGubOwner(id)
+                || (request.auth.uid != resource.data.ownerId
+                  && exists(gubMemberPath(id, request.auth.uid))
+                  && !existsAfter(gubMemberPath(id, request.auth.uid)))))))
         || (isGubOwner(id) && resource.data.get('deletionStatus','active') == 'active' && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'deletionStatus','deletionRequestedBy','deletionStartedAt','deletionUpdatedAt','deletionPhase'
         ]) && request.resource.data.deletionStatus == 'deleting'
@@ -753,10 +812,29 @@ service cloud.firestore {
           && validGubMemberAndCopy(id, uid, request.resource.data.role);
         allow update: if own(uid) && gubActive(id)
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['antiSpamRulesAccepted','antiSpamRulesAcceptedAt','antiSpamRulesVersion']);
-        allow delete: if (isGubOwner(id) && uid != request.auth.uid) || gubDeletingOwner(id);
+        allow delete: if (isGubOwner(id) && uid != request.auth.uid)
+          || (own(uid) && uid != gubDoc(id).data.ownerId
+            && gubActive(id)
+            && gubAfter(id).data.memberCount == gubDoc(id).data.memberCount - 1)
+          || gubDeletingOwner(id);
+      }
+      match /bans/{uid} {
+        allow get: if isGubOwner(id) || own(uid);
+        allow list: if isGubOwner(id);
+        allow create: if isGubOwner(id) && uid != request.auth.uid
+          && request.resource.data.keys().hasOnly(['userId','displayName','photoUrl','bannedBy','bannedAt'])
+          && request.resource.data.userId == uid
+          && validText(request.resource.data.displayName, 1, 25)
+          && validNullableString(request.resource.data.photoUrl)
+          && request.resource.data.bannedBy == request.auth.uid
+          && request.resource.data.bannedAt == request.time
+          && !existsAfter(gubMemberPath(id, uid));
+        allow delete: if isGubOwner(id);
       }
       match /messages/{messageId} {
-        allow read: if isGubMember(id) || gubDeletingOwner(id);
+        allow read: if gubDeletingOwner(id);
+        allow read: if isGubMember(id)
+          && resource.data.createdAt >= get(/databases/$(database)/documents/gubs/$(id)/members/$(request.auth.uid)).data.joinedAt;
         allow create: if isGubMember(id) && gubActive(id)
           && request.resource.data.keys().hasOnly(['messageId','gubId','senderId','senderName','text','createdAt'])
           && request.resource.data.messageId == messageId
@@ -803,7 +881,7 @@ service cloud.firestore {
       match /tasks/{taskId} {
         allow read: if isGubMember(id) || gubDeletingOwner(id);
         allow create: if isGubMember(id) && gubActive(id) && validTaskCreate(id, taskId);
-        allow update: if validTaskCompletion(id);
+        allow update: if validTaskCompletion(id) || validTaskSelfUnassignment(id);
         allow delete: if validHardDeleteWithCooldown(id, resource.data.creatorId, 'task', taskId)
           || gubDeletingOwner(id);
       }
@@ -845,6 +923,7 @@ service cloud.firestore {
         allow create: if isGubMember(id) && gubActive(id) && validGoalCreate(id, goalId);
         allow update: if gubActive(id)
           && (validGoalProgress(id)
+            || validGoalMemberDepartureProgress(id, goalId)
             || validSoftDelete(id, resource.data.ownerId, 'sharedBudget', goalId));
         allow delete: if gubDeletingOwner(id);
       }
@@ -854,13 +933,20 @@ service cloud.firestore {
         allow update: if gubActive(id)
           && (validOwnContribution(id, goalId, uid) || validOwnerConfirmation(id));
         allow delete: if (gubActive(id) && isGubOwner(id) && uid != request.auth.uid)
+          || (gubActive(id) && own(uid) && resource.data.confirmed == false)
           || gubDeletingOwner(id);
       }
       match /notifications/{notificationId} {
-        allow read: if isGubMember(id) || gubDeletingOwner(id);
+        allow read: if gubDeletingOwner(id);
+        allow read: if isGubMember(id)
+          && resource.data.createdAt >= get(gubMemberPath(id, request.auth.uid)).data.joinedAt;
         allow create: if isGubMember(id) && gubActive(id)
           && validNotificationCreate(id, notificationId);
-        allow update: if isGubMember(id) && gubActive(id) && validReadByUpdate();
+        allow update: if isGubMember(id) && gubActive(id)
+          && resource.data.createdAt is timestamp
+          && get(gubMemberPath(id, request.auth.uid)).data.joinedAt is timestamp
+          && resource.data.createdAt >= get(gubMemberPath(id, request.auth.uid)).data.joinedAt
+          && validReadByUpdate();
         allow delete: if gubDeletingOwner(id);
       }
       match /creationCooldowns/{cooldownId} {
@@ -878,10 +964,18 @@ service cloud.firestore {
         && validCommunityMemberAndCopy(id, request.auth.uid, 'owner')
         && getAfter(ownershipPath(request.auth.uid)).data.communityId == id;
       allow update: if (
-        (communityActive(id) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memberCount'])
+        communityActive(id)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memberCount'])
           && request.resource.data.memberCount == resource.data.memberCount + 1
           && (validCommunityMemberAndCopy(id, request.auth.uid, 'member')
-            || validCommunityApprovalSignal(id, getAfter(communityMembershipMutationPath(id)).data.userId)))
+            || validCommunityApprovalSignal(id, getAfter(communityMembershipMutationPath(id)).data.userId))
+        || (communityActive(id)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memberCount'])
+          && request.resource.data.memberCount == resource.data.memberCount - 1
+          && (isCommunityOwner(id)
+            || (request.auth.uid != resource.data.ownerId
+              && exists(communityMemberPath(id, request.auth.uid))
+              && !existsAfter(communityMemberPath(id, request.auth.uid)))))
         || (isCommunityOwner(id) && resource.data.get('deletionStatus','active') == 'active'
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['deletionStatus','deletionStartedAt','deletionStartedBy','deletionRequestedBy'])
           && request.resource.data.deletionStatus == 'deleting'
@@ -905,10 +999,31 @@ service cloud.firestore {
           && validCommunityMemberAndCopy(id,uid,request.resource.data.role))
           || (validCommunityApprovalSignal(id, uid)
             && validCommunityApprovalMember(id, uid));
-        allow delete: if communityDeletingOwner(id);
+        allow delete: if communityDeletingOwner(id)
+          || (isCommunityOwner(id) && uid != request.auth.uid
+            && communityActive(id)
+            && communityAfter(id).data.memberCount == communityDoc(id).data.memberCount - 1)
+          || (own(uid) && uid != communityDoc(id).data.ownerId
+            && communityActive(id)
+            && communityAfter(id).data.memberCount == communityDoc(id).data.memberCount - 1);
+      }
+      match /bans/{uid} {
+        allow get: if isCommunityOwner(id) || own(uid);
+        allow list: if isCommunityOwner(id);
+        allow create: if isCommunityOwner(id) && uid != request.auth.uid
+          && request.resource.data.keys().hasOnly(['userId','displayName','photoUrl','bannedBy','bannedAt'])
+          && request.resource.data.userId == uid
+          && validText(request.resource.data.displayName, 1, 25)
+          && validNullableString(request.resource.data.photoUrl)
+          && request.resource.data.bannedBy == request.auth.uid
+          && request.resource.data.bannedAt == request.time
+          && !existsAfter(communityMemberPath(id, uid));
+        allow delete: if isCommunityOwner(id);
       }
       match /messages/{messageId} {
-        allow read: if isCommunityMember(id) || communityDeletingOwner(id);
+        allow read: if communityDeletingOwner(id);
+        allow read: if isCommunityMember(id)
+          && resource.data.createdAt >= get(/databases/$(database)/documents/communities/$(id)/members/$(request.auth.uid)).data.joinedAt;
         allow create: if isCommunityMember(id) && communityActive(id)
           && request.resource.data.keys().hasOnly(['messageId','communityId','senderId','senderName','text','createdAt'])
           && request.resource.data.messageId == messageId
@@ -934,6 +1049,7 @@ service cloud.firestore {
           && communityActive(id)
           && communityDoc(id).data.get('accessMode','approval') == 'approval'
           && !exists(communityMemberPath(id, uid))
+          && !exists(communityBanPath(id, uid))
           && request.resource.data.keys().hasOnly(['userId','displayName','status','createdAt'])
           && request.resource.data.userId == uid
           && validText(request.resource.data.displayName, 1, 25)
@@ -951,7 +1067,19 @@ service cloud.firestore {
             && request.resource.data.createdAt == resource.data.createdAt
             && request.resource.data.status == 'rejected'
             && request.resource.data.resolvedAt == request.time
-            && request.resource.data.resolvedBy == request.auth.uid);
+            && request.resource.data.resolvedBy == request.auth.uid)
+          || (own(uid)
+            && communityActive(id)
+            && resource.data.status in ['rejected', 'approved']
+            && !exists(communityMemberPath(id, uid))
+            && !exists(communityBanPath(id, uid))
+            && request.resource.data.keys().hasOnly([
+              'userId','displayName','status','createdAt'
+            ])
+            && request.resource.data.userId == resource.data.userId
+            && request.resource.data.displayName == resource.data.displayName
+            && request.resource.data.createdAt == resource.data.createdAt
+            && request.resource.data.status == 'pending');
         allow delete: if (own(uid) && resource.data.status == 'pending')
           || communityDeletingOwner(id);
       }

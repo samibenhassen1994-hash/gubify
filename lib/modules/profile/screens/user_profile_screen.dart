@@ -7,14 +7,24 @@ import '../services/user_profile_service.dart';
 import 'user_activity_screen.dart';
 
 class UserProfileScreen extends StatefulWidget {
-  final String gubId;
+  final String? gubId;
+  final String? communityId;
   final String userId;
+  final Future<UserProfileModel?>? profileFuture;
 
   const UserProfileScreen({
     super.key,
     required this.gubId,
     required this.userId,
-  });
+    this.profileFuture,
+  }) : communityId = null;
+
+  const UserProfileScreen.community({
+    super.key,
+    required this.communityId,
+    required this.userId,
+    this.profileFuture,
+  }) : gubId = null;
 
   @override
   State<UserProfileScreen> createState() => _UserProfileScreenState();
@@ -26,10 +36,17 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   @override
   void initState() {
     super.initState();
-    _profileFuture = UserProfileService.instance.loadProfile(
-      gubId: widget.gubId,
-      userId: widget.userId,
-    );
+    _profileFuture =
+        widget.profileFuture ??
+        (widget.communityId == null
+            ? UserProfileService.instance.loadProfile(
+                gubId: widget.gubId!,
+                userId: widget.userId,
+              )
+            : UserProfileService.instance.loadCommunityProfile(
+                communityId: widget.communityId!,
+                userId: widget.userId,
+              ));
   }
 
   @override
@@ -54,7 +71,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                 return const Center(child: CircularProgressIndicator());
               }
               if (snapshot.hasError) {
-                return const _ProfileMessage(
+                return _ProfileMessage(
                   icon: Icons.lock_outline_rounded,
                   message: "Unable to load this profile.",
                 );
@@ -62,9 +79,11 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
               final profile = snapshot.data;
               if (profile == null) {
-                return const _ProfileMessage(
+                return _ProfileMessage(
                   icon: Icons.person_off_outlined,
-                  message: "This user is no longer a member of this Gub.",
+                  message: widget.communityId == null
+                      ? "This user is no longer a member of this Gub."
+                      : "This user is no longer a member of this Community.",
                 );
               }
 
@@ -72,28 +91,30 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                 padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
                 children: [
                   _ProfileHeader(profile: profile),
-                  const SizedBox(height: 30),
-                  Text(
-                    "Activity",
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w700,
+                  if (widget.communityId == null) ...[
+                    const SizedBox(height: 30),
+                    Text(
+                      "Activity",
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 14),
-                  for (final category in _activityCategories)
-                    _ActivityCategoryCard(
-                      category: category,
-                      onTap: () => Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => UserActivityScreen(
-                            gubId: widget.gubId,
-                            userId: widget.userId,
-                            type: category.type,
-                            initialProfile: profile,
+                    const SizedBox(height: 14),
+                    for (final category in _activityCategories)
+                      _ActivityCategoryCard(
+                        category: category,
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => UserActivityScreen(
+                              gubId: widget.gubId!,
+                              userId: widget.userId,
+                              type: category.type,
+                              initialProfile: profile,
+                            ),
                           ),
                         ),
                       ),
-                    ),
+                  ],
                 ],
               );
             },

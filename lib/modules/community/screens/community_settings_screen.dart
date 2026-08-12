@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 
 import '../../../widgets/gub_content_card.dart';
+import '../../../widgets/banned_users_screen.dart';
 import '../../../widgets/gub_screen_background.dart';
 import '../../../screens/welcome_screen.dart';
+import '../../../screens/gub/my_gubs_screen.dart';
 import '../models/community_model.dart';
 import '../services/community_service.dart';
 import 'community_join_requests_screen.dart';
+import 'community_members_screen.dart';
 
 class CommunitySettingsScreen extends StatefulWidget {
   final CommunityModel community;
@@ -44,6 +47,43 @@ class _CommunitySettingsScreenState extends State<CommunitySettingsScreen> {
       MaterialPageRoute(builder: (_) => const WelcomeScreen()),
       (_) => false,
     );
+  }
+
+  Future<void> _leaveCommunity() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Leave Community?'),
+        content: const Text('You will lose access to this Community.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Leave'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || confirmed != true) return;
+    try {
+      await CommunityService.instance.leaveCommunity(
+        widget.community.communityId,
+      );
+      if (!mounted) return;
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const MyGubsScreen()),
+        (_) => false,
+      );
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error.toString())));
+      }
+    }
   }
 
   @override
@@ -101,6 +141,29 @@ class _CommunitySettingsScreenState extends State<CommunitySettingsScreen> {
                   ],
                 ),
               ),
+              const SizedBox(height: 16),
+              GubContentCard(
+                padding: EdgeInsets.zero,
+                child: ListTile(
+                  leading: const Icon(
+                    Icons.people_outline_rounded,
+                    color: Color(0xFF2563EB),
+                  ),
+                  title: const Text(
+                    'Members',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  subtitle: Text('${widget.community.memberCount} members'),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) =>
+                          CommunityMembersScreen(community: widget.community),
+                    ),
+                  ),
+                ),
+              ),
               if (isOwner) ...[
                 const SizedBox(height: 16),
                 GubContentCard(
@@ -123,6 +186,36 @@ class _CommunitySettingsScreenState extends State<CommunitySettingsScreen> {
                       MaterialPageRoute(
                         builder: (_) => CommunityJoinRequestsScreen(
                           community: widget.community,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                GubContentCard(
+                  padding: EdgeInsets.zero,
+                  child: ListTile(
+                    leading: const Icon(Icons.block_rounded, color: Colors.red),
+                    title: const Text(
+                      'Banned users',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    subtitle: const Text(
+                      'View members banned from this Community.',
+                    ),
+                    trailing: const Icon(Icons.chevron_right_rounded),
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => BannedUsersScreen(
+                          title: 'Banned users',
+                          bannedUsersStream: CommunityService.instance
+                              .bannedUsersStream(widget.community.communityId),
+                          onUnban: (uid) =>
+                              CommunityService.instance.unbanMember(
+                                communityId: widget.community.communityId,
+                                uid: uid,
+                              ),
                         ),
                       ),
                     ),
@@ -159,6 +252,36 @@ class _CommunitySettingsScreenState extends State<CommunitySettingsScreen> {
                     ),
                     trailing: const Icon(Icons.chevron_right_rounded),
                     onTap: _showDeleteDialog,
+                  ),
+                ),
+              ] else ...[
+                const SizedBox(height: 28),
+                const Text(
+                  'Membership',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 10),
+                GubContentCard(
+                  padding: EdgeInsets.zero,
+                  color: const Color(0xFFFFF1F2),
+                  border: Border.all(color: const Color(0xFFFECACA)),
+                  child: ListTile(
+                    leading: const Icon(
+                      Icons.exit_to_app_rounded,
+                      color: Colors.red,
+                    ),
+                    title: const Text(
+                      'Leave Community',
+                      style: TextStyle(
+                        color: Colors.red,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    subtitle: const Text(
+                      'Remove yourself from this Community.',
+                    ),
+                    trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                    onTap: _leaveCommunity,
                   ),
                 ),
               ],

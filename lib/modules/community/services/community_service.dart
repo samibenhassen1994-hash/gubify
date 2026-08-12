@@ -248,6 +248,62 @@ class CommunityService {
     );
   }
 
+  Stream<List<CommunityMemberModel>> communityMembersStream(
+    String communityId,
+  ) {
+    _requireUser('view Community members');
+    final normalizedId = communityId.trim();
+    if (normalizedId.isEmpty) return const Stream.empty();
+    return CommunityRepository.instance.communityMembersStream(normalizedId);
+  }
+
+  Future<CommunityMemberModel?> loadCommunityMember({
+    required String communityId,
+    required String userId,
+  }) async {
+    _requireUser('view Community member profiles');
+    return CommunityRepository.instance.getCommunityMember(
+      communityId: communityId.trim(),
+      userId: userId,
+    );
+  }
+
+  Future<void> leaveCommunity(String communityId) async {
+    final user = _requireUser('leave a community');
+    final normalizedId = communityId.trim();
+    if (normalizedId.isEmpty) {
+      throw ArgumentError('Community ID cannot be empty.');
+    }
+    await CommunityRepository.instance.leaveCommunity(
+      communityId: normalizedId,
+      userId: user.uid,
+    );
+  }
+
+  Future<void> removeCommunityMember({
+    required String communityId,
+    required String userId,
+  }) async {
+    final owner = _requireUser('remove community members');
+    await CommunityRepository.instance.removeCommunityMember(
+      communityId: communityId.trim(),
+      userId: userId,
+      actorId: owner.uid,
+    );
+  }
+
+  Future<void> banCommunityMember({
+    required String communityId,
+    required String userId,
+  }) async {
+    final owner = _requireUser('ban community members');
+    await CommunityRepository.instance.banCommunityMember(
+      communityId: communityId.trim(),
+      userId: userId,
+      ownerId: owner.uid,
+    );
+  }
+
   Future<void> deleteCommunity({
     required String communityId,
     required String confirmationName,
@@ -304,6 +360,14 @@ class CommunityService {
     }
 
     try {
+      if (await CommunityRepository.instance.isUserBanned(
+        communityId: normalizedCommunityId,
+        userId: user.uid,
+      )) {
+        throw Exception(
+          'You were banned from this Community by an administrator.',
+        );
+      }
       final identity = await _currentIdentity(user);
 
       final community = await CommunityRepository.instance.joinCommunity(
@@ -325,6 +389,14 @@ class CommunityService {
     final user = _requireUser("request access to a community");
     final normalizedId = communityId.trim();
     await _guardAccessOperation("request/$normalizedId/${user.uid}", () async {
+      if (await CommunityRepository.instance.isUserBanned(
+        communityId: normalizedId,
+        userId: user.uid,
+      )) {
+        throw Exception(
+          'You were banned from this Community by an administrator.',
+        );
+      }
       final identity = await _currentIdentity(user);
       await CommunityRepository.instance.createJoinRequest(
         communityId: normalizedId,
@@ -367,6 +439,19 @@ class CommunityService {
     if (normalizedId.isEmpty) return Stream.value(0);
     return CommunityRepository.instance.pendingJoinRequestCountStream(
       normalizedId,
+    );
+  }
+
+  Stream<List<Map<String, dynamic>>> bannedUsersStream(String communityId) {
+    _requireUser('view banned users');
+    return CommunityRepository.instance.bannedUsersStream(communityId.trim());
+  }
+
+  Future<void> unbanMember({required String communityId, required String uid}) {
+    _requireUser('unban a user');
+    return CommunityRepository.instance.unbanMember(
+      communityId: communityId.trim(),
+      uid: uid,
     );
   }
 

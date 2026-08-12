@@ -141,6 +141,40 @@ class UserProfileService {
     );
   }
 
+  Future<UserProfileModel?> loadCommunityProfile({
+    required String communityId,
+    required String userId,
+  }) async {
+    final currentUserId = _auth.currentUser?.uid;
+    if (currentUserId == null) {
+      throw StateError("You must be signed in to view profiles.");
+    }
+
+    final memberships = await Future.wait([
+      CommunityService.instance.loadCommunityMember(
+        communityId: communityId,
+        userId: currentUserId,
+      ),
+      CommunityService.instance.loadCommunityMember(
+        communityId: communityId,
+        userId: userId,
+      ),
+    ]);
+    if (memberships.first == null) {
+      throw StateError("You no longer have access to this Community.");
+    }
+    final target = memberships.last;
+    if (target == null) return null;
+
+    return UserProfileModel(
+      userId: target.userId,
+      displayName: target.displayName,
+      photoUrl: target.photoUrl,
+      role: target.role,
+      isCurrentUser: currentUserId == target.userId,
+    );
+  }
+
   Stream<List<UserActivityEntry>> activityStream({
     required String gubId,
     required String userId,

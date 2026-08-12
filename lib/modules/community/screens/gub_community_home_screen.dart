@@ -9,10 +9,12 @@ import '../../../services/app_sound_service.dart';
 import '../../../widgets/gub_screen_background.dart';
 import '../models/community_access_request_model.dart';
 import '../models/community_model.dart';
+import '../repositories/community_repository.dart';
 import '../services/community_service.dart';
 import '../widgets/community_home_content.dart';
 import '../widgets/community_pending_requests_button.dart';
 import 'community_join_requests_screen.dart';
+import 'community_public_details_screen.dart';
 import 'community_settings_screen.dart';
 
 class GubCommunityHomeScreen extends StatefulWidget {
@@ -26,8 +28,7 @@ class GubCommunityHomeScreen extends StatefulWidget {
   });
 
   @override
-  State<GubCommunityHomeScreen> createState() =>
-      _GubCommunityHomeScreenState();
+  State<GubCommunityHomeScreen> createState() => _GubCommunityHomeScreenState();
 }
 
 class _GubCommunityHomeScreenState extends State<GubCommunityHomeScreen> {
@@ -108,20 +109,48 @@ class _GubCommunityHomeScreenState extends State<GubCommunityHomeScreen> {
         return;
       }
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('This Community is no longer available.'),
-        ),
-      );
+      final userId = FirebaseAuth.instance.currentUser?.uid;
+      var message = 'This Community is no longer available.';
+      var showPublicDetails = false;
+      if (userId != null) {
+        try {
+          final banned = await CommunityRepository.instance.isUserBanned(
+            communityId: widget.communityId,
+            userId: userId,
+          );
+          if (banned) {
+            message =
+                'You were banned from this Community by an administrator.';
+          } else {
+            final access = await CommunityService.instance
+                .loadPublicAccessState(widget.communityId);
+            showPublicDetails =
+                access != null && access.community.deletionStatus != 'deleting';
+          }
+        } catch (_) {}
+      }
+      if (!mounted) {
+        return;
+      }
+      if (showPublicDetails) {
+        await Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (_) =>
+                CommunityPublicDetailsScreen(communityId: widget.communityId),
+          ),
+        );
+        return;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
 
       final navigator = Navigator.of(context);
       final didPop = await navigator.maybePop();
 
       if (!didPop && mounted) {
         await navigator.pushReplacement(
-          MaterialPageRoute(
-            builder: (_) => const MyGubsScreen(),
-          ),
+          MaterialPageRoute(builder: (_) => const MyGubsScreen()),
         );
       }
 
@@ -148,9 +177,7 @@ class _GubCommunityHomeScreenState extends State<GubCommunityHomeScreen> {
                 stream: _communityStream,
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(
-                      child: CircularProgressIndicator(),
-                    );
+                    return const Center(child: CircularProgressIndicator());
                   }
 
                   if (snapshot.hasError) {
@@ -211,10 +238,9 @@ class _GubCommunityHomeScreenState extends State<GubCommunityHomeScreen> {
                               onPressed: () => Navigator.push(
                                 context,
                                 MaterialPageRoute(
-                                  builder: (_) =>
-                                      CommunityJoinRequestsScreen(
-                                        community: community,
-                                      ),
+                                  builder: (_) => CommunityJoinRequestsScreen(
+                                    community: community,
+                                  ),
                                 ),
                               ),
                             ),
@@ -230,10 +256,9 @@ class _GubCommunityHomeScreenState extends State<GubCommunityHomeScreen> {
                                   onTap: () => Navigator.push(
                                     context,
                                     MaterialPageRoute(
-                                      builder: (_) =>
-                                          CommunitySettingsScreen(
-                                            community: community,
-                                          ),
+                                      builder: (_) => CommunitySettingsScreen(
+                                        community: community,
+                                      ),
                                     ),
                                   ),
                                   child: const SizedBox(
@@ -319,11 +344,9 @@ class _CommunityDeletionInProgressState
       }
     } catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(error.toString()),
-          ),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error.toString())));
       }
     } finally {
       if (mounted) {
@@ -343,10 +366,7 @@ class _CommunityDeletionInProgressState
             children: [
               const Text(
                 'Deletion in progress',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                ),
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
               Text(

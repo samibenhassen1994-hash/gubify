@@ -40,6 +40,17 @@ class GubInviteRepository {
 
   String newGubId() => _firestore.collection('gubs').doc().id;
 
+  Future<Duration?> inviteRegenerationCooldown(String gubId) async {
+    final snapshot = await _firestore.collection('gubs').doc(gubId).get();
+    final regeneratedAt = snapshot.data()?['inviteRegeneratedAt'];
+    if (regeneratedAt is! Timestamp) return null;
+    final remaining = regeneratedAt
+        .toDate()
+        .add(const Duration(seconds: 60))
+        .difference(DateTime.now());
+    return remaining > Duration.zero ? remaining : null;
+  }
+
   Future<bool> tryCreateGubWithToken({
     required String gubId,
     required String name,
@@ -104,6 +115,50 @@ class GubInviteRepository {
     return snapshot.exists ? InviteTokenData.fromSnapshot(snapshot) : null;
   }
 
+  Future<bool> tryRegenerateInvite({
+    required String gubId,
+    required String ownerId,
+    required String canonicalCode,
+  }) {
+    final gubReference = _firestore.collection('gubs').doc(gubId);
+    final newTokenReference = _firestore
+        .collection('inviteTokens')
+        .doc(canonicalCode);
+    return _firestore.runTransaction((transaction) async {
+      final gub = await transaction.get(gubReference);
+      final newToken = await transaction.get(newTokenReference);
+      if (!gub.exists ||
+          gub.data()?['ownerId'] != ownerId ||
+          gub.data()?['deletionStatus'] == 'deleting' ||
+          newToken.exists) {
+        return false;
+      }
+      final oldCode = gub.data()?['inviteTokenId'] as String?;
+      final name = gub.data()?['name'] as String?;
+      if (oldCode == null || oldCode == canonicalCode || name == null) {
+        return false;
+      }
+      final oldTokenReference = _firestore
+          .collection('inviteTokens')
+          .doc(oldCode);
+      final oldToken = await transaction.get(oldTokenReference);
+      if (!oldToken.exists || oldToken.data()?['active'] != true) return false;
+      transaction.set(newTokenReference, {
+        'gubId': gubId,
+        'ownerId': ownerId,
+        'gubName': name,
+        'active': true,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+      transaction.update(oldTokenReference, {'active': false});
+      transaction.update(gubReference, {
+        'inviteTokenId': canonicalCode,
+        'inviteRegeneratedAt': FieldValue.serverTimestamp(),
+      });
+      return true;
+    });
+  }
+
   Future<Map<String, dynamic>?> getOwnMembership({
     required String gubId,
     required String userId,
@@ -128,6 +183,19 @@ class GubInviteRepository {
         .doc(gubId)
         .get();
     return snapshot.data();
+  }
+
+  Future<bool> isUserBanned({
+    required String gubId,
+    required String userId,
+  }) async {
+    final snapshot = await _firestore
+        .collection('gubs')
+        .doc(gubId)
+        .collection('bans')
+        .doc(userId)
+        .get();
+    return snapshot.exists;
   }
 
   Future<void> joinWithToken({

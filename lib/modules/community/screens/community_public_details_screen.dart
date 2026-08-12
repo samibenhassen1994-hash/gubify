@@ -246,17 +246,6 @@ class _CommunityPublicDetailsScreenState
         ],
       );
     }
-    if (request?.status == CommunityAccessRequestModel.rejectedStatus) {
-      return const SizedBox(
-        width: double.infinity,
-        child: FilledButton(onPressed: null, child: Text("Request Declined")),
-      );
-    }
-    if (request?.status == CommunityAccessRequestModel.approvedStatus) {
-      return const _DetailsState(
-        message: "Access approved. Refresh to open the Community.",
-      );
-    }
     return SizedBox(
       width: double.infinity,
       child: FilledButton.icon(

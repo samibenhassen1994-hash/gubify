@@ -7,11 +7,13 @@ import {
 } from '@firebase/rules-unit-testing';
 import {
   collection,
+  deleteField,
   deleteDoc,
   doc,
   getDoc,
   getDocs,
   query,
+  runTransaction,
   serverTimestamp,
   setDoc,
   updateDoc,
@@ -202,6 +204,254 @@ function startDeletion({ actor = ids.owner, revoke = true } = {}) {
   return batch.commit();
 }
 
+function regenerateInvite(actor = ids.owner, newCode = otherCode) {
+  const clientDb = db(actor);
+  const batch = writeBatch(clientDb);
+  batch.update(doc(clientDb, 'gubs', 'g1'), {
+    inviteTokenId: newCode,
+    inviteRegeneratedAt: serverTimestamp(),
+  });
+  batch.update(doc(clientDb, 'inviteTokens', code), { active: false });
+  batch.set(doc(clientDb, 'inviteTokens', newCode), {
+    gubId: 'g1', ownerId: ids.owner, gubName: 'Token Gub', active: true,
+    createdAt: serverTimestamp(),
+  });
+  return batch.commit();
+}
+
+function regenerateInviteTransaction(actor = ids.owner, newCode = otherCode) {
+  const clientDb = db(actor);
+  const gubReference = doc(clientDb, 'gubs', 'g1');
+  const newTokenReference = doc(clientDb, 'inviteTokens', newCode);
+  const oldTokenReference = doc(clientDb, 'inviteTokens', code);
+
+  return runTransaction(clientDb, async (transaction) => {
+    await transaction.get(gubReference);
+    await transaction.get(newTokenReference);
+    await transaction.get(oldTokenReference);
+    transaction.set(newTokenReference, {
+      gubId: 'g1', ownerId: ids.owner, gubName: 'Token Gub', active: true,
+      createdAt: serverTimestamp(),
+    });
+    transaction.update(oldTokenReference, { active: false });
+    transaction.update(gubReference, {
+      inviteTokenId: newCode,
+      inviteRegeneratedAt: serverTimestamp(),
+    });
+  });
+}
+
+async function seedPrivateMembership() {
+  await seedGub();
+  await env.withSecurityRulesDisabled(async (context) => {
+    const batch = writeBatch(context.firestore());
+    batch.update(doc(context.firestore(), 'gubs', 'g1'), { memberCount: 2 });
+    batch.set(doc(context.firestore(), 'gubs', 'g1', 'members', ids.member), member(ids.member));
+    batch.set(doc(context.firestore(), 'users', ids.member, 'gubs', 'g1'), copy(ids.member));
+    await batch.commit();
+  });
+}
+
+async function seedCommunityMembership() {
+  await env.withSecurityRulesDisabled(async (context) => {
+    const seedDb = context.firestore();
+    const batch = writeBatch(seedDb);
+    batch.set(doc(seedDb, 'communities', 'c1'), {
+      communityId: 'c1', name: 'Community', ownerId: ids.communityOwner,
+      memberCount: 2, visibility: 'public', createdAt: now(),
+      type: 'General', language: 'English', description: '', accessMode: 'open',
+    });
+    batch.set(doc(seedDb, 'communities', 'c1', 'members', ids.communityOwner), {
+      uid: ids.communityOwner, displayName: ids.communityOwner, photoUrl: null,
+      role: 'owner', joinedAt: now(),
+    });
+    batch.set(doc(seedDb, 'communities', 'c1', 'members', ids.communityMember), {
+      uid: ids.communityMember, displayName: ids.communityMember, photoUrl: null,
+      role: 'member', joinedAt: now(),
+    });
+    batch.set(doc(seedDb, 'users', ids.communityOwner, 'communities', 'c1'), {
+      communityId: 'c1', name: 'Community', ownerId: ids.communityOwner,
+      memberCount: 2, visibility: 'public', role: 'owner', joinedAt: now(),
+    });
+    batch.set(doc(seedDb, 'users', ids.communityMember, 'communities', 'c1'), {
+      communityId: 'c1', name: 'Community', ownerId: ids.communityOwner,
+      memberCount: 2, visibility: 'public', role: 'member', joinedAt: now(),
+    });
+    await batch.commit();
+  });
+}
+
+function leavePrivateGub(actor, target = actor) {
+  const clientDb = db(actor);
+  const batch = writeBatch(clientDb);
+  batch.update(doc(clientDb, 'gubs', 'g1'), { memberCount: 1 });
+  batch.delete(doc(clientDb, 'gubs', 'g1', 'members', target));
+  batch.delete(doc(clientDb, 'users', target, 'gubs', 'g1'));
+  return batch.commit();
+}
+
+async function seedLeaveCleanupData() {
+  await seedPrivateMembership();
+  await env.withSecurityRulesDisabled(async (context) => {
+    const seedDb = context.firestore();
+    const batch = writeBatch(seedDb);
+    batch.set(doc(seedDb, 'gubs', 'g1', 'tasks', 't1'), {
+      gubId: 'g1', taskId: 't1', title: 'Task', description: '',
+      creatorId: ids.owner, creatorName: ids.owner,
+      assignedUserId: ids.member, assignedUserName: ids.member,
+      status: 'active', priority: 'normal', createdAt: now(), dueDate: null,
+      completedAt: null, completedBy: null, notificationsEnabled: true,
+      archived: false, sourceType: null, sourceId: null, sourcePreview: null,
+      originUserId: null, sourceAuthorName: null, additionalDetails: null,
+    });
+    batch.set(doc(seedDb, 'gubs', 'g1', 'goals', 'b1'), {
+      goalId: 'b1', title: 'Budget', description: '', targetAmount: 100,
+      currentAmount: 0, ownerId: ids.owner, completedMembers: 0,
+      totalMembers: 2, status: 'active', archived: false, createdAt: now(),
+      deadline: null, completedAt: null, sourceType: null, sourceId: null,
+      sourcePreview: null, originUserId: null, sourceAuthorName: null,
+    });
+    batch.set(doc(seedDb, 'gubs', 'g1', 'goals', 'b1', 'members', ids.member), {
+      uid: ids.member, displayName: ids.member, photoUrl: null, amount: 0,
+      confirmed: false, updatedAt: now(), confirmedAt: null,
+    });
+    batch.set(doc(seedDb, 'gubs', 'g1', 'goals', 'b1', 'members', ids.owner), {
+      uid: ids.owner, displayName: ids.owner, photoUrl: null, amount: 0,
+      confirmed: false, updatedAt: now(), confirmedAt: null,
+    });
+    await batch.commit();
+  });
+}
+
+async function leavePrivateGubClientFlow(actor = ids.member) {
+  const clientDb = db(actor);
+  await updateDoc(doc(clientDb, 'gubs', 'g1', 'tasks', 't1'), {
+    assignedUserId: null,
+    assignedUserName: null,
+  });
+  await deleteDoc(doc(clientDb, 'gubs', 'g1', 'goals', 'b1', 'members', actor));
+  await runTransaction(clientDb, async (transaction) => {
+    transaction.update(doc(clientDb, 'gubs', 'g1', 'goals', 'b1'), {
+      currentAmount: 0,
+      completedMembers: 0,
+      totalMembers: 1,
+    });
+  });
+  return leavePrivateGub(actor);
+}
+
+function leaveCommunity(actor, target = actor) {
+  const clientDb = db(actor);
+  const batch = writeBatch(clientDb);
+  batch.update(doc(clientDb, 'communities', 'c1'), { memberCount: 1 });
+  batch.delete(doc(clientDb, 'communities', 'c1', 'members', target));
+  batch.delete(doc(clientDb, 'users', target, 'communities', 'c1'));
+  return batch.commit();
+}
+
+function banPrivateGub(actor, target = ids.member) {
+  const clientDb = db(actor);
+  const batch = writeBatch(clientDb);
+  batch.update(doc(clientDb, 'gubs', 'g1'), { memberCount: 1 });
+  batch.set(doc(clientDb, 'gubs', 'g1', 'bans', target), {
+    userId: target, displayName: target, photoUrl: null, bannedBy: actor, bannedAt: serverTimestamp(),
+  });
+  batch.delete(doc(clientDb, 'gubs', 'g1', 'members', target));
+  batch.delete(doc(clientDb, 'users', target, 'gubs', 'g1'));
+  return batch.commit();
+}
+
+function banCommunity(actor, target = ids.communityMember) {
+  const clientDb = db(actor);
+  const batch = writeBatch(clientDb);
+  batch.update(doc(clientDb, 'communities', 'c1'), { memberCount: 1 });
+  batch.set(doc(clientDb, 'communities', 'c1', 'bans', target), {
+    userId: target, displayName: target, photoUrl: null, bannedBy: actor, bannedAt: serverTimestamp(),
+  });
+  batch.delete(doc(clientDb, 'communities', 'c1', 'members', target));
+  batch.delete(doc(clientDb, 'users', target, 'communities', 'c1'));
+  return batch.commit();
+}
+
+function joinOpenCommunity(actor = ids.communityMember) {
+  const clientDb = db(actor);
+  const batch = writeBatch(clientDb);
+  batch.update(doc(clientDb, 'communities', 'c1'), { memberCount: 2 });
+  batch.set(doc(clientDb, 'communities', 'c1', 'members', actor), {
+    uid: actor, displayName: actor, photoUrl: null, role: 'member',
+    joinedAt: serverTimestamp(),
+  });
+  batch.set(doc(clientDb, 'users', actor, 'communities', 'c1'), {
+    communityId: 'c1', name: 'Community', ownerId: ids.communityOwner,
+    memberCount: 2, visibility: 'public', role: 'member',
+    joinedAt: serverTimestamp(),
+  });
+  return batch.commit();
+}
+
+function createCommunityRequest(actor = ids.communityMember) {
+  return setDoc(doc(db(actor), 'communities', 'c1', 'joinRequests', actor), {
+    userId: actor, displayName: actor, status: 'pending',
+    createdAt: serverTimestamp(),
+  });
+}
+
+function approveCommunityRequest(target = ids.communityMember) {
+  const clientDb = db(ids.communityOwner);
+  const batch = writeBatch(clientDb);
+  batch.update(doc(clientDb, 'communities', 'c1'), { memberCount: 2 });
+  batch.update(doc(clientDb, 'communities', 'c1', 'joinRequests', target), {
+    status: 'approved',
+    resolvedAt: serverTimestamp(),
+    resolvedBy: ids.communityOwner,
+  });
+  batch.set(doc(clientDb, 'communities', 'c1', 'members', target), {
+    uid: target, displayName: target, photoUrl: null, role: 'member',
+    joinedAt: serverTimestamp(),
+  });
+  batch.set(doc(clientDb, 'users', target, 'communities', 'c1'), {
+    communityId: 'c1', name: 'Community', ownerId: ids.communityOwner,
+    memberCount: 2, visibility: 'public', role: 'member',
+    joinedAt: serverTimestamp(),
+  });
+  batch.set(doc(clientDb, 'communities', 'c1', 'membershipMutations', 'current'), {
+    action: 'approve', userId: target, ownerId: ids.communityOwner,
+    createdAt: serverTimestamp(),
+  });
+  return batch.commit();
+}
+
+function approveCommunityRequestTransaction(target = ids.communityMember) {
+  const clientDb = db(ids.communityOwner);
+  const communityReference = doc(clientDb, 'communities', 'c1');
+  const requestReference = doc(clientDb, 'communities', 'c1', 'joinRequests', target);
+  const memberReference = doc(clientDb, 'communities', 'c1', 'members', target);
+  const copyReference = doc(clientDb, 'users', target, 'communities', 'c1');
+  const mutationReference = doc(clientDb, 'communities', 'c1', 'membershipMutations', 'current');
+  return runTransaction(clientDb, async (transaction) => {
+    await transaction.get(communityReference);
+    await transaction.get(requestReference);
+    await transaction.get(memberReference);
+    transaction.update(communityReference, { memberCount: 3 });
+    transaction.set(memberReference, {
+      uid: target, displayName: target, photoUrl: null, role: 'member',
+      joinedAt: serverTimestamp(),
+    });
+    transaction.set(copyReference, {
+      communityId: 'c1', name: 'Community', ownerId: ids.communityOwner,
+      memberCount: 3, visibility: 'public', role: 'member',
+      joinedAt: serverTimestamp(),
+    });
+    transaction.update(requestReference, {
+      status: 'approved', resolvedAt: serverTimestamp(), resolvedBy: ids.communityOwner,
+    });
+    transaction.set(mutationReference, {
+      action: 'approve', userId: target, ownerId: ids.communityOwner,
+      createdAt: serverTimestamp(),
+    });
+  });
+}
+
 describe('invite token reads and isolation', () => {
   beforeEach(() => seedGub());
   test('1 unauthenticated user cannot get a token', () => assertFails(getDoc(doc(anonymousDb(), 'inviteTokens', code))));
@@ -332,5 +582,297 @@ describe('revocation, deletion, retry, and Community isolation', () => {
     batch.set(doc(clientDb, 'users', ids.communityOwner, 'communities', 'c1'), { communityId: 'c1', name: 'Community', ownerId: ids.communityOwner, memberCount: 1, visibility: 'public', role: 'owner', joinedAt: serverTimestamp() });
     batch.set(doc(clientDb, 'communityOwnership', ids.communityOwner), { ownerId: ids.communityOwner, communityId: 'c1', createdAt: serverTimestamp() });
     await assertSucceeds(batch.commit());
+  });
+});
+
+describe('Step 1A membership leave and removal', () => {
+  test('57 private member can execute the real leave cleanup flow', async () => {
+    await seedLeaveCleanupData();
+    await assertSucceeds(leavePrivateGubClientFlow());
+  });
+  test('58 private member can leave atomically', async () => {
+    await seedPrivateMembership();
+    await assertSucceeds(leavePrivateGub(ids.member));
+  });
+  test('leave cleanup cannot change unrelated task fields', async () => {
+    await seedLeaveCleanupData();
+    await assertFails(updateDoc(
+      doc(db(ids.member), 'gubs', 'g1', 'tasks', 't1'),
+      { title: 'Changed while leaving' },
+    ));
+  });
+  test('leave cleanup cannot remove a confirmed Shared Budget member', async () => {
+    await seedLeaveCleanupData();
+    await env.withSecurityRulesDisabled(async (context) => {
+      await updateDoc(
+        doc(context.firestore(), 'gubs', 'g1', 'goals', 'b1', 'members', ids.member),
+        { confirmed: true, amount: 10, confirmedAt: now() },
+      );
+    });
+    await assertFails(deleteDoc(
+      doc(db(ids.member), 'gubs', 'g1', 'goals', 'b1', 'members', ids.member),
+    ));
+  });
+  test('leave cleanup cannot alter Shared Budget amounts or confirmations', async () => {
+    await seedLeaveCleanupData();
+    await deleteDoc(doc(db(ids.member), 'gubs', 'g1', 'goals', 'b1', 'members', ids.member));
+    await assertFails(updateDoc(doc(db(ids.member), 'gubs', 'g1', 'goals', 'b1'), {
+      currentAmount: 10,
+      completedMembers: 1,
+      totalMembers: 1,
+    }));
+  });
+  test('59 private owner cannot self-leave', async () => {
+    await seedPrivateMembership();
+    await assertFails(leavePrivateGub(ids.owner));
+  });
+  test('60 private owner can remove a member', async () => {
+    await seedPrivateMembership();
+    await assertSucceeds(leavePrivateGub(ids.owner, ids.member));
+  });
+  test('61 private member cannot remove another member', async () => {
+    await seedPrivateMembership();
+    await assertFails(leavePrivateGub(ids.member, ids.second));
+  });
+  test('62 community member can leave atomically', async () => {
+    await seedCommunityMembership();
+    await assertSucceeds(leaveCommunity(ids.communityMember));
+  });
+  test('63 community owner cannot self-leave', async () => {
+    await seedCommunityMembership();
+    await assertFails(leaveCommunity(ids.communityOwner));
+  });
+  test('64 community owner can remove a member', async () => {
+    await seedCommunityMembership();
+    await assertSucceeds(leaveCommunity(ids.communityOwner, ids.communityMember));
+  });
+  test('65 outsider cannot change private or community membership', async () => {
+    await seedPrivateMembership();
+    await seedCommunityMembership();
+    await assertFails(leavePrivateGub(ids.outsider, ids.member));
+    await assertFails(leaveCommunity(ids.outsider, ids.communityMember));
+  });
+});
+
+describe('Step 1B persistent bans', () => {
+  test('65 private owner can ban a normal member atomically', async () => {
+    await seedPrivateMembership();
+    await assertSucceeds(banPrivateGub(ids.owner));
+  });
+  test('66 private member cannot ban another member', async () => {
+    await seedPrivateMembership();
+    await assertFails(banPrivateGub(ids.member, ids.owner));
+  });
+  test('67 private owner cannot ban themselves', async () => {
+    await seedPrivateMembership();
+    await assertFails(banPrivateGub(ids.owner, ids.owner));
+  });
+  test('68 private outsider cannot ban a member', async () => {
+    await seedPrivateMembership();
+    await assertFails(banPrivateGub(ids.outsider));
+  });
+  test('69 a banned private member cannot rejoin with a valid invite', async () => {
+    await seedPrivateMembership();
+    await banPrivateGub(ids.owner);
+    await assertFails(joinGub({ actor: ids.member }));
+  });
+  test('70 Community owner can ban a normal member atomically', async () => {
+    await seedCommunityMembership();
+    await assertSucceeds(banCommunity(ids.communityOwner));
+  });
+  test('71 Community member cannot ban another member', async () => {
+    await seedCommunityMembership();
+    await assertFails(banCommunity(ids.communityMember, ids.communityOwner));
+  });
+  test('72 Community owner cannot ban themselves', async () => {
+    await seedCommunityMembership();
+    await assertFails(banCommunity(ids.communityOwner, ids.communityOwner));
+  });
+  test('73 Community outsider cannot ban a member', async () => {
+    await seedCommunityMembership();
+    await assertFails(banCommunity(ids.outsider));
+  });
+  test('74 a banned Community member cannot use open access to rejoin', async () => {
+    await seedCommunityMembership();
+    await banCommunity(ids.communityOwner);
+    await assertFails(joinOpenCommunity());
+  });
+  test('75 a banned Community member cannot create an approval request', async () => {
+    await seedCommunityMembership();
+    await env.withSecurityRulesDisabled(async (context) => {
+      await updateDoc(doc(context.firestore(), 'communities', 'c1'), {
+        accessMode: 'approval',
+      });
+    });
+    await banCommunity(ids.communityOwner);
+    await assertFails(createCommunityRequest());
+  });
+  test('76 a pending request for a banned user cannot be approved', async () => {
+    await seedCommunityMembership();
+    await env.withSecurityRulesDisabled(async (context) => {
+      const seedDb = context.firestore();
+      await updateDoc(doc(seedDb, 'communities', 'c1'), { accessMode: 'approval' });
+      await setDoc(doc(seedDb, 'communities', 'c1', 'joinRequests', ids.outsider), {
+        userId: ids.outsider, displayName: ids.outsider, status: 'pending',
+        createdAt: now(),
+      });
+      await setDoc(doc(seedDb, 'communities', 'c1', 'bans', ids.outsider), {
+        userId: ids.outsider, displayName: ids.outsider, photoUrl: null, bannedBy: ids.communityOwner, bannedAt: now(),
+      });
+    });
+    await assertFails(approveCommunityRequest(ids.outsider));
+  });
+  test('Community owner can approve with the repository transaction and grant access', async () => {
+    await seedCommunityMembership();
+    await env.withSecurityRulesDisabled(async (context) => {
+      const seedDb = context.firestore();
+      await updateDoc(doc(seedDb, 'communities', 'c1'), { accessMode: 'approval' });
+      await setDoc(doc(seedDb, 'communities', 'c1', 'joinRequests', ids.outsider), {
+        userId: ids.outsider, displayName: ids.outsider, status: 'pending',
+        createdAt: now(),
+      });
+    });
+    await assertSucceeds(approveCommunityRequestTransaction(ids.outsider));
+    await assertSucceeds(getDoc(doc(db(ids.outsider), 'communities', 'c1')));
+    await assertSucceeds(getDoc(
+      doc(db(ids.outsider), 'users', ids.outsider, 'communities', 'c1'),
+    ));
+  });
+  test('77 rejecting a request does not create a ban', async () => {
+    await seedCommunityMembership();
+    await env.withSecurityRulesDisabled(async (context) => {
+      const seedDb = context.firestore();
+      await updateDoc(doc(seedDb, 'communities', 'c1'), { accessMode: 'approval' });
+      await setDoc(doc(seedDb, 'communities', 'c1', 'joinRequests', ids.outsider), {
+        userId: ids.outsider, displayName: ids.outsider, status: 'pending',
+        createdAt: now(),
+      });
+    });
+    await assertSucceeds(updateDoc(
+      doc(db(ids.communityOwner), 'communities', 'c1', 'joinRequests', ids.outsider),
+      {
+        status: 'rejected',
+        resolvedAt: serverTimestamp(),
+        resolvedBy: ids.communityOwner,
+      },
+    ));
+    const snapshot = await getDoc(
+      doc(db(ids.communityOwner), 'communities', 'c1', 'bans', ids.outsider),
+    );
+    if (snapshot.exists()) throw new Error('A rejection must not create a ban.');
+  });
+  test('78 a rejected Community request can be submitted again', async () => {
+    await seedCommunityMembership();
+    await env.withSecurityRulesDisabled(async (context) => {
+      const seedDb = context.firestore();
+      await updateDoc(doc(seedDb, 'communities', 'c1'), { accessMode: 'approval' });
+      await setDoc(doc(seedDb, 'communities', 'c1', 'joinRequests', ids.outsider), {
+        userId: ids.outsider, displayName: ids.outsider, status: 'rejected',
+        createdAt: now(), resolvedAt: now(), resolvedBy: ids.communityOwner,
+      });
+    });
+    await assertSucceeds(updateDoc(
+      doc(db(ids.outsider), 'communities', 'c1', 'joinRequests', ids.outsider),
+      { status: 'pending', resolvedAt: deleteField(), resolvedBy: deleteField() },
+    ));
+  });
+  test('79 an unbanned former member can reset an approved request and be approved again', async () => {
+    await seedCommunityMembership();
+    await env.withSecurityRulesDisabled(async (context) => {
+      const seedDb = context.firestore();
+      await updateDoc(doc(seedDb, 'communities', 'c1'), {
+        accessMode: 'approval',
+      });
+      await setDoc(
+        doc(
+          seedDb,
+          'communities',
+          'c1',
+          'joinRequests',
+          ids.communityMember,
+        ),
+        {
+          userId: ids.communityMember,
+          displayName: ids.communityMember,
+          status: 'approved',
+          createdAt: now(),
+          resolvedAt: now(),
+          resolvedBy: ids.communityOwner,
+        },
+      );
+    });
+
+    await assertSucceeds(banCommunity(ids.communityOwner));
+    await assertFails(updateDoc(
+      doc(
+        db(ids.communityMember),
+        'communities',
+        'c1',
+        'joinRequests',
+        ids.communityMember,
+      ),
+      { status: 'pending', resolvedAt: deleteField(), resolvedBy: deleteField() },
+    ));
+    await assertSucceeds(deleteDoc(
+      doc(
+        db(ids.communityOwner),
+        'communities',
+        'c1',
+        'bans',
+        ids.communityMember,
+      ),
+    ));
+    await assertSucceeds(updateDoc(
+      doc(
+        db(ids.communityMember),
+        'communities',
+        'c1',
+        'joinRequests',
+        ids.communityMember,
+      ),
+      { status: 'pending', resolvedAt: deleteField(), resolvedBy: deleteField() },
+    ));
+    await assertSucceeds(approveCommunityRequest(ids.communityMember));
+    await assertSucceeds(getDoc(
+      doc(db(ids.communityMember), 'communities', 'c1'),
+    ));
+  });
+});
+
+describe('Step 1D invite regeneration', () => {
+  beforeEach(() => seedGub());
+  test('80 owner can regenerate an invite through the repository transaction', () =>
+    assertSucceeds(regenerateInviteTransaction()));
+  test('81 owner can regenerate an invite atomically', () =>
+    assertSucceeds(regenerateInvite()));
+  test('80 a normal member cannot regenerate an invite', async () => {
+    await seedPrivateMembership();
+    await assertFails(regenerateInvite(ids.member));
+  });
+  test('81 an outsider cannot regenerate an invite', () =>
+    assertFails(regenerateInvite(ids.outsider)));
+  test('82 the old invite cannot join after regeneration', async () => {
+    await regenerateInvite();
+    await assertFails(joinGub());
+  });
+  test('83 the new invite joins a non-banned user', async () => {
+    await regenerateInvite();
+    await assertSucceeds(joinGub({ proof: otherCode }));
+  });
+  test('84 regeneration preserves existing members and memberCount', async () => {
+    await seedPrivateMembership();
+    await regenerateInvite();
+    const ownerView = db(ids.owner);
+    const rootSnapshot = await getDoc(doc(ownerView, 'gubs', 'g1'));
+    const memberSnapshot = await getDoc(doc(db(ids.member), 'gubs', 'g1', 'members', ids.member));
+    if (rootSnapshot.data()?.memberCount !== 2 || !memberSnapshot.exists()) {
+      throw new Error('Regeneration must not alter memberships or memberCount.');
+    }
+  });
+  test('85 a banned user cannot use the new invite', async () => {
+    await seedPrivateMembership();
+    await banPrivateGub(ids.owner);
+    await regenerateInvite();
+    await assertFails(joinGub({ actor: ids.member, proof: otherCode }));
   });
 });
