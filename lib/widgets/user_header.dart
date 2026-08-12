@@ -1,11 +1,11 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../modules/chat/widgets/chat_user_avatar.dart';
 import '../modules/chat/widgets/gub_chat_overlay.dart';
-import '../modules/notifications/screens/notifications_screen.dart';
 import '../modules/notifications/models/notification_model.dart';
+import '../modules/notifications/screens/notifications_screen.dart';
+import '../modules/notifications/services/notification_service.dart';
 import '../modules/profile/screens/personal_profile_screen.dart';
 import '../modules/profile/screens/user_profile_screen.dart';
 import '../repositories/user_repository.dart';
@@ -136,46 +136,18 @@ class _UserHeaderState extends State<UserHeader> {
             ),
 
             if (widget.gubId != null)
-              StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                stream: FirebaseFirestore.instance
-                    .collection("gubs")
-                    .doc(widget.gubId)
-                    .collection("notifications")
-                    .snapshots(),
+              StreamBuilder<List<NotificationModel>>(
+                stream: NotificationService.instance.unreadNotificationsStream(
+                  widget.gubId!,
+                ),
                 builder: (context, snapshot) {
-                  final docs = snapshot.data?.docs ?? [];
-
-                  final unreadNotifications = docs.where((doc) {
-                    final data = doc.data();
-                    if (!NotificationModel.targetsUser(data, user.uid)) {
-                      return false;
-                    }
-
-                    final readBy = List<String>.from(data["readBy"] ?? []);
-
-                    final senderId = data["senderId"] ?? "";
-
-                    final type = data["type"] ?? "";
-
-                    if (type == "board_post") {
-                      return false;
-                    }
-
-                    if (readBy.contains(user.uid)) {
-                      return false;
-                    }
-
-                    if (type == "proposal_approved" ||
-                        type == "proposal_rejected") {
-                      return true;
-                    }
-
-                    return senderId != user.uid;
-                  }).toList(growable: false);
+                  final unreadNotifications = snapshot.data ?? const [];
 
                   AppSoundService.instance.handleUnreadNotifications(
                     gubId: widget.gubId!,
-                    unreadIds: unreadNotifications.map((doc) => doc.id),
+                    unreadIds: unreadNotifications.map(
+                      (notification) => notification.notificationId,
+                    ),
                   );
 
                   final count = unreadNotifications.length;

@@ -141,7 +141,7 @@ describe('real query compatibility', () => {
     await assertSucceeds(getDocs(query(collection(db(uid.member), 'gubs', 'g1', 'members'), orderBy('joinedAt'))));
     await assertSucceeds(getDocs(collection(db(uid.member), 'gubs', 'g1', 'proposals', 'proposal1', 'votes')));
     await assertSucceeds(getDocs(collection(db(uid.member), 'gubs', 'g1', 'goals', 'goal1', 'members')));
-    await assertSucceeds(getDocs(collection(db(uid.member), 'gubs', 'g1', 'notifications')));
+    await assertSucceeds(getDocs(query(collection(db(uid.member), 'gubs', 'g1', 'notifications'), where('createdAt', '>=', now()), orderBy('createdAt', 'desc'))));
     await assertSucceeds(getDocs(query(collection(db(uid.communityMember), 'communities', 'c1', 'messages'), where('createdAt', '>=', now()), orderBy('createdAt', 'desc'), limit(50))));
   });
 });

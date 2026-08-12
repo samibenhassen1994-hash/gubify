@@ -937,10 +937,16 @@ service cloud.firestore {
           || gubDeletingOwner(id);
       }
       match /notifications/{notificationId} {
-        allow read: if isGubMember(id) || gubDeletingOwner(id);
+        allow read: if gubDeletingOwner(id);
+        allow read: if isGubMember(id)
+          && resource.data.createdAt >= get(gubMemberPath(id, request.auth.uid)).data.joinedAt;
         allow create: if isGubMember(id) && gubActive(id)
           && validNotificationCreate(id, notificationId);
-        allow update: if isGubMember(id) && gubActive(id) && validReadByUpdate();
+        allow update: if isGubMember(id) && gubActive(id)
+          && resource.data.createdAt is timestamp
+          && get(gubMemberPath(id, request.auth.uid)).data.joinedAt is timestamp
+          && resource.data.createdAt >= get(gubMemberPath(id, request.auth.uid)).data.joinedAt
+          && validReadByUpdate();
         allow delete: if gubDeletingOwner(id);
       }
       match /creationCooldowns/{cooldownId} {
