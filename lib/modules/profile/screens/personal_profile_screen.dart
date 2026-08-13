@@ -9,12 +9,19 @@ import '../../community/models/community_model.dart';
 import '../../community/screens/gub_community_home_screen.dart';
 import '../models/user_profile_model.dart';
 import '../services/user_profile_service.dart';
+import '../widgets/google_account_connection_section.dart';
 import 'user_profile_screen.dart';
+import '../../../services/auth_service.dart';
 
 class PersonalProfileScreen extends StatefulWidget {
   final String userId;
+  final AuthService? authService;
 
-  const PersonalProfileScreen({super.key, required this.userId});
+  const PersonalProfileScreen({
+    super.key,
+    required this.userId,
+    this.authService,
+  });
 
   @override
   State<PersonalProfileScreen> createState() => _PersonalProfileScreenState();
@@ -24,12 +31,14 @@ class _PersonalProfileScreenState extends State<PersonalProfileScreen> {
   late Future<UserProfileModel> _profileFuture;
   late Stream<List<PersonalGubModel>> _gubsStream;
   late Stream<List<CommunityMembershipModel>> _communitiesStream;
+  late AuthService _authService;
   Object? _lastLoggedGubsError;
   MembershipWindow _selectedWindow = MembershipWindow.privateGubs;
 
   @override
   void initState() {
     super.initState();
+    _authService = widget.authService ?? AuthService();
     _initializeLoads();
   }
 
@@ -96,6 +105,10 @@ class _PersonalProfileScreenState extends State<PersonalProfileScreen> {
                         children: [
                           _PersonalProfileHeader(
                             profile: profileSnapshot.data!,
+                          ),
+                          const SizedBox(height: 20),
+                          GoogleAccountConnectionSection(
+                            authService: _authService,
                           ),
                           const SizedBox(height: 26),
                           MembershipWindowSelector(
