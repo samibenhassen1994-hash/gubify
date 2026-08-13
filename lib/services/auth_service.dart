@@ -70,6 +70,40 @@ class GoogleIdentity {
   final String? photoUrl;
 }
 
+enum EmailPasswordLinkStatus {
+  success,
+  noCurrentUser,
+  userNotAnonymous,
+  providerAlreadyLinked,
+  invalidEmail,
+  weakPassword,
+  emailAlreadyInUse,
+  credentialAlreadyInUse,
+  requiresRecentLogin,
+  networkRequestFailed,
+  tooManyRequests,
+  uidChanged,
+  unknownFailure,
+}
+
+class EmailPasswordLinkResult {
+  const EmailPasswordLinkResult._({required this.status, this.uid, this.email});
+
+  final EmailPasswordLinkStatus status;
+  final String? uid;
+  final String? email;
+
+  bool get isSuccess => status == EmailPasswordLinkStatus.success;
+
+  const EmailPasswordLinkResult.success({
+    required String uid,
+    required String email,
+  }) : this._(status: EmailPasswordLinkStatus.success, uid: uid, email: email);
+
+  const EmailPasswordLinkResult.failure(EmailPasswordLinkStatus status)
+    : this._(status: status);
+}
+
 enum GoogleCredentialFailure { cancelled, invalidCredential, unknown }
 
 class GoogleCredentialException implements Exception {
@@ -88,6 +122,10 @@ abstract interface class AuthLinkGateway {
   List<String> get providerIds;
 
   Future<AuthLinkState> linkGoogleIdToken(String idToken);
+  Future<AuthLinkState> linkEmailPassword({
+    required String email,
+    required String password,
+  });
 }
 
 class AuthLinkState {
@@ -123,6 +161,9 @@ class AuthService {
 
   bool get isGoogleLinked =>
       _authLinkGateway.providerIds.contains(GoogleAuthProvider.PROVIDER_ID);
+
+  bool get isPasswordLinked =>
+      _authLinkGateway.providerIds.contains(EmailAuthProvider.PROVIDER_ID);
 
   List<String> get providerIds =>
       List.unmodifiable(_authLinkGateway.providerIds);
@@ -199,6 +240,49 @@ class AuthService {
     }
   }
 
+  Future<EmailPasswordLinkResult> linkCurrentUserWithEmailAndPassword({
+    required String email,
+    required String password,
+  }) async {
+    final uidBeforeLink = _authLinkGateway.currentUserId;
+    if (uidBeforeLink == null) {
+      return const EmailPasswordLinkResult.failure(
+        EmailPasswordLinkStatus.noCurrentUser,
+      );
+    }
+    if (!isCurrentUserAnonymous) {
+      return const EmailPasswordLinkResult.failure(
+        EmailPasswordLinkStatus.userNotAnonymous,
+      );
+    }
+    if (isPasswordLinked) {
+      return const EmailPasswordLinkResult.failure(
+        EmailPasswordLinkStatus.providerAlreadyLinked,
+      );
+    }
+
+    try {
+      final linkedUser = await _authLinkGateway.linkEmailPassword(
+        email: email,
+        password: password,
+      );
+      if (linkedUser.uid != uidBeforeLink) {
+        return const EmailPasswordLinkResult.failure(
+          EmailPasswordLinkStatus.uidChanged,
+        );
+      }
+      return EmailPasswordLinkResult.success(uid: uidBeforeLink, email: email);
+    } on FirebaseAuthException catch (error) {
+      return EmailPasswordLinkResult.failure(
+        _emailPasswordErrorStatus(error.code),
+      );
+    } catch (_) {
+      return const EmailPasswordLinkResult.failure(
+        EmailPasswordLinkStatus.unknownFailure,
+      );
+    }
+  }
+
   GoogleLinkStatus _firebaseErrorStatus(String code) {
     return switch (code) {
       'provider-already-linked' => GoogleLinkStatus.providerAlreadyLinked,
@@ -210,6 +294,22 @@ class AuthService {
       'operation-not-allowed' => GoogleLinkStatus.operationNotAllowed,
       'too-many-requests' => GoogleLinkStatus.tooManyRequests,
       _ => GoogleLinkStatus.unknownFailure,
+    };
+  }
+
+  EmailPasswordLinkStatus _emailPasswordErrorStatus(String code) {
+    return switch (code) {
+      'invalid-email' => EmailPasswordLinkStatus.invalidEmail,
+      'weak-password' => EmailPasswordLinkStatus.weakPassword,
+      'email-already-in-use' => EmailPasswordLinkStatus.emailAlreadyInUse,
+      'credential-already-in-use' =>
+        EmailPasswordLinkStatus.credentialAlreadyInUse,
+      'provider-already-linked' =>
+        EmailPasswordLinkStatus.providerAlreadyLinked,
+      'requires-recent-login' => EmailPasswordLinkStatus.requiresRecentLogin,
+      'network-request-failed' => EmailPasswordLinkStatus.networkRequestFailed,
+      'too-many-requests' => EmailPasswordLinkStatus.tooManyRequests,
+      _ => EmailPasswordLinkStatus.unknownFailure,
     };
   }
 }
@@ -240,6 +340,32 @@ class FirebaseAuthLinkGateway implements AuthLinkGateway {
     }
 
     final credential = GoogleAuthProvider.credential(idToken: idToken);
+    final linkedCredential = await currentUser.linkWithCredential(credential);
+    final linkedUser = linkedCredential.user;
+    return AuthLinkState(
+      uid: linkedUser?.uid,
+      providerIds:
+          linkedUser?.providerData
+              .map((provider) => provider.providerId)
+              .toList(growable: false) ??
+          const <String>[],
+    );
+  }
+
+  @override
+  Future<AuthLinkState> linkEmailPassword({
+    required String email,
+    required String password,
+  }) async {
+    final currentUser = _auth.currentUser;
+    if (currentUser == null) {
+      throw StateError('No authenticated user.');
+    }
+
+    final credential = EmailAuthProvider.credential(
+      email: email,
+      password: password,
+    );
     final linkedCredential = await currentUser.linkWithCredential(credential);
     final linkedUser = linkedCredential.user;
     return AuthLinkState(

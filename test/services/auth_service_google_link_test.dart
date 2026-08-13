@@ -171,6 +171,93 @@ void main() {
       expect(client.authenticateCalls, 2);
     },
   );
+
+  test('links email and password while preserving the Firebase UID', () async {
+    final auth = _FakeAuthLinkGateway(
+      currentUserId: 'existing-uid',
+      linkedProviderIds: const ['password'],
+    );
+
+    final result =
+        await serviceFor(
+          auth: auth,
+          google: _FakeGoogleCredentialProvider(identity: identity),
+        ).linkCurrentUserWithEmailAndPassword(
+          email: 'person@example.com',
+          password: 'secure-password',
+        );
+
+    expect(result.isSuccess, isTrue);
+    expect(result.uid, 'existing-uid');
+    expect(result.email, 'person@example.com');
+    expect(auth.emailLinkCalls, 1);
+  });
+
+  test(
+    'returns a controlled result when email binding has no current user',
+    () async {
+      final auth = _FakeAuthLinkGateway(currentUserId: null);
+
+      final result =
+          await serviceFor(
+            auth: auth,
+            google: _FakeGoogleCredentialProvider(identity: identity),
+          ).linkCurrentUserWithEmailAndPassword(
+            email: 'person@example.com',
+            password: 'secure-password',
+          );
+
+      expect(result.status, EmailPasswordLinkStatus.noCurrentUser);
+      expect(auth.emailLinkCalls, 0);
+    },
+  );
+
+  test('maps email binding failures without changing the UID', () async {
+    final expectedStatuses = <String, EmailPasswordLinkStatus>{
+      'invalid-email': EmailPasswordLinkStatus.invalidEmail,
+      'weak-password': EmailPasswordLinkStatus.weakPassword,
+      'email-already-in-use': EmailPasswordLinkStatus.emailAlreadyInUse,
+      'credential-already-in-use':
+          EmailPasswordLinkStatus.credentialAlreadyInUse,
+    };
+
+    for (final entry in expectedStatuses.entries) {
+      final auth = _FakeAuthLinkGateway(
+        currentUserId: 'existing-uid',
+        emailLinkError: FirebaseAuthException(code: entry.key),
+      );
+      final result =
+          await serviceFor(
+            auth: auth,
+            google: _FakeGoogleCredentialProvider(identity: identity),
+          ).linkCurrentUserWithEmailAndPassword(
+            email: 'person@example.com',
+            password: 'secure-password',
+          );
+
+      expect(result.status, entry.value, reason: entry.key);
+      expect(auth.currentUserId, 'existing-uid', reason: entry.key);
+    }
+  });
+
+  test('does not bind email credentials for a non-anonymous user', () async {
+    final auth = _FakeAuthLinkGateway(
+      currentUserId: 'existing-uid',
+      anonymous: false,
+    );
+
+    final result =
+        await serviceFor(
+          auth: auth,
+          google: _FakeGoogleCredentialProvider(identity: identity),
+        ).linkCurrentUserWithEmailAndPassword(
+          email: 'person@example.com',
+          password: 'secure-password',
+        );
+
+    expect(result.status, EmailPasswordLinkStatus.userNotAnonymous);
+    expect(auth.emailLinkCalls, 0);
+  });
 }
 
 class _FakeAuthLinkGateway implements AuthLinkGateway {
@@ -180,6 +267,8 @@ class _FakeAuthLinkGateway implements AuthLinkGateway {
     String? linkedUid,
     List<String>? linkedProviderIds,
     this.linkError,
+    this.emailLinkError,
+    this.anonymous = true,
   }) {
     _linkedUid = linkedUid;
     _linkedProviderIds = linkedProviderIds;
@@ -189,7 +278,7 @@ class _FakeAuthLinkGateway implements AuthLinkGateway {
   String? currentUserId;
 
   @override
-  bool get isCurrentUserAnonymous => true;
+  bool get isCurrentUserAnonymous => anonymous;
 
   @override
   final List<String> providerIds;
@@ -197,7 +286,10 @@ class _FakeAuthLinkGateway implements AuthLinkGateway {
   late final String? _linkedUid;
   late final List<String>? _linkedProviderIds;
   final FirebaseAuthException? linkError;
+  final FirebaseAuthException? emailLinkError;
+  final bool anonymous;
   int linkCalls = 0;
+  int emailLinkCalls = 0;
   String? lastIdToken;
 
   @override
@@ -209,6 +301,20 @@ class _FakeAuthLinkGateway implements AuthLinkGateway {
     return AuthLinkState(
       uid: _linkedUid ?? currentUserId,
       providerIds: _linkedProviderIds ?? providerIds,
+    );
+  }
+
+  @override
+  Future<AuthLinkState> linkEmailPassword({
+    required String email,
+    required String password,
+  }) async {
+    emailLinkCalls += 1;
+    final error = emailLinkError;
+    if (error != null) throw error;
+    return AuthLinkState(
+      uid: _linkedUid ?? currentUserId,
+      providerIds: _linkedProviderIds ?? const ['password'],
     );
   }
 }

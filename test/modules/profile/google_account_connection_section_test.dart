@@ -38,6 +38,129 @@ void main() {
 
     expect(find.text('Secure your account'), findsOneWidget);
     expect(find.text('Continue with Google'), findsOneWidget);
+    expect(find.text('Create email & password login'), findsOneWidget);
+  });
+
+  testWidgets('opens the email and password form', (tester) async {
+    await tester.pumpWidget(buildSubject(serviceFor()));
+
+    await tester.tap(find.text('Create email & password login'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Email'), findsOneWidget);
+    expect(find.text('Password'), findsOneWidget);
+    expect(find.text('Confirm password'), findsOneWidget);
+    expect(find.text('Create login'), findsOneWidget);
+  });
+
+  testWidgets('a password mismatch blocks email binding', (tester) async {
+    final auth = _FakeAuthLinkGateway();
+    await tester.pumpWidget(buildSubject(serviceFor(auth: auth)));
+    await tester.tap(find.text('Create email & password login'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byType(TextFormField).at(0),
+      'person@example.com',
+    );
+    await tester.enterText(find.byType(TextFormField).at(1), 'first-password');
+    await tester.enterText(find.byType(TextFormField).at(2), 'second-password');
+    await tester.tap(find.text('Create login'));
+    await tester.pump();
+
+    expect(find.text('Passwords do not match.'), findsOneWidget);
+    expect(auth.emailLinkCalls, 0);
+  });
+
+  testWidgets('email binding success removes Secure your account', (
+    tester,
+  ) async {
+    await tester.pumpWidget(buildSubject(serviceFor()));
+    await tester.tap(find.text('Create email & password login'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byType(TextFormField).at(0),
+      'person@example.com',
+    );
+    await tester.enterText(find.byType(TextFormField).at(1), 'secure-password');
+    await tester.enterText(find.byType(TextFormField).at(2), 'secure-password');
+    await tester.tap(find.text('Create login'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Account secured'), findsOneWidget);
+    expect(find.text('Secure your account'), findsNothing);
+  });
+
+  testWidgets('a weak password displays a controlled error', (tester) async {
+    await tester.pumpWidget(
+      buildSubject(
+        serviceFor(
+          auth: _FakeAuthLinkGateway(
+            emailLinkError: FirebaseAuthException(code: 'weak-password'),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('Create email & password login'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byType(TextFormField).at(0),
+      'person@example.com',
+    );
+    await tester.enterText(find.byType(TextFormField).at(1), 'password');
+    await tester.enterText(find.byType(TextFormField).at(2), 'password');
+    await tester.tap(find.text('Create login'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('Choose a stronger password and try again.'),
+      findsOneWidget,
+    );
+    expect(find.text('Secure your account'), findsOneWidget);
+  });
+
+  testWidgets('an email already in use displays a controlled error', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      buildSubject(
+        serviceFor(
+          auth: _FakeAuthLinkGateway(
+            emailLinkError: FirebaseAuthException(code: 'email-already-in-use'),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('Create email & password login'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byType(TextFormField).at(0),
+      'person@example.com',
+    );
+    await tester.enterText(find.byType(TextFormField).at(1), 'password');
+    await tester.enterText(find.byType(TextFormField).at(2), 'password');
+    await tester.tap(find.text('Create login'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('This email is already linked to another Gubify account.'),
+      findsOneWidget,
+    );
+    expect(find.text('Secure your account'), findsOneWidget);
+  });
+
+  testWidgets('a non-anonymous user does not see Secure your account', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      buildSubject(serviceFor(auth: _FakeAuthLinkGateway(anonymous: false))),
+    );
+
+    expect(find.text('Secure your account'), findsNothing);
+    expect(find.text('Create email & password login'), findsNothing);
   });
 
   testWidgets('a linked user sees no Google connection card', (tester) async {
@@ -137,19 +260,24 @@ class _FakeAuthLinkGateway implements AuthLinkGateway {
   _FakeAuthLinkGateway({
     this.providerIds = const <String>['anonymous'],
     this.linkError,
+    this.emailLinkError,
+    this.anonymous = true,
   });
 
   @override
   final List<String> providerIds;
 
   final FirebaseAuthException? linkError;
+  final FirebaseAuthException? emailLinkError;
+  final bool anonymous;
   int linkCalls = 0;
+  int emailLinkCalls = 0;
 
   @override
   String? get currentUserId => 'existing-uid';
 
   @override
-  bool get isCurrentUserAnonymous => true;
+  bool get isCurrentUserAnonymous => anonymous;
 
   @override
   Future<AuthLinkState> linkGoogleIdToken(String idToken) async {
@@ -160,6 +288,17 @@ class _FakeAuthLinkGateway implements AuthLinkGateway {
       uid: 'existing-uid',
       providerIds: ['anonymous', 'google.com'],
     );
+  }
+
+  @override
+  Future<AuthLinkState> linkEmailPassword({
+    required String email,
+    required String password,
+  }) async {
+    emailLinkCalls += 1;
+    final error = emailLinkError;
+    if (error != null) throw error;
+    return const AuthLinkState(uid: 'existing-uid', providerIds: ['password']);
   }
 }
 
