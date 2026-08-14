@@ -15,12 +15,18 @@ void main() {
     required GoogleCredentialProvider google,
     AuthAccountGateway? account,
     AuthVerificationGateway? verification,
+    PasswordResetGateway? passwordReset,
+    GoogleSignOutGateway? googleSignOut,
+    void Function()? clearUserCache,
     Future<bool> Function(String userId)? userProfileExists,
   }) {
     return AuthService(
       authLinkGateway: auth,
       authAccountGateway: account,
       authVerificationGateway: verification,
+      passwordResetGateway: passwordReset,
+      googleSignOutGateway: googleSignOut,
+      clearUserCache: clearUserCache,
       googleCredentialProvider: google,
       userProfileExists: userProfileExists,
     );
@@ -591,6 +597,78 @@ void main() {
       expect(verification.deleteCalls, 0);
       expect(verification.signOutCalls, 0);
     });
+
+    test('sends a password reset without changing authentication state', () async {
+      final reset = _FakePasswordResetGateway();
+      final result = await serviceFor(
+        auth: _FakeAuthLinkGateway(currentUserId: 'existing-uid'),
+        google: _FakeGoogleCredentialProvider(identity: identity),
+        passwordReset: reset,
+      ).sendPasswordResetEmail(email: '  person@example.com  ');
+
+      expect(result.isSuccess, isTrue);
+      expect(reset.emails, ['person@example.com']);
+    });
+
+    test('maps controlled password reset failures', () async {
+      final reset = _FakePasswordResetGateway(
+        error: FirebaseAuthException(code: 'too-many-requests'),
+      );
+      final result = await serviceFor(
+        auth: _FakeAuthLinkGateway(currentUserId: 'existing-uid'),
+        google: _FakeGoogleCredentialProvider(identity: identity),
+        passwordReset: reset,
+      ).sendPasswordResetEmail(email: 'person@example.com');
+
+      expect(result.status, PasswordResetStatus.tooManyRequests);
+    });
+
+    test('does not disclose a missing password reset account', () async {
+      final reset = _FakePasswordResetGateway(
+        error: FirebaseAuthException(code: 'user-not-found'),
+      );
+      final result = await serviceFor(
+        auth: _FakeAuthLinkGateway(currentUserId: 'existing-uid'),
+        google: _FakeGoogleCredentialProvider(identity: identity),
+        passwordReset: reset,
+      ).sendPasswordResetEmail(email: 'person@example.com');
+
+      expect(result.isSuccess, isTrue);
+    });
+
+    test('does not log a pure anonymous user out', () async {
+      final verification = _FakeAuthVerificationGateway();
+      final result = await serviceFor(
+        auth: _FakeAuthLinkGateway(currentUserId: 'anonymous-uid'),
+        google: _FakeGoogleCredentialProvider(identity: identity),
+        verification: verification,
+      ).logOut();
+
+      expect(result.status, LogoutStatus.anonymousUser);
+      expect(verification.signOutCalls, 0);
+    });
+
+    test('logs out a Google account and clears cached profile data', () async {
+      final verification = _FakeAuthVerificationGateway();
+      final googleSignOut = _FakeGoogleSignOutGateway();
+      var cacheClearCalls = 0;
+      final result = await serviceFor(
+        auth: _FakeAuthLinkGateway(
+          currentUserId: 'google-uid',
+          anonymous: false,
+          providerIds: const ['google.com'],
+        ),
+        google: _FakeGoogleCredentialProvider(identity: identity),
+        verification: verification,
+        googleSignOut: googleSignOut,
+        clearUserCache: () => cacheClearCalls += 1,
+      ).logOut();
+
+      expect(result.isSuccess, isTrue);
+      expect(googleSignOut.calls, 1);
+      expect(verification.signOutCalls, 1);
+      expect(cacheClearCalls, 1);
+    });
   });
 }
 
@@ -666,6 +744,29 @@ class _FakeGoogleCredentialProvider implements GoogleCredentialProvider {
     final failure = error;
     if (failure != null) throw failure;
     return identity!;
+  }
+}
+
+class _FakePasswordResetGateway implements PasswordResetGateway {
+  _FakePasswordResetGateway({this.error});
+
+  final FirebaseAuthException? error;
+  final List<String> emails = [];
+
+  @override
+  Future<void> sendPasswordResetEmail(String email) async {
+    emails.add(email);
+    final failure = error;
+    if (failure != null) throw failure;
+  }
+}
+
+class _FakeGoogleSignOutGateway implements GoogleSignOutGateway {
+  int calls = 0;
+
+  @override
+  Future<void> signOut() async {
+    calls += 1;
   }
 }
 

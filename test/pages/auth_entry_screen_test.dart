@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -12,10 +14,12 @@ void main() {
   AuthService serviceFor({
     GoogleCredentialProvider? google,
     AuthAccountGateway? account,
+    PasswordResetGateway? passwordReset,
   }) {
     return AuthService(
       authLinkGateway: const _FakeAuthLinkGateway(),
       authAccountGateway: account ?? _FakeAuthAccountGateway(),
+      passwordResetGateway: passwordReset,
       googleCredentialProvider:
           google ??
           const _FakeGoogleCredentialProvider(
@@ -112,8 +116,11 @@ void main() {
     );
 
     expect(anonymousContinuationCalls, 0);
-    await tester.tap(find.text('Continue without an account'));
-    await tester.pump();
+    final anonymousAction = find.text('Continue without an account');
+    await tester.ensureVisible(anonymousAction);
+    await tester.pumpAndSettle();
+    await tester.tap(anonymousAction);
+    await tester.pumpAndSettle();
     expect(anonymousContinuationCalls, 1);
   });
 
@@ -181,6 +188,126 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('Sign in'), findsOneWidget);
+  });
+
+  testWidgets('shows Forgot password only in sign in mode', (tester) async {
+    await tester.pumpWidget(app(service: serviceFor()));
+
+    expect(find.text('Forgot password?'), findsOneWidget);
+    final forgotPasswordAlignment = find.byWidgetPredicate(
+      (widget) =>
+          widget is Align &&
+          widget.alignment == Alignment.center &&
+          widget.child is TextButton,
+    );
+    expect(forgotPasswordAlignment, findsOneWidget);
+
+    await tester.tap(find.text('Create account'));
+    await tester.pump();
+    expect(find.text('Forgot password?'), findsNothing);
+
+    final signInModeAction = find.text('Already have an account? Sign in');
+    await tester.ensureVisible(signInModeAction);
+    await tester.tap(signInModeAction);
+    await tester.pump();
+    expect(find.text('Forgot password?'), findsOneWidget);
+  });
+
+  testWidgets('password reset prefills email and submits once', (tester) async {
+    final passwordReset = _FakePasswordResetGateway();
+    await tester.pumpWidget(
+      app(service: serviceFor(passwordReset: passwordReset)),
+    );
+
+    await tester.enterText(
+      find.byType(TextFormField).at(0),
+      'person@example.com',
+    );
+    await tester.tap(find.text('Forgot password?'));
+    await tester.pumpAndSettle();
+
+    final resetEmail = tester.widget<TextFormField>(
+      find.byType(TextFormField).last,
+    );
+    expect(resetEmail.controller?.text, 'person@example.com');
+
+    await tester.tap(find.text('Send reset email'));
+    await tester.pumpAndSettle();
+
+    expect(passwordReset.emails, ['person@example.com']);
+    expect(
+      find.text(
+        "If an account exists for this email, you'll receive a password reset link.",
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('invalid reset email does not submit', (tester) async {
+    final passwordReset = _FakePasswordResetGateway();
+    await tester.pumpWidget(
+      app(service: serviceFor(passwordReset: passwordReset)),
+    );
+
+    await tester.tap(find.text('Forgot password?'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Send reset email'));
+    await tester.pump();
+
+    expect(find.text('Enter a valid email address.'), findsOneWidget);
+    expect(passwordReset.emails, isEmpty);
+  });
+
+  testWidgets('password reset errors remain controlled', (tester) async {
+    final passwordReset = _FakePasswordResetGateway(
+      error: FirebaseAuthException(code: 'network-request-failed'),
+    );
+    await tester.pumpWidget(
+      app(service: serviceFor(passwordReset: passwordReset)),
+    );
+
+    await tester.tap(find.text('Forgot password?'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byType(TextFormField).last,
+      'person@example.com',
+    );
+    await tester.tap(find.text('Send reset email'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('Check your internet connection and try again.'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('password reset prevents a duplicate submission', (tester) async {
+    final completer = Completer<void>();
+    final passwordReset = _FakePasswordResetGateway(completer: completer);
+    await tester.pumpWidget(
+      app(service: serviceFor(passwordReset: passwordReset)),
+    );
+
+    await tester.tap(find.text('Forgot password?'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byType(TextFormField).last,
+      'person@example.com',
+    );
+    await tester.tap(find.text('Send reset email'));
+    await tester.pump();
+
+    final sendButton = tester.widget<FilledButton>(
+      find.ancestor(
+        of: find.byType(CircularProgressIndicator),
+        matching: find.byType(FilledButton),
+      ),
+    );
+    expect(sendButton.onPressed, isNull);
+    expect(passwordReset.emails, ['person@example.com']);
+
+    completer.complete();
+    await tester.pumpAndSettle();
   });
 
   testWidgets('requires terms acceptance before creating an email account', (
@@ -350,6 +477,22 @@ class _FakeAuthAccountGateway implements AuthAccountGateway {
 
   @override
   Future<String> signInWithGoogleIdToken(String idToken) async => 'google-user';
+}
+
+class _FakePasswordResetGateway implements PasswordResetGateway {
+  _FakePasswordResetGateway({this.error, this.completer});
+
+  final FirebaseAuthException? error;
+  final Completer<void>? completer;
+  final List<String> emails = [];
+
+  @override
+  Future<void> sendPasswordResetEmail(String email) async {
+    emails.add(email);
+    final failure = error;
+    if (failure != null) throw failure;
+    await completer?.future;
+  }
 }
 
 class _FakeGoogleCredentialProvider implements GoogleCredentialProvider {

@@ -3,9 +3,14 @@ import 'package:flutter/material.dart';
 import '../../../services/auth_service.dart';
 
 class GoogleAccountConnectionSection extends StatefulWidget {
-  const GoogleAccountConnectionSection({super.key, required this.authService});
+  const GoogleAccountConnectionSection({
+    super.key,
+    required this.authService,
+    this.onAccountSecured,
+  });
 
   final AuthService authService;
+  final VoidCallback? onAccountSecured;
 
   @override
   State<GoogleAccountConnectionSection> createState() =>
@@ -43,6 +48,7 @@ class _GoogleAccountConnectionSectionState
         'Google account connected',
         duration: const Duration(seconds: 3),
       );
+      widget.onAccountSecured?.call();
       return;
     }
 
@@ -69,6 +75,7 @@ class _GoogleAccountConnectionSectionState
             : 'Account secured. We could not send the verification email.',
         duration: const Duration(seconds: 4),
       );
+      widget.onAccountSecured?.call();
     }
   }
 

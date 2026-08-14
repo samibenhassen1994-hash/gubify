@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
+import '../repositories/user_repository.dart';
 import 'user_service.dart';
 
 enum GoogleLinkStatus {
@@ -128,6 +129,40 @@ enum AccountAuthStatus {
   tooManyRequests,
   operationNotAllowed,
   unknownFailure,
+}
+
+enum PasswordResetStatus {
+  success,
+  invalidEmail,
+  networkRequestFailed,
+  tooManyRequests,
+  unknownFailure,
+}
+
+class PasswordResetResult {
+  const PasswordResetResult._(this.status);
+
+  final PasswordResetStatus status;
+
+  bool get isSuccess => status == PasswordResetStatus.success;
+
+  const PasswordResetResult.success() : this._(PasswordResetStatus.success);
+
+  const PasswordResetResult.failure(PasswordResetStatus status) : this._(status);
+}
+
+enum LogoutStatus { success, noCurrentUser, anonymousUser, unknownFailure }
+
+class LogoutResult {
+  const LogoutResult._(this.status);
+
+  final LogoutStatus status;
+
+  bool get isSuccess => status == LogoutStatus.success;
+
+  const LogoutResult.success() : this._(LogoutStatus.success);
+
+  const LogoutResult.failure(LogoutStatus status) : this._(status);
 }
 
 class AccountAuthResult {
@@ -260,6 +295,14 @@ abstract interface class AuthVerificationGateway {
   Future<void> signOut();
 }
 
+abstract interface class PasswordResetGateway {
+  Future<void> sendPasswordResetEmail(String email);
+}
+
+abstract interface class GoogleSignOutGateway {
+  Future<void> signOut();
+}
+
 class AuthLinkState {
   const AuthLinkState({required this.uid, required this.providerIds});
 
@@ -275,6 +318,9 @@ class AuthService {
     AuthAccountGateway? authAccountGateway,
     AuthVerificationGateway? authVerificationGateway,
     GoogleCredentialProvider? googleCredentialProvider,
+    PasswordResetGateway? passwordResetGateway,
+    GoogleSignOutGateway? googleSignOutGateway,
+    this.clearUserCache,
     this.userProfileExists,
   }) : _auth = auth ?? (authLinkGateway == null ? FirebaseAuth.instance : null),
        _authLinkGateway =
@@ -291,7 +337,17 @@ class AuthService {
                ? FirebaseAuthVerificationGateway(auth ?? FirebaseAuth.instance)
                : const _UnavailableAuthVerificationGateway()),
        _googleCredentialProvider =
-           googleCredentialProvider ?? GoogleSignInCredentialProvider() {
+           googleCredentialProvider ?? GoogleSignInCredentialProvider(),
+       _passwordResetGateway =
+           passwordResetGateway ??
+           (authLinkGateway == null
+               ? FirebasePasswordResetGateway(auth ?? FirebaseAuth.instance)
+               : const _UnavailablePasswordResetGateway()),
+       _googleSignOutGateway =
+           googleSignOutGateway ??
+           (authLinkGateway == null
+               ? GoogleSignInSessionGateway()
+               : const _UnavailableGoogleSignOutGateway()) {
     _userService = userService;
   }
 
@@ -301,6 +357,9 @@ class AuthService {
   final AuthAccountGateway _authAccountGateway;
   final AuthVerificationGateway _authVerificationGateway;
   final GoogleCredentialProvider _googleCredentialProvider;
+  final PasswordResetGateway _passwordResetGateway;
+  final GoogleSignOutGateway _googleSignOutGateway;
+  final void Function()? clearUserCache;
   final Future<bool> Function(String userId)? userProfileExists;
 
   User? get currentUser => _auth?.currentUser;
@@ -321,6 +380,9 @@ class AuthService {
 
   List<String> get providerIds =>
       List.unmodifiable(_authLinkGateway.providerIds);
+
+  bool get canCurrentUserLogOut =>
+      currentUserId != null && !isCurrentUserAnonymous;
 
   Stream<User?> get authStateChanges =>
       _auth?.authStateChanges() ?? Stream<User?>.value(null);
@@ -525,6 +587,52 @@ class AuthService {
     }
   }
 
+  Future<PasswordResetResult> sendPasswordResetEmail({
+    required String email,
+  }) async {
+    try {
+      await _passwordResetGateway.sendPasswordResetEmail(email.trim());
+      return const PasswordResetResult.success();
+    } on FirebaseAuthException catch (error) {
+      if (error.code == 'user-not-found') {
+        // Do not disclose whether the requested email owns an account.
+        return const PasswordResetResult.success();
+      }
+      return PasswordResetResult.failure(_passwordResetErrorStatus(error.code));
+    } catch (_) {
+      return const PasswordResetResult.failure(PasswordResetStatus.unknownFailure);
+    }
+  }
+
+  Future<LogoutResult> logOut() async {
+    if (currentUserId == null) {
+      return const LogoutResult.failure(LogoutStatus.noCurrentUser);
+    }
+    if (isCurrentUserAnonymous) {
+      return const LogoutResult.failure(LogoutStatus.anonymousUser);
+    }
+
+    final wasGoogleLinked = isGoogleLinked;
+
+    try {
+      await _authVerificationGateway.signOut();
+      (clearUserCache ?? _clearCachedUsers).call();
+    } catch (_) {
+      return const LogoutResult.failure(LogoutStatus.unknownFailure);
+    }
+
+    if (wasGoogleLinked) {
+      try {
+        await _googleSignOutGateway.signOut();
+      } catch (_) {
+        // Firebase sign-out remains authoritative even if the local Google
+        // session cannot be cleared.
+      }
+    }
+
+    return const LogoutResult.success();
+  }
+
   Future<EmailVerificationResult> sendCurrentUserEmailVerification() async {
     final email = currentUserEmail;
     if (_authVerificationGateway.currentUserId == null) {
@@ -673,6 +781,15 @@ class AuthService {
     };
   }
 
+  PasswordResetStatus _passwordResetErrorStatus(String code) {
+    return switch (code) {
+      'invalid-email' => PasswordResetStatus.invalidEmail,
+      'network-request-failed' => PasswordResetStatus.networkRequestFailed,
+      'too-many-requests' => PasswordResetStatus.tooManyRequests,
+      _ => PasswordResetStatus.unknownFailure,
+    };
+  }
+
   EmailVerificationStatus _emailVerificationErrorStatus(String code) {
     return switch (code) {
       'network-request-failed' => EmailVerificationStatus.networkRequestFailed,
@@ -680,6 +797,10 @@ class AuthService {
       _ => EmailVerificationStatus.unknownFailure,
     };
   }
+}
+
+void _clearCachedUsers() {
+  UserRepository.instance.clearCache();
 }
 
 class FirebaseAuthLinkGateway implements AuthLinkGateway {
@@ -841,6 +962,30 @@ class FirebaseAuthVerificationGateway implements AuthVerificationGateway {
   Future<void> signOut() => _auth.signOut();
 }
 
+class FirebasePasswordResetGateway implements PasswordResetGateway {
+  FirebasePasswordResetGateway(this._auth);
+
+  final FirebaseAuth _auth;
+
+  @override
+  Future<void> sendPasswordResetEmail(String email) {
+    return _auth.sendPasswordResetEmail(email: email);
+  }
+}
+
+class GoogleSignInSessionGateway implements GoogleSignOutGateway {
+  GoogleSignInSessionGateway({GoogleSignIn? googleSignIn})
+    : _googleSignIn = googleSignIn ?? GoogleSignIn.instance;
+
+  final GoogleSignIn _googleSignIn;
+
+  @override
+  Future<void> signOut() async {
+    await _googleSignIn.initialize();
+    await _googleSignIn.signOut();
+  }
+}
+
 class _UnavailableAuthAccountGateway implements AuthAccountGateway {
   const _UnavailableAuthAccountGateway();
 
@@ -894,6 +1039,22 @@ class _UnavailableAuthVerificationGateway implements AuthVerificationGateway {
 
   @override
   Future<void> signOut() async => _unavailable();
+}
+
+class _UnavailablePasswordResetGateway implements PasswordResetGateway {
+  const _UnavailablePasswordResetGateway();
+
+  @override
+  Future<void> sendPasswordResetEmail(String email) {
+    throw StateError('FirebaseAuth is unavailable.');
+  }
+}
+
+class _UnavailableGoogleSignOutGateway implements GoogleSignOutGateway {
+  const _UnavailableGoogleSignOutGateway();
+
+  @override
+  Future<void> signOut() async {}
 }
 
 abstract interface class GoogleSignInClient {

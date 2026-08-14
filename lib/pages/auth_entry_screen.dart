@@ -124,6 +124,25 @@ class _AuthEntryScreenState extends State<AuthEntryScreen> {
     }
   }
 
+  Future<void> _openPasswordReset() async {
+    if (_isLoading || _isRegistering) return;
+    final sent = await showDialog<bool>(
+      context: context,
+      builder: (_) => _PasswordResetDialog(
+        authService: widget.authService,
+        initialEmail: _emailController.text.trim(),
+      ),
+    );
+    if (!mounted || sent != true) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          "If an account exists for this email, you'll receive a password reset link.",
+        ),
+      ),
+    );
+  }
+
   void _showError(String message) {
     ScaffoldMessenger.of(
       context,
@@ -283,6 +302,16 @@ class _AuthEntryScreenState extends State<AuthEntryScreen> {
                                           ? null
                                           : 'Enter a password.',
                                     ),
+                                    if (!_isRegistering)
+                                      Align(
+                                        alignment: Alignment.center,
+                                        child: TextButton(
+                                          onPressed: _isLoading
+                                              ? null
+                                              : _openPasswordReset,
+                                          child: const Text('Forgot password?'),
+                                        ),
+                                      ),
                                     if (_isRegistering) ...[
                                       const SizedBox(height: 8),
                                       TextFormField(
@@ -444,6 +473,123 @@ class _AuthEntryScreenState extends State<AuthEntryScreen> {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _PasswordResetDialog extends StatefulWidget {
+  const _PasswordResetDialog({
+    required this.authService,
+    required this.initialEmail,
+  });
+
+  final AuthService authService;
+  final String initialEmail;
+
+  @override
+  State<_PasswordResetDialog> createState() => _PasswordResetDialogState();
+}
+
+class _PasswordResetDialogState extends State<_PasswordResetDialog> {
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _emailController;
+  bool _isSending = false;
+  String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _emailController = TextEditingController(text: widget.initialEmail);
+  }
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _send() async {
+    if (_isSending || !(_formKey.currentState?.validate() ?? false)) return;
+    setState(() {
+      _isSending = true;
+      _errorMessage = null;
+    });
+    final result = await widget.authService.sendPasswordResetEmail(
+      email: _emailController.text.trim(),
+    );
+    if (!mounted) return;
+
+    if (result.isSuccess) {
+      Navigator.of(context).pop(true);
+      return;
+    }
+
+    setState(() {
+      _isSending = false;
+      _errorMessage = _messageFor(result.status);
+    });
+  }
+
+  String _messageFor(PasswordResetStatus status) {
+    return switch (status) {
+      PasswordResetStatus.networkRequestFailed =>
+        'Check your internet connection and try again.',
+      PasswordResetStatus.tooManyRequests =>
+        'Too many attempts. Please try again later.',
+      PasswordResetStatus.invalidEmail => 'Enter a valid email address.',
+      PasswordResetStatus.unknownFailure || PasswordResetStatus.success =>
+        'Unable to send a reset email right now. Please try again.',
+    };
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Reset password'),
+      content: Form(
+        key: _formKey,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            TextFormField(
+              controller: _emailController,
+              keyboardType: TextInputType.emailAddress,
+              autofocus: true,
+              decoration: const InputDecoration(labelText: 'Email'),
+              validator: (value) {
+                final email = value?.trim() ?? '';
+                return email.isEmpty || !email.contains('@')
+                    ? 'Enter a valid email address.'
+                    : null;
+              },
+            ),
+            if (_errorMessage != null) ...[
+              const SizedBox(height: 12),
+              Text(
+                _errorMessage!,
+                style: const TextStyle(color: Color(0xFFB91C1C)),
+              ),
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _isSending ? null : () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: _isSending ? null : _send,
+          child: _isSending
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Text('Send reset email'),
+        ),
+      ],
     );
   }
 }
