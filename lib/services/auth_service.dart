@@ -1,4 +1,5 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
 import '../repositories/user_repository.dart';
@@ -335,6 +336,25 @@ abstract interface class PasswordChangeGateway {
   Future<void> updatePassword(String password);
 }
 
+abstract interface class AccountDeletionAuthGateway {
+  Future<void> reauthenticateWithPassword({
+    required String email,
+    required String password,
+  });
+  Future<void> reauthenticateWithGoogleIdToken(String idToken);
+  Future<void> deleteCurrentUser();
+}
+
+enum AccountDeletionReauthStatus {
+  success,
+  wrongPassword,
+  wrongGoogleAccount,
+  cancelled,
+  noCurrentUser,
+  unavailable,
+  failed,
+}
+
 abstract interface class GoogleSignOutGateway {
   Future<void> signOut();
 }
@@ -356,6 +376,7 @@ class AuthService {
     GoogleCredentialProvider? googleCredentialProvider,
     PasswordResetGateway? passwordResetGateway,
     PasswordChangeGateway? passwordChangeGateway,
+    AccountDeletionAuthGateway? accountDeletionAuthGateway,
     GoogleSignOutGateway? googleSignOutGateway,
     this.clearUserCache,
     this.userProfileExists,
@@ -385,6 +406,13 @@ class AuthService {
            (authLinkGateway == null
                ? FirebasePasswordChangeGateway(auth ?? FirebaseAuth.instance)
                : const _UnavailablePasswordChangeGateway()),
+       _accountDeletionAuthGateway =
+           accountDeletionAuthGateway ??
+           (authLinkGateway == null
+               ? FirebaseAccountDeletionAuthGateway(
+                   auth ?? FirebaseAuth.instance,
+                 )
+               : const _UnavailableAccountDeletionAuthGateway()),
        _googleSignOutGateway =
            googleSignOutGateway ??
            (authLinkGateway == null
@@ -401,6 +429,7 @@ class AuthService {
   final GoogleCredentialProvider _googleCredentialProvider;
   final PasswordResetGateway _passwordResetGateway;
   final PasswordChangeGateway _passwordChangeGateway;
+  final AccountDeletionAuthGateway _accountDeletionAuthGateway;
   final GoogleSignOutGateway _googleSignOutGateway;
   final void Function()? clearUserCache;
   final Future<bool> Function(String userId)? userProfileExists;
@@ -708,6 +737,108 @@ class AuthService {
     }
 
     return const LogoutResult.success();
+  }
+
+  Future<AccountDeletionReauthStatus> reauthenticateForDeletion({
+    String? password,
+  }) async {
+    if (currentUserId == null) return AccountDeletionReauthStatus.noCurrentUser;
+    if (isCurrentUserAnonymous) return AccountDeletionReauthStatus.success;
+
+    try {
+      if (isPasswordLinked) {
+        final email = currentUserEmail;
+        if (email == null || email.trim().isEmpty || password == null) {
+          return AccountDeletionReauthStatus.unavailable;
+        }
+        await _accountDeletionAuthGateway.reauthenticateWithPassword(
+          email: email,
+          password: password,
+        );
+        return AccountDeletionReauthStatus.success;
+      }
+      if (isGoogleLinked) {
+        final identity = await _authenticateGoogleForDeletion();
+        final currentEmail = currentUserEmail?.trim().toLowerCase();
+        final selectedEmail = identity.email.trim().toLowerCase();
+        if (currentEmail != null &&
+            currentEmail.isNotEmpty &&
+            selectedEmail.isNotEmpty &&
+            currentEmail != selectedEmail) {
+          _debugAccountDeletionFailure(
+            'googleAuthentication',
+            StateError('The selected Google account does not match.'),
+          );
+          return AccountDeletionReauthStatus.wrongGoogleAccount;
+        }
+        final uidBefore = currentUserId;
+        await _accountDeletionAuthGateway.reauthenticateWithGoogleIdToken(
+          identity.idToken,
+        );
+        final uidAfter = currentUserId;
+        if (uidBefore == null || uidAfter != uidBefore) {
+          _debugAccountDeletionFailure(
+            'firebaseReauthentication',
+            StateError('Firebase UID changed during reauthentication.'),
+          );
+          return AccountDeletionReauthStatus.wrongGoogleAccount;
+        }
+        return AccountDeletionReauthStatus.success;
+      }
+      return AccountDeletionReauthStatus.unavailable;
+    } on GoogleCredentialException catch (error) {
+      return error.failure == GoogleCredentialFailure.cancelled
+          ? AccountDeletionReauthStatus.cancelled
+          : AccountDeletionReauthStatus.failed;
+    } on FirebaseAuthException catch (error) {
+      _debugAccountDeletionFailure('firebaseReauthentication', error);
+      return switch (error.code) {
+        'wrong-password' ||
+        'invalid-credential' => AccountDeletionReauthStatus.wrongPassword,
+        'user-mismatch' => AccountDeletionReauthStatus.wrongGoogleAccount,
+        _ => AccountDeletionReauthStatus.failed,
+      };
+    } catch (error) {
+      _debugAccountDeletionFailure('firebaseReauthentication', error);
+      return AccountDeletionReauthStatus.failed;
+    }
+  }
+
+  Future<GoogleIdentity> _authenticateGoogleForDeletion() async {
+    try {
+      return await _googleCredentialProvider.authenticate();
+    } on Object catch (error) {
+      _debugAccountDeletionFailure('googleAuthentication', error);
+      rethrow;
+    }
+  }
+
+  Future<bool> deleteCurrentAccountAuthUser() async {
+    try {
+      await _accountDeletionAuthGateway.deleteCurrentUser();
+      (clearUserCache ?? _clearCachedUsers).call();
+      return true;
+    } catch (error) {
+      _debugAccountDeletionFailure('deleteFirebaseAuth', error);
+      return false;
+    }
+  }
+
+  void _debugAccountDeletionFailure(String stage, Object error) {
+    if (!kDebugMode) return;
+    debugPrint('Account deletion failed at: $stage');
+    if (error is FirebaseAuthException) {
+      debugPrint('FirebaseAuthException code: ${error.code}');
+      if (error.message case final message?) {
+        debugPrint('FirebaseAuthException message: $message');
+      }
+    } else if (error is FirebaseException) {
+      debugPrint(
+        'FirebaseException plugin: ${error.plugin}, code: ${error.code}',
+      );
+    } else {
+      debugPrint('Account deletion error type: ${error.runtimeType}');
+    }
   }
 
   Future<EmailVerificationResult> sendCurrentUserEmailVerification() async {
@@ -1083,6 +1214,35 @@ class FirebasePasswordChangeGateway implements PasswordChangeGateway {
   }
 }
 
+class FirebaseAccountDeletionAuthGateway implements AccountDeletionAuthGateway {
+  FirebaseAccountDeletionAuthGateway(this._auth);
+
+  final FirebaseAuth _auth;
+
+  User get _user {
+    final user = _auth.currentUser;
+    if (user == null) throw StateError('No authenticated user.');
+    return user;
+  }
+
+  @override
+  Future<void> reauthenticateWithPassword({
+    required String email,
+    required String password,
+  }) => _user.reauthenticateWithCredential(
+    EmailAuthProvider.credential(email: email, password: password),
+  );
+
+  @override
+  Future<void> reauthenticateWithGoogleIdToken(String idToken) =>
+      _user.reauthenticateWithCredential(
+        GoogleAuthProvider.credential(idToken: idToken),
+      );
+
+  @override
+  Future<void> deleteCurrentUser() => _user.delete();
+}
+
 class GoogleSignInSessionGateway implements GoogleSignOutGateway {
   GoogleSignInSessionGateway({GoogleSignIn? googleSignIn})
     : _googleSignIn = googleSignIn ?? GoogleSignIn.instance;
@@ -1179,6 +1339,26 @@ class _UnavailablePasswordChangeGateway implements PasswordChangeGateway {
 
   @override
   Future<void> updatePassword(String password) async => _unavailable();
+}
+
+class _UnavailableAccountDeletionAuthGateway
+    implements AccountDeletionAuthGateway {
+  const _UnavailableAccountDeletionAuthGateway();
+
+  Never _unavailable() => throw StateError('FirebaseAuth is unavailable.');
+
+  @override
+  Future<void> deleteCurrentUser() async => _unavailable();
+
+  @override
+  Future<void> reauthenticateWithGoogleIdToken(String idToken) async =>
+      _unavailable();
+
+  @override
+  Future<void> reauthenticateWithPassword({
+    required String email,
+    required String password,
+  }) async => _unavailable();
 }
 
 class _UnavailableGoogleSignOutGateway implements GoogleSignOutGateway {

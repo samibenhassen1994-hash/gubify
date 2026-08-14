@@ -1,4 +1,5 @@
 import { after, before, beforeEach, describe, test } from 'node:test';
+import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
   assertFails,
@@ -993,4 +994,561 @@ describe('Phase E display name cooldown', () => {
       displayNameChangedAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     })));
+
+  test('private rename keeps membership coherent and future writes authorized', async () => {
+    await seedPrivateMembership();
+    const clientDb = db(ids.member);
+    const batch = writeBatch(clientDb);
+    batch.update(doc(clientDb, 'users', ids.member), {
+      displayName: 'New Name',
+      displayNameChangedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    batch.update(doc(clientDb, 'gubs', 'g1', 'members', ids.member), {
+      displayName: 'New Name',
+    });
+    await assertSucceeds(batch.commit());
+
+    const ownerBefore = (await getDoc(
+      doc(db(ids.owner), 'gubs', 'g1', 'members', ids.owner),
+    )).data();
+    const renamed = (await getDoc(
+      doc(clientDb, 'gubs', 'g1', 'members', ids.member),
+    )).data();
+    assert.equal(renamed.displayName, 'New Name');
+    assert.equal(renamed.role, 'member');
+    assert.equal(ownerBefore.displayName, ids.owner);
+    assert.equal(ownerBefore.role, 'owner');
+
+    await assertSucceeds(setDoc(
+      doc(clientDb, 'gubs', 'g1', 'messages', 'after-rename'),
+      {
+        messageId: 'after-rename', gubId: 'g1', senderId: ids.member,
+        senderName: 'New Name', text: 'Message', createdAt: now(),
+      },
+    ));
+    await assertSucceeds(setDoc(
+      doc(clientDb, 'gubs', 'g1', 'tasks', 'after-rename'),
+      {
+        gubId: 'g1', taskId: 'after-rename', title: 'Task', description: '',
+        creatorId: ids.member, creatorName: 'New Name',
+        assignedUserId: ids.member, assignedUserName: 'New Name',
+        sourceType: 'manual', sourceId: null, sourcePreview: null,
+        originUserId: null, sourceAuthorName: null, additionalDetails: null,
+        status: 'active', priority: 'normal', createdAt: now(), dueDate: null,
+        completedAt: null, completedBy: null, notificationsEnabled: true,
+        archived: false,
+      },
+    ));
+  });
+
+  test('Community rename keeps membership coherent and chat authorized', async () => {
+    await seedCommunityMembership();
+    const clientDb = db(ids.communityMember);
+    const batch = writeBatch(clientDb);
+    batch.update(doc(clientDb, 'users', ids.communityMember), {
+      displayName: 'Community New Name',
+      displayNameChangedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    batch.update(
+      doc(clientDb, 'communities', 'c1', 'members', ids.communityMember),
+      { displayName: 'Community New Name' },
+    );
+    await assertSucceeds(batch.commit());
+
+    await assertSucceeds(setDoc(
+      doc(clientDb, 'communities', 'c1', 'messages', 'after-rename'),
+      {
+        messageId: 'after-rename', communityId: 'c1',
+        senderId: ids.communityMember, senderName: 'Community New Name',
+        text: 'Message', createdAt: serverTimestamp(),
+      },
+    ));
+    const owner = (await getDoc(
+      doc(db(ids.communityOwner), 'communities', 'c1', 'members', ids.communityOwner),
+    )).data();
+    assert.equal(owner.displayName, ids.communityOwner);
+    assert.equal(owner.role, 'owner');
+  });
+
+  test('membership-only repair uses canonical name without resetting cooldown', async () => {
+    await seedPrivateMembership();
+    await env.withSecurityRulesDisabled(async (context) => {
+      await updateDoc(doc(context.firestore(), 'users', ids.member), {
+        displayName: 'Already Canonical',
+        displayNameChangedAt: new Date(),
+      });
+    });
+    await assertSucceeds(updateDoc(
+      doc(db(ids.member), 'gubs', 'g1', 'members', ids.member),
+      { displayName: 'Already Canonical' },
+    ));
+    const profileData = (await getDoc(doc(db(ids.member), 'users', ids.member))).data();
+    assert.equal(profileData.displayName, 'Already Canonical');
+    assert.ok(profileData.displayNameChangedAt);
+  });
+
+  test('a user cannot rename another current membership', async () => {
+    await seedPrivateMembership();
+    await assertFails(updateDoc(
+      doc(db(ids.owner), 'gubs', 'g1', 'members', ids.member),
+      { displayName: 'Forged' },
+    ));
+  });
+
+  test('owner rename preserves Private Gub and Community ownership', async () => {
+    await seedGub();
+    await seedCommunityMembership();
+
+    const privateDb = db(ids.owner);
+    const privateBatch = writeBatch(privateDb);
+    privateBatch.update(doc(privateDb, 'users', ids.owner), {
+      displayName: 'Private Owner New',
+      displayNameChangedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    privateBatch.update(doc(privateDb, 'gubs', 'g1', 'members', ids.owner), {
+      displayName: 'Private Owner New',
+    });
+    await assertSucceeds(privateBatch.commit());
+
+    const communityDb = db(ids.communityOwner);
+    const communityBatch = writeBatch(communityDb);
+    communityBatch.update(doc(communityDb, 'users', ids.communityOwner), {
+      displayName: 'Community Owner New',
+      displayNameChangedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    communityBatch.update(
+      doc(communityDb, 'communities', 'c1', 'members', ids.communityOwner),
+      { displayName: 'Community Owner New' },
+    );
+    await assertSucceeds(communityBatch.commit());
+
+    const privateRoot = (await getDoc(doc(privateDb, 'gubs', 'g1'))).data();
+    const privateOwner = (await getDoc(
+      doc(privateDb, 'gubs', 'g1', 'members', ids.owner),
+    )).data();
+    const communityRoot = (await getDoc(
+      doc(communityDb, 'communities', 'c1'),
+    )).data();
+    const communityOwner = (await getDoc(
+      doc(communityDb, 'communities', 'c1', 'members', ids.communityOwner),
+    )).data();
+    assert.equal(privateRoot.ownerId, ids.owner);
+    assert.equal(privateOwner.role, 'owner');
+    assert.equal(communityRoot.ownerId, ids.communityOwner);
+    assert.equal(communityOwner.role, 'owner');
+  });
+});
+
+describe('Phase F account self-cleanup permissions', () => {
+  test('a user may delete only their own profile', async () => {
+    await assertSucceeds(deleteDoc(doc(db(ids.member), 'users', ids.member)));
+    await assertFails(deleteDoc(doc(db(ids.outsider), 'users', ids.member)));
+  });
+
+  test('a current member may remove only their own private read state', async () => {
+    await env.withSecurityRulesDisabled(async (context) => {
+      const admin = context.firestore();
+      await setDoc(doc(admin, 'gubs', 'g1'), root({ memberCount: 2 }));
+      await setDoc(doc(admin, 'gubs', 'g1', 'members', ids.member), member(ids.member));
+      await setDoc(doc(admin, 'gubs', 'g1', 'chatReads', ids.member), {
+        userId: ids.member,
+        gubId: 'g1',
+        lastReadAt: now(),
+      });
+      await setDoc(doc(admin, 'gubs', 'g1', 'boardReads', ids.member), {
+        lastReadAt: now(),
+      });
+    });
+
+    await assertFails(
+      deleteDoc(doc(db(ids.outsider), 'gubs', 'g1', 'chatReads', ids.member)),
+    );
+    await assertSucceeds(
+      deleteDoc(doc(db(ids.member), 'gubs', 'g1', 'chatReads', ids.member)),
+    );
+    await assertSucceeds(
+      deleteDoc(doc(db(ids.member), 'gubs', 'g1', 'boardReads', ids.member)),
+    );
+  });
+
+  test('a resolved Community request remains historical account data', async () => {
+    await env.withSecurityRulesDisabled(async (context) => {
+      const admin = context.firestore();
+      await setDoc(doc(admin, 'communities', 'c1'), {
+        communityId: 'c1',
+        name: 'Community',
+        ownerId: ids.communityOwner,
+        memberCount: 2,
+        visibility: 'public',
+        accessMode: 'approval',
+        status: 'active',
+        createdAt: now(),
+      });
+      await setDoc(
+        doc(admin, 'communities', 'c1', 'members', ids.communityMember),
+        member(ids.communityMember),
+      );
+      await setDoc(
+        doc(admin, 'communities', 'c1', 'joinRequests', ids.communityMember),
+        {
+          userId: ids.communityMember,
+          displayName: ids.communityMember,
+          status: 'approved',
+          createdAt: now(),
+          resolvedAt: now(),
+          resolvedBy: ids.communityOwner,
+        },
+      );
+    });
+
+    await assertFails(
+      deleteDoc(
+        doc(
+          db(ids.outsider),
+          'communities',
+          'c1',
+          'joinRequests',
+          ids.communityMember,
+        ),
+      ),
+    );
+    await assertFails(
+      deleteDoc(
+        doc(
+          db(ids.communityMember),
+          'communities',
+          'c1',
+          'joinRequests',
+          ids.communityMember,
+        ),
+      ),
+    );
+  });
+});
+
+describe('Phase F irreversible shared identity anonymization', () => {
+  async function seedIdentityDocuments() {
+    await seedGub();
+    await env.withSecurityRulesDisabled(async (context) => {
+      const seedDb = context.firestore();
+      await setDoc(doc(seedDb, 'gubs', 'g1', 'members', ids.member), member(ids.member));
+      await setDoc(doc(seedDb, 'users', ids.member, 'gubs', 'g1'), copy(ids.member));
+      await setDoc(doc(seedDb, 'gubs', 'g1', 'messages', 'm1'), {
+        messageId: 'm1', gubId: 'g1', senderId: ids.member,
+        senderName: 'Original Name', text: 'Shared content', createdAt: now(),
+      });
+      await setDoc(doc(seedDb, 'gubs', 'g1', 'tasks', 't1'), {
+        gubId: 'g1', taskId: 't1', title: 'Keep title', description: 'Keep description',
+        creatorId: ids.member, creatorName: 'Original Name', assignedUserId: ids.second,
+        assignedUserName: ids.second, sourceType: 'manual', sourceId: null,
+        sourcePreview: null, originUserId: null, sourceAuthorName: null,
+        additionalDetails: null, status: 'active', priority: 'normal', createdAt: now(),
+        dueDate: null, completedAt: null, completedBy: null,
+        notificationsEnabled: true, archived: false,
+      });
+    });
+  }
+
+  test('user anonymizes only their own message identity with exact sentinel', async () => {
+    await seedIdentityDocuments();
+    const reference = doc(db(ids.member), 'gubs', 'g1', 'messages', 'm1');
+    await assertSucceeds(updateDoc(reference, {
+      senderId: '__deleted_user__', senderName: 'Deleted user',
+    }));
+    const data = (await getDoc(reference)).data();
+    assert.equal(data.text, 'Shared content');
+    assert.equal(data.senderId, '__deleted_user__');
+    assert.equal(data.senderName, 'Deleted user');
+  });
+
+  test('anonymization cannot alter shared message content', async () => {
+    await seedIdentityDocuments();
+    await assertFails(updateDoc(doc(db(ids.member), 'gubs', 'g1', 'messages', 'm1'), {
+      senderId: '__deleted_user__', senderName: 'Deleted user', text: 'Changed',
+    }));
+  });
+
+  test('sentinel and visible name must be exact', async () => {
+    await seedIdentityDocuments();
+    const reference = doc(db(ids.member), 'gubs', 'g1', 'messages', 'm1');
+    await assertFails(updateDoc(reference, { senderId: 'deleted_member', senderName: 'Deleted user' }));
+    await assertFails(updateDoc(reference, { senderId: '__deleted_user__', senderName: 'Someone' }));
+    await assertFails(updateDoc(reference, { senderId: ids.second, senderName: ids.second }));
+  });
+
+  test('another member and outsider cannot anonymize the author', async () => {
+    await seedIdentityDocuments();
+    const update = { senderId: '__deleted_user__', senderName: 'Deleted user' };
+    await assertFails(updateDoc(doc(db(ids.second), 'gubs', 'g1', 'messages', 'm1'), update));
+    await assertFails(updateDoc(doc(db(ids.outsider), 'gubs', 'g1', 'messages', 'm1'), update));
+  });
+
+  test('task identity can change without changing content or status', async () => {
+    await seedIdentityDocuments();
+    const reference = doc(db(ids.member), 'gubs', 'g1', 'tasks', 't1');
+    await assertSucceeds(updateDoc(reference, {
+      creatorId: '__deleted_user__', creatorName: 'Deleted user',
+    }));
+    const data = (await getDoc(reference)).data();
+    assert.equal(data.title, 'Keep title');
+    assert.equal(data.description, 'Keep description');
+    assert.equal(data.status, 'active');
+    assert.equal(data.assignedUserId, ids.second);
+    assert.equal(data.assignedUserName, ids.second);
+    await assertFails(updateDoc(reference, { status: 'completed' }));
+  });
+
+  test('mixed-user resources preserve every surviving identity', async () => {
+    await seedIdentityDocuments();
+    await env.withSecurityRulesDisabled(async (context) => {
+      const seedDb = context.firestore();
+      await setDoc(doc(seedDb, 'gubs', 'g1', 'organizedEvents', 'e1'), {
+        eventId: 'e1', gubId: 'g1', title: 'Event', createdBy: ids.member,
+        createdByName: 'Original Name', originUserId: null,
+        sourceAuthorName: null, assignments: [{
+          userId: ids.second, userName: 'Surviving User', taskText: 'Keep task',
+          isCompleted: false, completedAt: null,
+        }], status: 'active', createdAt: now(),
+      });
+      await setDoc(doc(seedDb, 'gubs', 'g1', 'goals', 'goal1'), {
+        goalId: 'goal1', gubId: 'g1', title: 'Budget', ownerId: ids.second,
+        originUserId: ids.member, sourceAuthorName: 'Original Name',
+        status: 'active', archived: false, createdAt: now(),
+      });
+    });
+
+    const eventReference = doc(db(ids.member), 'gubs', 'g1', 'organizedEvents', 'e1');
+    await assertSucceeds(updateDoc(eventReference, {
+      createdBy: '__deleted_user__', createdByName: 'Deleted user',
+    }));
+    const event = (await getDoc(eventReference)).data();
+    assert.deepEqual(event.assignments, [{
+      userId: ids.second, userName: 'Surviving User', taskText: 'Keep task',
+      isCompleted: false, completedAt: null,
+    }]);
+
+    const budgetReference = doc(db(ids.member), 'gubs', 'g1', 'goals', 'goal1');
+    await assertSucceeds(updateDoc(budgetReference, {
+      originUserId: '__deleted_user__', sourceAuthorName: 'Deleted user',
+    }));
+    const budget = (await getDoc(budgetReference)).data();
+    assert.equal(budget.ownerId, ids.second);
+    assert.equal(budget.title, 'Budget');
+  });
+
+  test('deleting member cannot delete owner profile and owner keeps normal writes', async () => {
+    await env.withSecurityRulesDisabled(async (context) => {
+      const seedDb = context.firestore();
+      await setDoc(doc(seedDb, 'gubs', 'g1'), root({
+        ownerId: ids.second, memberCount: 2,
+      }));
+      await setDoc(
+        doc(seedDb, 'gubs', 'g1', 'members', ids.second),
+        member(ids.second, 'owner', { displayName: 'Surviving User' }),
+      );
+      await setDoc(
+        doc(seedDb, 'gubs', 'g1', 'members', ids.member),
+        member(ids.member, 'member', { displayName: 'Deleting User' }),
+      );
+      await setDoc(doc(seedDb, 'users', ids.member, 'gubs', 'g1'), copy(ids.member, 'member', {
+        ownerId: ids.second,
+      }));
+      await updateDoc(doc(seedDb, 'users', ids.second), {
+        displayName: 'Surviving User',
+      });
+    });
+
+    await assertFails(deleteDoc(doc(db(ids.member), 'users', ids.second)));
+    await assertSucceeds(deleteDoc(doc(db(ids.member), 'users', ids.member)));
+
+    const leavingDb = db(ids.member);
+    await assertSucceeds(runTransaction(leavingDb, async (transaction) => {
+      transaction.update(doc(leavingDb, 'gubs', 'g1'), { memberCount: 1 });
+      transaction.delete(doc(leavingDb, 'gubs', 'g1', 'members', ids.member));
+      transaction.delete(doc(leavingDb, 'users', ids.member, 'gubs', 'g1'));
+    }));
+
+    const ownerProfile = await getDoc(doc(db(ids.second), 'users', ids.second));
+    const ownerMembership = await getDoc(
+      doc(db(ids.second), 'gubs', 'g1', 'members', ids.second),
+    );
+    const gub = await getDoc(doc(db(ids.second), 'gubs', 'g1'));
+    assert.equal(ownerProfile.data().displayName, 'Surviving User');
+    assert.equal(ownerMembership.data().displayName, 'Surviving User');
+    assert.equal(ownerMembership.data().role, 'owner');
+    assert.equal(gub.data().ownerId, ids.second);
+    assert.equal(gub.data().memberCount, 1);
+
+    await assertSucceeds(setDoc(
+      doc(db(ids.second), 'gubs', 'g1', 'messages', 'surviving-message'),
+      {
+        messageId: 'surviving-message', gubId: 'g1', senderId: ids.second,
+        senderName: 'Surviving User', text: 'Still allowed', createdAt: now(),
+      },
+    ));
+    await assertSucceeds(setDoc(
+      doc(db(ids.second), 'gubs', 'g1', 'tasks', 'surviving-task'),
+      {
+        gubId: 'g1', taskId: 'surviving-task', title: 'Still works',
+        description: '', creatorId: ids.second, creatorName: 'Surviving User',
+        assignedUserId: ids.second, assignedUserName: 'Surviving User',
+        sourceType: 'manual', sourceId: null, sourcePreview: null,
+        originUserId: null, sourceAuthorName: null, additionalDetails: null,
+        status: 'active', priority: 'normal', createdAt: now(), dueDate: null,
+        completedAt: null, completedBy: null, notificationsEnabled: true,
+        archived: false,
+      },
+    ));
+  });
+
+  test('production Private Chat anonymization query proves joinedAt boundary', async () => {
+    await seedIdentityDocuments();
+    const productionQuery = query(
+      collection(db(ids.member), 'gubs', 'g1', 'messages'),
+      where('senderId', '==', ids.member),
+      where('createdAt', '>=', now()),
+    );
+    const snapshot = await assertSucceeds(getDocs(productionQuery));
+    assert.equal(snapshot.size, 1);
+
+    const unbounded = query(
+      collection(db(ids.member), 'gubs', 'g1', 'messages'),
+      where('senderId', '==', ids.member),
+    );
+    await assertFails(getDocs(unbounded));
+    await assertFails(getDocs(query(
+      collection(db(ids.outsider), 'gubs', 'g1', 'messages'),
+      where('senderId', '==', ids.member),
+      where('createdAt', '>=', now()),
+    )));
+  });
+
+  test('production Community Chat anonymization query preserves boundary', async () => {
+    await env.withSecurityRulesDisabled(async (context) => {
+      const seedDb = context.firestore();
+      await setDoc(doc(seedDb, 'communities', 'c1'), {
+        communityId: 'c1', name: 'Community', ownerId: ids.communityOwner,
+        visibility: 'public', accessMode: 'open', memberCount: 2, createdAt: now(),
+      });
+      await setDoc(doc(seedDb, 'communities', 'c1', 'members', ids.communityMember),
+        member(ids.communityMember));
+      await setDoc(doc(seedDb, 'communities', 'c1', 'messages', 'm1'), {
+        messageId: 'm1', communityId: 'c1', senderId: ids.communityMember,
+        senderName: 'Original Name', text: 'Community content', createdAt: now(),
+      });
+    });
+    const productionQuery = query(
+      collection(db(ids.communityMember), 'communities', 'c1', 'messages'),
+      where('senderId', '==', ids.communityMember),
+      where('createdAt', '>=', now()),
+    );
+    const snapshot = await assertSucceeds(getDocs(productionQuery));
+    assert.equal(snapshot.size, 1);
+    await assertFails(getDocs(query(
+      collection(db(ids.communityMember), 'communities', 'c1', 'messages'),
+      where('senderId', '==', ids.communityMember),
+    )));
+  });
+
+  test('notification removes only deleted identity and own read state', async () => {
+    await seedIdentityDocuments();
+    await env.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), 'gubs', 'g1', 'notifications', 'n1'), {
+        notificationId: 'n1', title: 'New task',
+        body: 'Original Name assigned a new task: Keep title', type: 'task_created',
+        senderId: ids.member, senderName: 'Original Name', createdAt: now(),
+        readBy: [ids.member, ids.second],
+        data: { module: 'tasks', gubId: 'g1', taskId: 't1' },
+      });
+    });
+    const reference = doc(db(ids.member), 'gubs', 'g1', 'notifications', 'n1');
+    await assertSucceeds(updateDoc(reference, {
+      senderId: '__deleted_user__', senderName: 'Deleted user',
+      body: 'Deleted user assigned a new task: Keep title', readBy: [ids.second],
+    }));
+    const data = (await getDoc(reference)).data();
+    assert.equal(data.title, 'New task');
+    assert.equal(data.type, 'task_created');
+    assert.deepEqual(data.data, { module: 'tasks', gubId: 'g1', taskId: 't1' });
+    assert.deepEqual(data.readBy, [ids.second]);
+  });
+
+  test('notification anonymization cannot change content or another read state', async () => {
+    await seedIdentityDocuments();
+    await env.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), 'gubs', 'g1', 'notifications', 'n1'), {
+        notificationId: 'n1', title: 'New task',
+        body: 'Original Name assigned a new task: Keep title', type: 'task_created',
+        senderId: ids.member, senderName: 'Original Name', createdAt: now(),
+        readBy: [ids.member, ids.second],
+        data: { module: 'tasks', gubId: 'g1', taskId: 't1' },
+      });
+    });
+    const reference = doc(db(ids.member), 'gubs', 'g1', 'notifications', 'n1');
+    await assertFails(updateDoc(reference, {
+      senderId: '__deleted_user__', senderName: 'Deleted user',
+      body: 'Deleted user assigned a new task: Changed title', readBy: [],
+    }));
+    await assertFails(updateDoc(doc(db(ids.second), 'gubs', 'g1', 'notifications', 'n1'), {
+      senderId: '__deleted_user__', senderName: 'Deleted user',
+      body: 'Deleted user assigned a new task: Keep title',
+    }));
+  });
+
+  test('notification identity can be anonymized when readBy is absent or unrelated', async () => {
+    await seedIdentityDocuments();
+    await env.withSecurityRulesDisabled(async (context) => {
+      const seedDb = context.firestore();
+      for (const [notificationId, readBy] of [
+        ['absent', undefined],
+        ['empty', []],
+        ['other-reader', [ids.second]],
+      ]) {
+        const notification = {
+          notificationId, title: 'New proposal',
+          body: 'Original Name created a new proposal.', type: 'proposal_created',
+          senderId: ids.member, senderName: 'Original Name', createdAt: now(),
+          data: { module: 'proposals', gubId: 'g1', proposalId: 'p1' },
+        };
+        if (readBy !== undefined) notification.readBy = readBy;
+        await setDoc(
+          doc(seedDb, 'gubs', 'g1', 'notifications', notificationId),
+          notification,
+        );
+      }
+    });
+
+    for (const notificationId of ['absent', 'empty', 'other-reader']) {
+      await assertSucceeds(updateDoc(
+        doc(db(ids.member), 'gubs', 'g1', 'notifications', notificationId),
+        {
+          senderId: '__deleted_user__', senderName: 'Deleted user',
+          body: 'Deleted user created a new proposal.',
+        },
+      ));
+    }
+  });
+
+  test('notification read state cleanup is idempotent and preserves other readers', async () => {
+    await seedIdentityDocuments();
+    await env.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), 'gubs', 'g1', 'notifications', 'n1'), {
+        notificationId: 'n1', title: 'Task completed',
+        body: 'Keep title has been completed.', type: 'task_completed',
+        senderId: ids.second, senderName: ids.second, createdAt: now(),
+        readBy: [ids.member, ids.second],
+        data: { module: 'tasks', gubId: 'g1', taskId: 't1' },
+      });
+    });
+    const reference = doc(db(ids.member), 'gubs', 'g1', 'notifications', 'n1');
+    await assertSucceeds(updateDoc(reference, { readBy: [ids.second] }));
+    const data = (await getDoc(reference)).data();
+    assert.deepEqual(data.readBy, [ids.second]);
+    assert.equal(data.senderId, ids.second);
+    assert.equal(data.body, 'Keep title has been completed.');
+  });
 });

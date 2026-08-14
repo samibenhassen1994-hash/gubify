@@ -39,7 +39,15 @@ class AccountService {
 
   Future<AccountDetailsModel?> load() async {
     final userId = authService.currentUserId;
-    return userId == null ? null : _repository.load(userId);
+    if (userId == null) return null;
+    final details = await _repository.load(userId);
+    if (details != null) {
+      await _repository.synchronizeCurrentDisplayName(
+        userId: userId,
+        displayName: details.displayName,
+      );
+    }
+    return details;
   }
 
   DateTime? nextNameChangeAt(AccountDetailsModel details) {

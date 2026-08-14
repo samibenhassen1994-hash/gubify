@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 
 import '../../../repositories/member_repository.dart';
 import '../../../repositories/shared_budget_repository.dart';
@@ -7,6 +10,8 @@ import '../../../repositories/user_repository.dart';
 import '../../community/models/community_model.dart';
 import '../../community/services/community_service.dart';
 import '../../gub_calendar/repositories/event_repository.dart';
+import '../../organized_events/models/gub_event_model.dart';
+import '../../organized_events/repositories/gub_event_repository.dart';
 import '../../proposals/repositories/proposal_repository.dart';
 import '../../tasks/repositories/task_repository.dart';
 import '../models/user_profile_model.dart';
@@ -254,7 +259,7 @@ class UserProfileService {
     String gubId,
     String userId,
   ) {
-    return EventRepository.instance
+    final calendarEvents = EventRepository.instance
         .profileActivityCandidatesStream(gubId)
         .map(
           (events) => _sortActivities([
@@ -270,6 +275,105 @@ class UserProfileService {
                 ),
           ]),
         );
+
+    final organizedEvents = GubEventRepository.instance
+        .createdByStream(gubId: gubId, creatorId: userId)
+        .map(
+          (events) => buildOrganizedEventActivityEntries(
+            events: events,
+            userId: userId,
+          ),
+        );
+
+    return _combineActivityStreams(calendarEvents, organizedEvents);
+  }
+
+  @visibleForTesting
+  static List<UserActivityEntry> buildOrganizedEventActivityEntries({
+    required Iterable<GubEventModel> events,
+    required String userId,
+  }) {
+    if (userId.trim().isEmpty || userId == '__deleted_user__') {
+      return const <UserActivityEntry>[];
+    }
+
+    final activities = <UserActivityEntry>[
+      for (final event in events)
+        if (event.createdBy == userId)
+          UserActivityEntry(
+            id: event.eventId,
+            title: event.title,
+            status: event.status,
+            kind: UserActivityKind.eventCreated,
+            occurredAt: event.createdAt,
+            organizedEvent: event,
+          ),
+    ];
+    activities.sort((first, second) {
+      final dateComparison = second.occurredAt.compareTo(first.occurredAt);
+      return dateComparison != 0
+          ? dateComparison
+          : second.id.compareTo(first.id);
+    });
+    return activities;
+  }
+
+  Stream<List<UserActivityEntry>> _combineActivityStreams(
+    Stream<List<UserActivityEntry>> first,
+    Stream<List<UserActivityEntry>> second,
+  ) {
+    late final StreamController<List<UserActivityEntry>> controller;
+    StreamSubscription<List<UserActivityEntry>>? firstSubscription;
+    StreamSubscription<List<UserActivityEntry>>? secondSubscription;
+    List<UserActivityEntry>? firstActivities;
+    List<UserActivityEntry>? secondActivities;
+    var completedStreams = 0;
+
+    void emitWhenReady() {
+      if (controller.isClosed ||
+          firstActivities == null ||
+          secondActivities == null) {
+        return;
+      }
+      controller.add(
+        _sortActivities([...firstActivities!, ...secondActivities!]),
+      );
+    }
+
+    void handleDone() {
+      completedStreams++;
+      if (completedStreams == 2 && !controller.isClosed) {
+        unawaited(controller.close());
+      }
+    }
+
+    controller = StreamController<List<UserActivityEntry>>(
+      onListen: () {
+        firstSubscription = first.listen(
+          (activities) {
+            firstActivities = activities;
+            emitWhenReady();
+          },
+          onError: controller.addError,
+          onDone: handleDone,
+        );
+        secondSubscription = second.listen(
+          (activities) {
+            secondActivities = activities;
+            emitWhenReady();
+          },
+          onError: controller.addError,
+          onDone: handleDone,
+        );
+      },
+      onCancel: () async {
+        await Future.wait([
+          if (firstSubscription != null) firstSubscription!.cancel(),
+          if (secondSubscription != null) secondSubscription!.cancel(),
+        ]);
+      },
+    );
+    return controller.stream;
   }
 
   Stream<List<UserActivityEntry>> _sharedBudgetActivityStream(

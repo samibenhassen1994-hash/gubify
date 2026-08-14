@@ -456,9 +456,10 @@ describe('users and profiles', () => {
     await seedProfiles();
     await assertFails(updateDoc(doc(db(ids.outsider), 'users', ids.ownerGub), { displayName: 'Forged' }));
   });
-  test('cannot delete a profile through current client policy', async () => {
+  test('an authenticated user may delete only their own profile', async () => {
     await seedProfiles([ids.outsider]);
-    await assertFails(deleteDoc(doc(db(ids.outsider), 'users', ids.outsider)));
+    await assertFails(deleteDoc(doc(db(ids.memberGub), 'users', ids.outsider)));
+    await assertSucceeds(deleteDoc(doc(db(ids.outsider), 'users', ids.outsider)));
   });
   test('cannot add arbitrary fields when creating a profile', async () => {
     await assertFails(setDoc(doc(db(ids.outsider), 'users', ids.outsider), {
@@ -746,7 +747,7 @@ describe('Gub chat, read states, and Board', () => {
     await assertSucceeds(setDoc(ref, { userId: ids.memberGub, gubId: 'g1', lastReadAt: serverTimestamp() }, { merge: true }));
     await assertSucceeds(setDoc(ref, { userId: ids.memberGub, gubId: 'g1', lastReadAt: serverTimestamp() }, { merge: true }));
   });
-  test('chatReads rejects wrong owner, internal IDs, types, extras, and delete', async () => {
+  test('chatReads rejects invalid writes and permits active-member self cleanup', async () => {
     await assertFails(setDoc(doc(db(ids.memberGub), 'gubs', 'g1', 'chatReads', ids.secondMember), { userId: ids.secondMember, gubId: 'g1', lastReadAt: serverTimestamp() }));
     const ref = doc(db(ids.memberGub), 'gubs', 'g1', 'chatReads', ids.memberGub);
     await assertFails(setDoc(ref, { userId: ids.ownerGub, gubId: 'g1', lastReadAt: serverTimestamp() }));
@@ -754,7 +755,7 @@ describe('Gub chat, read states, and Board', () => {
     await assertFails(setDoc(ref, { userId: ids.memberGub, gubId: 'g1', lastReadAt: 'today' }));
     await assertFails(setDoc(ref, { userId: ids.memberGub, gubId: 'g1', lastReadAt: serverTimestamp(), extra: true }));
     await env.withSecurityRulesDisabled(async (context) => setDoc(doc(context.firestore(), 'gubs', 'g1', 'chatReads', ids.memberGub), { userId: ids.memberGub, gubId: 'g1', lastReadAt: new Date() }));
-    await assertFails(deleteDoc(ref));
+    await assertSucceeds(deleteDoc(ref));
   });
   test('outsider cannot access chatReads', async () => {
     await assertFails(setDoc(doc(db(ids.outsider), 'gubs', 'g1', 'chatReads', ids.outsider), { userId: ids.outsider, gubId: 'g1', lastReadAt: serverTimestamp() }));
@@ -766,14 +767,14 @@ describe('Gub chat, read states, and Board', () => {
     await assertSucceeds(setDoc(ref, { lastReadAt: serverTimestamp() }, { merge: true }));
     await assertSucceeds(setDoc(ref, { lastReadAt: serverTimestamp() }, { merge: true }));
   });
-  test('boardReads rejects wrong owner, types, extras, outsiders, and delete', async () => {
+  test('boardReads rejects invalid writes and permits active-member self cleanup', async () => {
     await assertFails(setDoc(doc(db(ids.memberGub), 'gubs', 'g1', 'boardReads', ids.secondMember), { lastReadAt: serverTimestamp() }));
     const ref = doc(db(ids.memberGub), 'gubs', 'g1', 'boardReads', ids.memberGub);
     await assertFails(setDoc(ref, { lastReadAt: 'today' }));
     await assertFails(setDoc(ref, { lastReadAt: serverTimestamp(), extra: true }));
     await assertFails(setDoc(doc(db(ids.outsider), 'gubs', 'g1', 'boardReads', ids.outsider), { lastReadAt: serverTimestamp() }));
     await env.withSecurityRulesDisabled(async (context) => setDoc(doc(context.firestore(), 'gubs', 'g1', 'boardReads', ids.memberGub), { lastReadAt: new Date() }));
-    await assertFails(deleteDoc(ref));
+    await assertSucceeds(deleteDoc(ref));
   });
   test('read-state writes are denied while deleting', async () => {
     await env.clearFirestore();

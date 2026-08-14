@@ -160,10 +160,27 @@ void main() {
       expect(repository.changedNames, ['New Anonymous Name']);
     },
   );
+
+  test('loading Account repairs stale current membership names', () async {
+    final repository = _AccountRepository();
+    final auth = AuthService(
+      authLinkGateway: const _AuthGateway(false, ['password']),
+      authVerificationGateway: _VerificationGateway(),
+    );
+
+    final details = await AccountService(
+      authService: auth,
+      repository: repository,
+    ).load();
+
+    expect(details?.displayName, 'Test User');
+    expect(repository.synchronizedNames, ['Test User']);
+  });
 }
 
 class _AccountRepository implements AccountProfileRepository {
   final List<String> changedNames = [];
+  final List<String> synchronizedNames = [];
   @override
   Future<AccountDetailsModel?> load(String userId) async => AccountDetailsModel(
     displayName: 'Test User',
@@ -175,6 +192,12 @@ class _AccountRepository implements AccountProfileRepository {
     required String userId,
     required String displayName,
   }) async => changedNames.add(displayName);
+
+  @override
+  Future<void> synchronizeCurrentDisplayName({
+    required String userId,
+    required String displayName,
+  }) async => synchronizedNames.add(displayName);
 }
 
 class _AuthGateway implements AuthLinkGateway {

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gubify/pages/auth_entry_screen.dart';
+import 'package:gubify/modules/profile/repositories/account_deletion_marker_store.dart';
 import 'package:gubify/pages/name_screen.dart';
 import 'package:gubify/pages/startup_screen.dart';
 import 'package:gubify/pages/verify_email_screen.dart';
@@ -181,6 +182,7 @@ void main() {
         MaterialApp(
           home: StartupScreen(
             authService: service,
+            accountDeletionMarkerStore: _EmptyDeletionMarkerStore(),
             minimumDisplayDuration: Duration.zero,
             onNavigationReady: () {},
             userProfileExists: (uid) async {
@@ -236,52 +238,54 @@ void main() {
     },
   );
 
-  testWidgets('verified account with a profile keeps its session and opens app', (
-    tester,
-  ) async {
-    final session = _FakeEmailSession()
-      ..currentUid = 'existing-email-uid'
-      ..registeredUid = 'existing-email-uid'
-      ..email = 'person@example.com';
-    final verification = _SessionVerificationGateway(session);
-    final service = AuthService(
-      authLinkGateway: _SessionLinkGateway(session),
-      authAccountGateway: _SessionAccountGateway(session),
-      authVerificationGateway: verification,
-      googleCredentialProvider: const _UnusedGoogleProvider(),
-    );
-    var profileLookups = 0;
+  testWidgets(
+    'verified account with a profile keeps its session and opens app',
+    (tester) async {
+      final session = _FakeEmailSession()
+        ..currentUid = 'existing-email-uid'
+        ..registeredUid = 'existing-email-uid'
+        ..email = 'person@example.com';
+      final verification = _SessionVerificationGateway(session);
+      final service = AuthService(
+        authLinkGateway: _SessionLinkGateway(session),
+        authAccountGateway: _SessionAccountGateway(session),
+        authVerificationGateway: verification,
+        googleCredentialProvider: const _UnusedGoogleProvider(),
+      );
+      var profileLookups = 0;
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: StartupScreen(
-          authService: service,
-          minimumDisplayDuration: Duration.zero,
-          onNavigationReady: () {},
-          authenticatedAppBuilder: (_) =>
-              const Scaffold(body: Text('TEST_APP_DESTINATION')),
-          userProfileExists: (uid) async {
-            profileLookups += 1;
-            expect(uid, 'existing-email-uid');
-            return true;
-          },
+      await tester.pumpWidget(
+        MaterialApp(
+          home: StartupScreen(
+            authService: service,
+            accountDeletionMarkerStore: _EmptyDeletionMarkerStore(),
+            minimumDisplayDuration: Duration.zero,
+            onNavigationReady: () {},
+            authenticatedAppBuilder: (_) =>
+                const Scaffold(body: Text('TEST_APP_DESTINATION')),
+            userProfileExists: (uid) async {
+              profileLookups += 1;
+              expect(uid, 'existing-email-uid');
+              return true;
+            },
+          ),
         ),
-      ),
-    );
-    await tester.pump();
+      );
+      await tester.pump();
 
-    expect(find.byType(VerifyEmailScreen), findsOneWidget);
-    session.emailVerified = true;
-    await tester.tap(find.text("I've verified my email"));
-    await tester.pumpAndSettle();
+      expect(find.byType(VerifyEmailScreen), findsOneWidget);
+      session.emailVerified = true;
+      await tester.tap(find.text("I've verified my email"));
+      await tester.pumpAndSettle();
 
-    expect(profileLookups, 1);
-    expect(verification.signOutCalls, 0);
-    expect(session.currentUid, 'existing-email-uid');
-    expect(find.text('TEST_APP_DESTINATION'), findsOneWidget);
-    expect(find.byType(WelcomeScreen), findsNothing);
-    expect(find.byType(NameScreen), findsNothing);
-  });
+      expect(profileLookups, 1);
+      expect(verification.signOutCalls, 0);
+      expect(session.currentUid, 'existing-email-uid');
+      expect(find.text('TEST_APP_DESTINATION'), findsOneWidget);
+      expect(find.byType(WelcomeScreen), findsNothing);
+      expect(find.byType(NameScreen), findsNothing);
+    },
+  );
 
   testWidgets('use another account signs out and returns to auth entry', (
     tester,
@@ -302,6 +306,7 @@ void main() {
       MaterialApp(
         home: StartupScreen(
           authService: service,
+          accountDeletionMarkerStore: _EmptyDeletionMarkerStore(),
           minimumDisplayDuration: Duration.zero,
           onNavigationReady: () {},
           userProfileExists: (_) async => true,
@@ -340,6 +345,7 @@ void main() {
       MaterialApp(
         home: StartupScreen(
           authService: service,
+          accountDeletionMarkerStore: _EmptyDeletionMarkerStore(),
           minimumDisplayDuration: Duration.zero,
           onNavigationReady: () {},
           userProfileExists: (_) async {
@@ -395,6 +401,7 @@ Widget _startupForSession(
   return MaterialApp(
     home: StartupScreen(
       authService: service,
+      accountDeletionMarkerStore: _EmptyDeletionMarkerStore(),
       minimumDisplayDuration: Duration.zero,
       onNavigationReady: () {},
       userProfileExists: userProfileExists,
@@ -402,6 +409,17 @@ Widget _startupForSession(
           const Scaffold(body: Text('TEST_APP_DESTINATION')),
     ),
   );
+}
+
+class _EmptyDeletionMarkerStore implements AccountDeletionMarkerStore {
+  @override
+  Future<void> clear() async {}
+
+  @override
+  Future<String?> readUserId() async => null;
+
+  @override
+  Future<void> writeUserId(String userId) async {}
 }
 
 class _FakeEmailSession {

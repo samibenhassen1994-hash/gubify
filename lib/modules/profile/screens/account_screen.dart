@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 
 import '../../../services/auth_service.dart';
+import '../../../pages/startup_screen.dart';
 import '../models/account_details_model.dart';
+import '../models/account_deletion_model.dart';
 import '../services/account_service.dart';
+import '../services/account_deletion_service.dart';
+import '../widgets/delete_account_dialog.dart';
 import '../widgets/google_account_connection_section.dart';
 
 class AccountScreen extends StatefulWidget {
@@ -10,10 +14,12 @@ class AccountScreen extends StatefulWidget {
     super.key,
     required this.authService,
     this.accountService,
+    this.accountDeletionService,
   });
 
   final AuthService authService;
   final AccountService? accountService;
+  final AccountDeletionService? accountDeletionService;
 
   @override
   State<AccountScreen> createState() => _AccountScreenState();
@@ -21,6 +27,7 @@ class AccountScreen extends StatefulWidget {
 
 class _AccountScreenState extends State<AccountScreen> {
   late final AccountService _accountService;
+  AccountDeletionService? _accountDeletionService;
   late Future<AccountDetailsModel?> _details;
 
   @override
@@ -29,6 +36,7 @@ class _AccountScreenState extends State<AccountScreen> {
     _accountService =
         widget.accountService ??
         AccountService(authService: widget.authService);
+    _accountDeletionService = widget.accountDeletionService;
     _reload();
   }
 
@@ -52,6 +60,7 @@ class _AccountScreenState extends State<AccountScreen> {
       _showMessage('Name changed.');
       return;
     }
+    setState(_reload);
     _showMessage(_nameChangeMessage(change));
   }
 
@@ -74,6 +83,48 @@ class _AccountScreenState extends State<AccountScreen> {
       builder: (_) => _ChangePasswordDialog(authService: widget.authService),
     );
     if (mounted && changed == true) _showMessage('Password changed.');
+  }
+
+  Future<void> _deleteAccount() async {
+    final deletionService = _accountDeletionService ??= AccountDeletionService(
+      authService: widget.authService,
+    );
+    AccountDeletionPreflight preflight;
+    try {
+      preflight = await deletionService.preflight();
+    } catch (_) {
+      if (mounted) {
+        _showMessage('Unable to check account ownership. Try again.');
+      }
+      return;
+    }
+    if (!mounted) return;
+    if (preflight.isBlocked) {
+      await showDialog<void>(
+        context: context,
+        builder: (_) => AccountDeletionBlockedDialog(preflight: preflight),
+      );
+      return;
+    }
+    final deleted = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => DeleteAccountDialog(
+        service: deletionService,
+        requiresPassword: widget.authService.isPasswordLinked,
+      ),
+    );
+    if (!mounted || deleted != true) return;
+    Navigator.of(context, rootNavigator: true).pushAndRemoveUntil<void>(
+      MaterialPageRoute(
+        builder: (_) => StartupScreen(
+          authService: widget.authService,
+          minimumDisplayDuration: Duration.zero,
+          onNavigationReady: () {},
+        ),
+      ),
+      (_) => false,
+    );
   }
 
   void _showMessage(String message) {
@@ -168,6 +219,38 @@ class _AccountScreenState extends State<AccountScreen> {
           value: details.createdAt == null
               ? 'Not available'
               : _formatDate(details.createdAt!.toDate()),
+        ),
+        Card(
+          margin: const EdgeInsets.only(top: 12),
+          color: const Color(0xFFFFF1F2),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Danger zone',
+                  style: TextStyle(
+                    color: Color(0xFFB91C1C),
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Permanently delete your account and personal data.',
+                ),
+                const SizedBox(height: 10),
+                OutlinedButton.icon(
+                  onPressed: _deleteAccount,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFFB91C1C),
+                  ),
+                  icon: const Icon(Icons.delete_forever_outlined),
+                  label: const Text('Delete account'),
+                ),
+              ],
+            ),
+          ),
         ),
       ],
     );

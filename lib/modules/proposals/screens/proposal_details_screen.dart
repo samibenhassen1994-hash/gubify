@@ -1,5 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import '../../chat/widgets/deleted_user_identity_builder.dart';
 import 'package:intl/intl.dart';
 import '../../../core/models/creation_availability.dart';
 import '../../../core/models/deletion_context.dart';
@@ -181,13 +182,19 @@ class _ProposalDetailsScreenState extends State<ProposalDetailsScreen> {
                             if (p.sourceType == "chat" &&
                                 p.sourcePreview?.isNotEmpty == true) ...[
                               const SizedBox(height: 20),
-                              _ProposalChatSourceCard(
-                                message: p.sourcePreview!,
-                                authorName: p.sourceAuthorName,
-                                opening: _openingOriginalMessage,
-                                onTap: p.sourceId?.isNotEmpty == true
-                                    ? () => _openOriginalMessage(p)
-                                    : null,
+                              DeletedUserIdentityBuilder(
+                                userId: p.originUserId ?? '',
+                                currentDisplayName:
+                                    p.sourceAuthorName ?? 'User',
+                                builder: (context, displayName, deleted) =>
+                                    _ProposalChatSourceCard(
+                                      message: p.sourcePreview!,
+                                      authorName: displayName,
+                                      opening: _openingOriginalMessage,
+                                      onTap: p.sourceId?.isNotEmpty == true
+                                          ? () => _openOriginalMessage(p)
+                                          : null,
+                                    ),
                               ),
                             ],
                             const SizedBox(height: 20),

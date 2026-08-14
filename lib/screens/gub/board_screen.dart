@@ -8,6 +8,7 @@ import '../../services/board_read_service.dart';
 import '../../services/post_service.dart';
 import '../../widgets/gub_screen_background.dart';
 import 'create_post_screen.dart';
+import 'widgets/board_post_author.dart';
 
 class BoardScreen extends StatefulWidget {
   final String gubId;
@@ -196,23 +197,7 @@ class _BoardScreenState extends State<BoardScreen> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Row(
-                                    children: [
-                                      const CircleAvatar(
-                                        child: Icon(Icons.person),
-                                      ),
-                                      const SizedBox(width: 12),
-                                      Expanded(
-                                        child: Text(
-                                          post.authorName,
-                                          style: const TextStyle(
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 16,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
+                                  BoardPostAuthor(post: post),
                                   const SizedBox(height: 16),
                                   Text(
                                     post.message,

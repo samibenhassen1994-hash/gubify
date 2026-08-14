@@ -51,7 +51,10 @@ class TaskCard extends StatelessWidget {
 
               const SizedBox(height: 12),
 
-              TaskAssigneeTile(assignedUserName: task.assignedUserName),
+              TaskAssigneeTile(
+                assignedUserId: task.assignedUserId,
+                assignedUserName: task.assignedUserName,
+              ),
 
               if (task.dueDate != null) ...[
                 const SizedBox(height: 8),

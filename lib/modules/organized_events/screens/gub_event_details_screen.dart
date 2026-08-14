@@ -1,5 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import '../../chat/widgets/deleted_user_identity_builder.dart';
 
 import '../../../widgets/gub_screen_background.dart';
 import '../../../widgets/delete_item_dialog.dart';
@@ -249,11 +250,16 @@ class _EventSummaryCard extends StatelessWidget {
             if (event.sourceType == 'chat' &&
                 event.sourcePreview?.isNotEmpty == true) ...[
               const SizedBox(height: 18),
-              _EventChatSourceCard(
-                message: event.sourcePreview!,
-                authorName: event.sourceAuthorName,
-                opening: openingOriginalMessage,
-                onTap: onOpenOriginalMessage,
+              DeletedUserIdentityBuilder(
+                userId: event.originUserId ?? '',
+                currentDisplayName: event.sourceAuthorName ?? 'User',
+                builder: (context, displayName, deleted) =>
+                    _EventChatSourceCard(
+                      message: event.sourcePreview!,
+                      authorName: displayName,
+                      opening: openingOriginalMessage,
+                      onTap: onOpenOriginalMessage,
+                    ),
               ),
             ],
             const SizedBox(height: 20),
@@ -353,21 +359,34 @@ class _AssignmentCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              CircleAvatar(
-                backgroundColor: const Color(0xFFDBEAFE),
-                child: Text(
-                  _initial(assignment.userName),
-                  style: const TextStyle(
-                    color: Color(0xFF2563EB),
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
               Expanded(
-                child: Text(
-                  assignment.userName,
-                  style: const TextStyle(fontWeight: FontWeight.w700),
+                child: DeletedUserIdentityBuilder(
+                  userId: assignment.userId,
+                  currentDisplayName: assignment.userName,
+                  resolveCurrentDisplayName: assignment.userId
+                      .trim()
+                      .isNotEmpty,
+                  builder: (context, displayName, deleted) => Row(
+                    children: [
+                      CircleAvatar(
+                        backgroundColor: const Color(0xFFDBEAFE),
+                        child: Text(
+                          _initial(displayName),
+                          style: const TextStyle(
+                            color: Color(0xFF2563EB),
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          displayName,
+                          style: const TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
               Container(

@@ -23,6 +23,33 @@ class GubEventRepository {
             s.docs.map((d) => GubEventModel.fromFirestore(d.data())).toList(),
       );
 
+  Stream<List<GubEventModel>> createdByStream({
+    required String gubId,
+    required String creatorId,
+  }) {
+    final normalizedCreatorId = creatorId.trim();
+    if (normalizedCreatorId.isEmpty ||
+        normalizedCreatorId == '__deleted_user__') {
+      return Stream.value(const <GubEventModel>[]);
+    }
+
+    return _events(gubId)
+        .where('createdBy', isEqualTo: normalizedCreatorId)
+        .snapshots()
+        .map(
+          (snapshot) => snapshot.docs
+              .map((document) {
+                final data = document.data();
+                return GubEventModel.fromFirestore({
+                  ...data,
+                  'eventId': data['eventId'] ?? document.id,
+                  'gubId': data['gubId'] ?? gubId,
+                });
+              })
+              .toList(growable: false),
+        );
+  }
+
   Stream<GubEventModel?> eventStream(String gubId, String id) => _events(gubId)
       .doc(id)
       .snapshots()

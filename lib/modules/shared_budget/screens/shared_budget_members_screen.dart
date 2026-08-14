@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import '../../chat/widgets/deleted_user_identity_builder.dart';
 
 import '../../../widgets/gub_screen_background.dart';
 import '../../../core/models/deletion_context.dart';
@@ -206,13 +207,19 @@ class _SharedBudgetMembersScreenState extends State<SharedBudgetMembersScreen> {
                         sharedBudget.sourcePreview?.isNotEmpty == true)
                       Padding(
                         padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                        child: _SharedBudgetChatSourceCard(
-                          message: sharedBudget.sourcePreview!,
-                          authorName: sharedBudget.sourceAuthorName,
-                          opening: _openingOriginalMessage,
-                          onTap: sharedBudget.sourceId?.isNotEmpty == true
-                              ? () => _openOriginalMessage(sharedBudget)
-                              : null,
+                        child: DeletedUserIdentityBuilder(
+                          userId: sharedBudget.originUserId ?? '',
+                          currentDisplayName:
+                              sharedBudget.sourceAuthorName ?? 'User',
+                          builder: (context, displayName, deleted) =>
+                              _SharedBudgetChatSourceCard(
+                                message: sharedBudget.sourcePreview!,
+                                authorName: displayName,
+                                opening: _openingOriginalMessage,
+                                onTap: sharedBudget.sourceId?.isNotEmpty == true
+                                    ? () => _openOriginalMessage(sharedBudget)
+                                    : null,
+                              ),
                         ),
                       ),
                     Expanded(
@@ -253,128 +260,138 @@ class _SharedBudgetMembersScreenState extends State<SharedBudgetMembersScreen> {
                             statusColor = Colors.grey;
                           }
 
-                          return Card(
-                            margin: const EdgeInsets.only(bottom: 12),
-                            clipBehavior: Clip.antiAlias,
-                            child: InkWell(
-                              onTap: isMe
-                                  ? () {
-                                      Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (_) => MyContributionScreen(
-                                            gubId: widget.gubId,
-                                            sharedBudgetId:
-                                                widget.sharedBudgetId,
-                                          ),
-                                        ),
-                                      );
-                                    }
-                                  : null,
-                              child: Padding(
-                                padding: const EdgeInsets.all(16),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        CircleAvatar(
-                                          child: Text(
-                                            memberName.isEmpty
-                                                ? "U"
-                                                : memberName[0].toUpperCase(),
-                                          ),
-                                        ),
-                                        const SizedBox(width: 12),
-                                        Expanded(
-                                          child: Column(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
-                                            children: [
-                                              Text(
-                                                memberName,
-                                                style: Theme.of(
-                                                  context,
-                                                ).textTheme.titleMedium,
-                                              ),
-                                              const SizedBox(height: 4),
-                                              Text(
-                                                "Contribution: "
-                                                "€${amount.toStringAsFixed(2)}",
-                                              ),
-                                              if (!confirmed) ...[
-                                                const SizedBox(height: 4),
-                                                Text(
-                                                  status,
-                                                  style: TextStyle(
-                                                    color: statusColor,
-                                                    fontWeight: FontWeight.w600,
-                                                  ),
+                          return DeletedUserIdentityBuilder(
+                            userId: uid,
+                            currentDisplayName: memberName,
+                            resolveCurrentDisplayName: uid.trim().isNotEmpty,
+                            builder: (context, displayName, deleted) => Card(
+                              margin: const EdgeInsets.only(bottom: 12),
+                              clipBehavior: Clip.antiAlias,
+                              child: InkWell(
+                                onTap: isMe
+                                    ? () {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (_) =>
+                                                MyContributionScreen(
+                                                  gubId: widget.gubId,
+                                                  sharedBudgetId:
+                                                      widget.sharedBudgetId,
                                                 ),
-                                              ],
-                                            ],
                                           ),
-                                        ),
-                                        if (isMe && !confirmed)
-                                          const Icon(
-                                            Icons.edit,
-                                            color: Colors.blue,
-                                          ),
-                                      ],
-                                    ),
-                                    if (confirmed) ...[
-                                      const SizedBox(height: 12),
-                                      const Row(
-                                        mainAxisSize: MainAxisSize.min,
+                                        );
+                                      }
+                                    : null,
+                                child: Padding(
+                                  padding: const EdgeInsets.all(16),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
                                         children: [
-                                          Icon(
-                                            Icons.check_circle_rounded,
-                                            color: Colors.green,
-                                            size: 21,
-                                          ),
-                                          SizedBox(width: 6),
-                                          Text(
-                                            "Confirmed",
-                                            style: TextStyle(
-                                              color: Colors.green,
-                                              fontWeight: FontWeight.w600,
+                                          CircleAvatar(
+                                            child: Text(
+                                              displayName.isEmpty
+                                                  ? "U"
+                                                  : displayName[0]
+                                                        .toUpperCase(),
                                             ),
                                           ),
+                                          const SizedBox(width: 12),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  displayName,
+                                                  style: Theme.of(
+                                                    context,
+                                                  ).textTheme.titleMedium,
+                                                ),
+                                                const SizedBox(height: 4),
+                                                Text(
+                                                  "Contribution: "
+                                                  "€${amount.toStringAsFixed(2)}",
+                                                ),
+                                                if (!confirmed) ...[
+                                                  const SizedBox(height: 4),
+                                                  Text(
+                                                    status,
+                                                    style: TextStyle(
+                                                      color: statusColor,
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ],
+                                            ),
+                                          ),
+                                          if (isMe && !confirmed)
+                                            const Icon(
+                                              Icons.edit,
+                                              color: Colors.blue,
+                                            ),
                                         ],
                                       ),
-                                    ] else if (canConfirm) ...[
-                                      const SizedBox(height: 12),
-                                      Align(
-                                        alignment: Alignment.centerLeft,
-                                        child: FilledButton.icon(
-                                          onPressed: isConfirming
-                                              ? null
-                                              : () => _confirmContribution(
-                                                  uid: uid,
-                                                  memberName: memberName,
-                                                  amount: amount,
-                                                  confirmedById: widget.ownerId,
-                                                ),
-                                          icon: isConfirming
-                                              ? const SizedBox.square(
-                                                  dimension: 18,
-                                                  child:
-                                                      CircularProgressIndicator(
-                                                        strokeWidth: 2,
-                                                        color: Colors.white,
-                                                      ),
-                                                )
-                                              : const Icon(
-                                                  Icons
-                                                      .check_circle_outline_rounded,
-                                                ),
-                                          label: const Text(
-                                            "Confirm contribution",
+                                      if (confirmed) ...[
+                                        const SizedBox(height: 12),
+                                        const Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(
+                                              Icons.check_circle_rounded,
+                                              color: Colors.green,
+                                              size: 21,
+                                            ),
+                                            SizedBox(width: 6),
+                                            Text(
+                                              "Confirmed",
+                                              style: TextStyle(
+                                                color: Colors.green,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ] else if (canConfirm) ...[
+                                        const SizedBox(height: 12),
+                                        Align(
+                                          alignment: Alignment.centerLeft,
+                                          child: FilledButton.icon(
+                                            onPressed: isConfirming
+                                                ? null
+                                                : () => _confirmContribution(
+                                                    uid: uid,
+                                                    memberName: displayName,
+                                                    amount: amount,
+                                                    confirmedById:
+                                                        widget.ownerId,
+                                                  ),
+                                            icon: isConfirming
+                                                ? const SizedBox.square(
+                                                    dimension: 18,
+                                                    child:
+                                                        CircularProgressIndicator(
+                                                          strokeWidth: 2,
+                                                          color: Colors.white,
+                                                        ),
+                                                  )
+                                                : const Icon(
+                                                    Icons
+                                                        .check_circle_outline_rounded,
+                                                  ),
+                                            label: const Text(
+                                              "Confirm contribution",
+                                            ),
                                           ),
                                         ),
-                                      ),
+                                      ],
                                     ],
-                                  ],
+                                  ),
                                 ),
                               ),
                             ),

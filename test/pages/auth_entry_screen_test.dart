@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gubify/pages/auth_entry_screen.dart';
 import 'package:gubify/pages/startup_screen.dart';
+import 'package:gubify/modules/profile/repositories/account_deletion_marker_store.dart';
 import 'package:gubify/modules/legal/privacy_policy_screen.dart';
 import 'package:gubify/modules/legal/terms_screen.dart';
 import 'package:gubify/services/auth_service.dart';
@@ -91,6 +92,7 @@ void main() {
       MaterialApp(
         home: StartupScreen(
           authService: serviceFor(),
+          accountDeletionMarkerStore: _EmptyDeletionMarkerStore(),
           minimumDisplayDuration: Duration.zero,
           onNavigationReady: () {},
           onAnonymousSignIn: () async => anonymousSignInCalls += 1,
@@ -397,6 +399,17 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(PrivacyPolicyScreen), findsOneWidget);
   });
+}
+
+class _EmptyDeletionMarkerStore implements AccountDeletionMarkerStore {
+  @override
+  Future<void> clear() async {}
+
+  @override
+  Future<String?> readUserId() async => null;
+
+  @override
+  Future<void> writeUserId(String userId) async {}
 }
 
 TapGestureRecognizer _linkRecognizer(WidgetTester tester, String label) {

@@ -1,8 +1,9 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-import '../../shared_budget/models/shared_budget_model.dart';
 import '../../gub_calendar/models/event_model.dart';
+import '../../organized_events/models/gub_event_model.dart';
 import '../../proposals/models/proposal_model.dart';
+import '../../shared_budget/models/shared_budget_model.dart';
 import '../../tasks/models/task_model.dart';
 
 class UserProfileModel {
@@ -57,6 +58,7 @@ class UserActivityEntry {
   final TaskModel? task;
   final ProposalModel? proposal;
   final EventModel? event;
+  final GubEventModel? organizedEvent;
   final SharedBudgetModel? sharedBudget;
 
   const UserActivityEntry({
@@ -68,6 +70,7 @@ class UserActivityEntry {
     this.task,
     this.proposal,
     this.event,
+    this.organizedEvent,
     this.sharedBudget,
   });
 }
