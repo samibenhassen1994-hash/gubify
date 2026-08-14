@@ -87,21 +87,128 @@ enum EmailPasswordLinkStatus {
 }
 
 class EmailPasswordLinkResult {
-  const EmailPasswordLinkResult._({required this.status, this.uid, this.email});
+  const EmailPasswordLinkResult._({
+    required this.status,
+    this.uid,
+    this.email,
+    this.verificationStatus,
+  });
 
   final EmailPasswordLinkStatus status;
   final String? uid;
   final String? email;
+  final EmailVerificationStatus? verificationStatus;
 
   bool get isSuccess => status == EmailPasswordLinkStatus.success;
 
   const EmailPasswordLinkResult.success({
     required String uid,
     required String email,
-  }) : this._(status: EmailPasswordLinkStatus.success, uid: uid, email: email);
+    EmailVerificationStatus? verificationStatus,
+  }) : this._(
+         status: EmailPasswordLinkStatus.success,
+         uid: uid,
+         email: email,
+         verificationStatus: verificationStatus,
+       );
 
   const EmailPasswordLinkResult.failure(EmailPasswordLinkStatus status)
     : this._(status: status);
+}
+
+enum AccountAuthStatus {
+  success,
+  cancelled,
+  invalidEmail,
+  invalidCredential,
+  emailAlreadyInUse,
+  weakPassword,
+  userDisabled,
+  networkRequestFailed,
+  tooManyRequests,
+  operationNotAllowed,
+  unknownFailure,
+}
+
+class AccountAuthResult {
+  const AccountAuthResult._({required this.status, this.uid});
+
+  final AccountAuthStatus status;
+  final String? uid;
+
+  bool get isSuccess => status == AccountAuthStatus.success;
+
+  const AccountAuthResult.success(String uid)
+    : this._(status: AccountAuthStatus.success, uid: uid);
+
+  const AccountAuthResult.failure(AccountAuthStatus status)
+    : this._(status: status);
+}
+
+enum EmailVerificationStatus {
+  success,
+  notVerified,
+  noCurrentUser,
+  networkRequestFailed,
+  tooManyRequests,
+  unknownFailure,
+}
+
+enum IncompleteProfileExitStatus {
+  success,
+  noCurrentUser,
+  profileAlreadyExists,
+  unknownFailure,
+}
+
+enum IncompleteProfileExitAction {
+  anonymousUserDeleted,
+  anonymousUserSignedOut,
+  accountSignedOut,
+}
+
+class IncompleteProfileExitResult {
+  const IncompleteProfileExitResult._({required this.status, this.action});
+
+  final IncompleteProfileExitStatus status;
+  final IncompleteProfileExitAction? action;
+
+  bool get isSuccess => status == IncompleteProfileExitStatus.success;
+
+  const IncompleteProfileExitResult.success(
+    IncompleteProfileExitAction action,
+  ) : this._(status: IncompleteProfileExitStatus.success, action: action);
+
+  const IncompleteProfileExitResult.failure(
+    IncompleteProfileExitStatus status,
+  ) : this._(status: status);
+}
+
+class EmailVerificationResult {
+  const EmailVerificationResult._({
+    required this.status,
+    this.email,
+    this.isVerified = false,
+  });
+
+  final EmailVerificationStatus status;
+  final String? email;
+  final bool isVerified;
+
+  bool get isSuccess => status == EmailVerificationStatus.success;
+
+  const EmailVerificationResult.success({String? email, bool isVerified = false})
+    : this._(
+        status: EmailVerificationStatus.success,
+        email: email,
+        isVerified: isVerified,
+      );
+
+  const EmailVerificationResult.failure(
+    EmailVerificationStatus status, {
+    String? email,
+    bool isVerified = false,
+  }) : this._(status: status, email: email, isVerified: isVerified);
 }
 
 enum GoogleCredentialFailure { cancelled, invalidCredential, unknown }
@@ -128,6 +235,31 @@ abstract interface class AuthLinkGateway {
   });
 }
 
+abstract interface class AuthAccountGateway {
+  Future<String> signInWithGoogleIdToken(String idToken);
+  Future<String> signInWithEmailPassword({
+    required String email,
+    required String password,
+  });
+  Future<String> registerWithEmailPassword({
+    required String email,
+    required String password,
+  });
+}
+
+abstract interface class AuthVerificationGateway {
+  String? get currentUserId;
+  String? get currentUserEmail;
+  bool get isCurrentUserAnonymous;
+  bool get isCurrentUserEmailVerified;
+  List<String> get providerIds;
+
+  Future<void> sendEmailVerification();
+  Future<void> reloadCurrentUser();
+  Future<void> deleteCurrentUser();
+  Future<void> signOut();
+}
+
 class AuthLinkState {
   const AuthLinkState({required this.uid, required this.providerIds});
 
@@ -140,11 +272,24 @@ class AuthService {
     FirebaseAuth? auth,
     UserService? userService,
     AuthLinkGateway? authLinkGateway,
+    AuthAccountGateway? authAccountGateway,
+    AuthVerificationGateway? authVerificationGateway,
     GoogleCredentialProvider? googleCredentialProvider,
+    this.userProfileExists,
   }) : _auth = auth ?? (authLinkGateway == null ? FirebaseAuth.instance : null),
        _authLinkGateway =
            authLinkGateway ??
            FirebaseAuthLinkGateway(auth ?? FirebaseAuth.instance),
+       _authAccountGateway =
+           authAccountGateway ??
+           (authLinkGateway == null
+               ? FirebaseAuthAccountGateway(auth ?? FirebaseAuth.instance)
+               : const _UnavailableAuthAccountGateway()),
+       _authVerificationGateway =
+           authVerificationGateway ??
+           (authLinkGateway == null
+               ? FirebaseAuthVerificationGateway(auth ?? FirebaseAuth.instance)
+               : const _UnavailableAuthVerificationGateway()),
        _googleCredentialProvider =
            googleCredentialProvider ?? GoogleSignInCredentialProvider() {
     _userService = userService;
@@ -153,9 +298,18 @@ class AuthService {
   final FirebaseAuth? _auth;
   late UserService? _userService;
   final AuthLinkGateway _authLinkGateway;
+  final AuthAccountGateway _authAccountGateway;
+  final AuthVerificationGateway _authVerificationGateway;
   final GoogleCredentialProvider _googleCredentialProvider;
+  final Future<bool> Function(String userId)? userProfileExists;
 
   User? get currentUser => _auth?.currentUser;
+
+  String? get currentUserId =>
+      _auth?.currentUser?.uid ?? _authVerificationGateway.currentUserId;
+
+  String? get currentUserEmail =>
+      _auth?.currentUser?.email ?? _authVerificationGateway.currentUserEmail;
 
   bool get isCurrentUserAnonymous => _authLinkGateway.isCurrentUserAnonymous;
 
@@ -167,6 +321,27 @@ class AuthService {
 
   List<String> get providerIds =>
       List.unmodifiable(_authLinkGateway.providerIds);
+
+  Stream<User?> get authStateChanges =>
+      _auth?.authStateChanges() ?? Stream<User?>.value(null);
+
+  bool requiresEmailVerification(User user) {
+    final providerIds = user.providerData
+        .map((provider) => provider.providerId)
+        .toSet();
+    return !user.isAnonymous &&
+        providerIds.contains(EmailAuthProvider.PROVIDER_ID) &&
+        !providerIds.contains(GoogleAuthProvider.PROVIDER_ID) &&
+        !user.emailVerified;
+  }
+
+  bool get requiresCurrentUserEmailVerification {
+    final providerIds = _authVerificationGateway.providerIds;
+    return !_authVerificationGateway.isCurrentUserAnonymous &&
+        providerIds.contains(EmailAuthProvider.PROVIDER_ID) &&
+        !providerIds.contains(GoogleAuthProvider.PROVIDER_ID) &&
+        !_authVerificationGateway.isCurrentUserEmailVerified;
+  }
 
   Future<User> signInAnonymously() async {
     final auth = _auth;
@@ -271,7 +446,12 @@ class AuthService {
           EmailPasswordLinkStatus.uidChanged,
         );
       }
-      return EmailPasswordLinkResult.success(uid: uidBeforeLink, email: email);
+      final verification = await sendCurrentUserEmailVerification();
+      return EmailPasswordLinkResult.success(
+        uid: uidBeforeLink,
+        email: email,
+        verificationStatus: verification.status,
+      );
     } on FirebaseAuthException catch (error) {
       return EmailPasswordLinkResult.failure(
         _emailPasswordErrorStatus(error.code),
@@ -279,6 +459,170 @@ class AuthService {
     } catch (_) {
       return const EmailPasswordLinkResult.failure(
         EmailPasswordLinkStatus.unknownFailure,
+      );
+    }
+  }
+
+  Future<AccountAuthResult> signInWithGoogle() async {
+    try {
+      final identity = await _googleCredentialProvider.authenticate();
+      if (identity.idToken.isEmpty) {
+        return const AccountAuthResult.failure(
+          AccountAuthStatus.invalidCredential,
+        );
+      }
+      final uid = await _authAccountGateway.signInWithGoogleIdToken(
+        identity.idToken,
+      );
+      return AccountAuthResult.success(uid);
+    } on GoogleCredentialException catch (error) {
+      return AccountAuthResult.failure(switch (error.failure) {
+        GoogleCredentialFailure.cancelled => AccountAuthStatus.cancelled,
+        GoogleCredentialFailure.invalidCredential =>
+          AccountAuthStatus.invalidCredential,
+        GoogleCredentialFailure.unknown => AccountAuthStatus.unknownFailure,
+      });
+    } on FirebaseAuthException catch (error) {
+      return AccountAuthResult.failure(_accountAuthErrorStatus(error.code));
+    } catch (_) {
+      return const AccountAuthResult.failure(AccountAuthStatus.unknownFailure);
+    }
+  }
+
+  Future<AccountAuthResult> signInWithEmailAndPassword({
+    required String email,
+    required String password,
+  }) async {
+    try {
+      return AccountAuthResult.success(
+        await _authAccountGateway.signInWithEmailPassword(
+          email: email,
+          password: password,
+        ),
+      );
+    } on FirebaseAuthException catch (error) {
+      return AccountAuthResult.failure(_accountAuthErrorStatus(error.code));
+    } catch (_) {
+      return const AccountAuthResult.failure(AccountAuthStatus.unknownFailure);
+    }
+  }
+
+  Future<AccountAuthResult> registerWithEmailAndPassword({
+    required String email,
+    required String password,
+  }) async {
+    try {
+      final uid = await _authAccountGateway.registerWithEmailPassword(
+          email: email,
+          password: password,
+        );
+      await sendCurrentUserEmailVerification();
+      return AccountAuthResult.success(uid);
+    } on FirebaseAuthException catch (error) {
+      return AccountAuthResult.failure(_accountAuthErrorStatus(error.code));
+    } catch (_) {
+      return const AccountAuthResult.failure(AccountAuthStatus.unknownFailure);
+    }
+  }
+
+  Future<EmailVerificationResult> sendCurrentUserEmailVerification() async {
+    final email = currentUserEmail;
+    if (_authVerificationGateway.currentUserId == null) {
+      return EmailVerificationResult.failure(
+        EmailVerificationStatus.noCurrentUser,
+        email: email,
+      );
+    }
+
+    try {
+      await _authVerificationGateway.sendEmailVerification();
+      return EmailVerificationResult.success(email: email);
+    } on FirebaseAuthException catch (error) {
+      return EmailVerificationResult.failure(
+        _emailVerificationErrorStatus(error.code),
+        email: email,
+      );
+    } catch (_) {
+      return EmailVerificationResult.failure(
+        EmailVerificationStatus.unknownFailure,
+        email: email,
+      );
+    }
+  }
+
+  Future<EmailVerificationResult> reloadCurrentUser() async {
+    if (_authVerificationGateway.currentUserId == null) {
+      return const EmailVerificationResult.failure(
+        EmailVerificationStatus.noCurrentUser,
+      );
+    }
+
+    try {
+      await _authVerificationGateway.reloadCurrentUser();
+      final isVerified = _authVerificationGateway.isCurrentUserEmailVerified;
+      return isVerified
+          ? EmailVerificationResult.success(
+              email: currentUserEmail,
+              isVerified: true,
+            )
+          : EmailVerificationResult.failure(
+              EmailVerificationStatus.notVerified,
+              email: currentUserEmail,
+            );
+    } on FirebaseAuthException catch (error) {
+      return EmailVerificationResult.failure(
+        _emailVerificationErrorStatus(error.code),
+        email: currentUserEmail,
+      );
+    } catch (_) {
+      return EmailVerificationResult.failure(
+        EmailVerificationStatus.unknownFailure,
+        email: currentUserEmail,
+      );
+    }
+  }
+
+  Future<void> signOutForAuthSwitch() => _authVerificationGateway.signOut();
+
+  Future<IncompleteProfileExitResult>
+  exitIncompleteProfileOnboarding() async {
+    final uid = _authVerificationGateway.currentUserId;
+    if (uid == null) {
+      return const IncompleteProfileExitResult.failure(
+        IncompleteProfileExitStatus.noCurrentUser,
+      );
+    }
+
+    try {
+      final profileExists = await (userProfileExists?.call(uid) ??
+          (_userService ??= UserService()).userExists(uid));
+      if (profileExists) {
+        return const IncompleteProfileExitResult.failure(
+          IncompleteProfileExitStatus.profileAlreadyExists,
+        );
+      }
+
+      if (_authVerificationGateway.isCurrentUserAnonymous) {
+        try {
+          await _authVerificationGateway.deleteCurrentUser();
+          return const IncompleteProfileExitResult.success(
+            IncompleteProfileExitAction.anonymousUserDeleted,
+          );
+        } catch (_) {
+          await _authVerificationGateway.signOut();
+          return const IncompleteProfileExitResult.success(
+            IncompleteProfileExitAction.anonymousUserSignedOut,
+          );
+        }
+      }
+
+      await _authVerificationGateway.signOut();
+      return const IncompleteProfileExitResult.success(
+        IncompleteProfileExitAction.accountSignedOut,
+      );
+    } catch (_) {
+      return const IncompleteProfileExitResult.failure(
+        IncompleteProfileExitStatus.unknownFailure,
       );
     }
   }
@@ -310,6 +654,30 @@ class AuthService {
       'network-request-failed' => EmailPasswordLinkStatus.networkRequestFailed,
       'too-many-requests' => EmailPasswordLinkStatus.tooManyRequests,
       _ => EmailPasswordLinkStatus.unknownFailure,
+    };
+  }
+
+  AccountAuthStatus _accountAuthErrorStatus(String code) {
+    return switch (code) {
+      'invalid-email' => AccountAuthStatus.invalidEmail,
+      'invalid-credential' ||
+      'wrong-password' ||
+      'user-not-found' => AccountAuthStatus.invalidCredential,
+      'email-already-in-use' => AccountAuthStatus.emailAlreadyInUse,
+      'weak-password' => AccountAuthStatus.weakPassword,
+      'user-disabled' => AccountAuthStatus.userDisabled,
+      'network-request-failed' => AccountAuthStatus.networkRequestFailed,
+      'too-many-requests' => AccountAuthStatus.tooManyRequests,
+      'operation-not-allowed' => AccountAuthStatus.operationNotAllowed,
+      _ => AccountAuthStatus.unknownFailure,
+    };
+  }
+
+  EmailVerificationStatus _emailVerificationErrorStatus(String code) {
+    return switch (code) {
+      'network-request-failed' => EmailVerificationStatus.networkRequestFailed,
+      'too-many-requests' => EmailVerificationStatus.tooManyRequests,
+      _ => EmailVerificationStatus.unknownFailure,
     };
   }
 }
@@ -377,6 +745,155 @@ class FirebaseAuthLinkGateway implements AuthLinkGateway {
           const <String>[],
     );
   }
+}
+
+class FirebaseAuthAccountGateway implements AuthAccountGateway {
+  FirebaseAuthAccountGateway(this._auth);
+
+  final FirebaseAuth _auth;
+
+  @override
+  Future<String> signInWithGoogleIdToken(String idToken) async {
+    final credential = GoogleAuthProvider.credential(idToken: idToken);
+    final result = await _auth.signInWithCredential(credential);
+    final user = result.user;
+    if (user == null) throw StateError('Google sign-in did not return a user.');
+    return user.uid;
+  }
+
+  @override
+  Future<String> signInWithEmailPassword({
+    required String email,
+    required String password,
+  }) async {
+    final result = await _auth.signInWithEmailAndPassword(
+      email: email,
+      password: password,
+    );
+    final user = result.user;
+    if (user == null) throw StateError('Email sign-in did not return a user.');
+    return user.uid;
+  }
+
+  @override
+  Future<String> registerWithEmailPassword({
+    required String email,
+    required String password,
+  }) async {
+    final result = await _auth.createUserWithEmailAndPassword(
+      email: email,
+      password: password,
+    );
+    final user = result.user;
+    if (user == null) throw StateError('Registration did not return a user.');
+    return user.uid;
+  }
+}
+
+class FirebaseAuthVerificationGateway implements AuthVerificationGateway {
+  FirebaseAuthVerificationGateway(this._auth);
+
+  final FirebaseAuth _auth;
+
+  User? get _currentUser => _auth.currentUser;
+
+  @override
+  String? get currentUserId => _currentUser?.uid;
+
+  @override
+  String? get currentUserEmail => _currentUser?.email;
+
+  @override
+  bool get isCurrentUserAnonymous => _currentUser?.isAnonymous ?? false;
+
+  @override
+  bool get isCurrentUserEmailVerified => _currentUser?.emailVerified ?? false;
+
+  @override
+  List<String> get providerIds =>
+      _currentUser?.providerData
+          .map((provider) => provider.providerId)
+          .toList(growable: false) ??
+      const <String>[];
+
+  @override
+  Future<void> sendEmailVerification() async {
+    final user = _currentUser;
+    if (user == null) throw StateError('No authenticated user.');
+    await user.sendEmailVerification();
+  }
+
+  @override
+  Future<void> reloadCurrentUser() async {
+    final user = _currentUser;
+    if (user == null) throw StateError('No authenticated user.');
+    await user.reload();
+  }
+
+  @override
+  Future<void> deleteCurrentUser() async {
+    final user = _currentUser;
+    if (user == null) throw StateError('No authenticated user.');
+    await user.delete();
+  }
+
+  @override
+  Future<void> signOut() => _auth.signOut();
+}
+
+class _UnavailableAuthAccountGateway implements AuthAccountGateway {
+  const _UnavailableAuthAccountGateway();
+
+  Never _unavailable() => throw StateError('FirebaseAuth is unavailable.');
+
+  @override
+  Future<String> registerWithEmailPassword({
+    required String email,
+    required String password,
+  }) async => _unavailable();
+
+  @override
+  Future<String> signInWithEmailPassword({
+    required String email,
+    required String password,
+  }) async => _unavailable();
+
+  @override
+  Future<String> signInWithGoogleIdToken(String idToken) async =>
+      _unavailable();
+}
+
+class _UnavailableAuthVerificationGateway implements AuthVerificationGateway {
+  const _UnavailableAuthVerificationGateway();
+
+  Never _unavailable() => throw StateError('FirebaseAuth is unavailable.');
+
+  @override
+  String? get currentUserEmail => null;
+
+  @override
+  String? get currentUserId => null;
+
+  @override
+  bool get isCurrentUserAnonymous => false;
+
+  @override
+  bool get isCurrentUserEmailVerified => false;
+
+  @override
+  List<String> get providerIds => const <String>[];
+
+  @override
+  Future<void> reloadCurrentUser() async => _unavailable();
+
+  @override
+  Future<void> deleteCurrentUser() async => _unavailable();
+
+  @override
+  Future<void> sendEmailVerification() async => _unavailable();
+
+  @override
+  Future<void> signOut() async => _unavailable();
 }
 
 abstract interface class GoogleSignInClient {

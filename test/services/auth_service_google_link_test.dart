@@ -13,8 +13,17 @@ void main() {
   AuthService serviceFor({
     required _FakeAuthLinkGateway auth,
     required GoogleCredentialProvider google,
+    AuthAccountGateway? account,
+    AuthVerificationGateway? verification,
+    Future<bool> Function(String userId)? userProfileExists,
   }) {
-    return AuthService(authLinkGateway: auth, googleCredentialProvider: google);
+    return AuthService(
+      authLinkGateway: auth,
+      authAccountGateway: account,
+      authVerificationGateway: verification,
+      googleCredentialProvider: google,
+      userProfileExists: userProfileExists,
+    );
   }
 
   test('returns a controlled result when there is no current user', () async {
@@ -258,6 +267,331 @@ void main() {
     expect(result.status, EmailPasswordLinkStatus.userNotAnonymous);
     expect(auth.emailLinkCalls, 0);
   });
+
+  test(
+    'signs in with Google without using the account-linking gateway',
+    () async {
+      final auth = _FakeAuthLinkGateway(currentUserId: null);
+      final account = _FakeAuthAccountGateway(googleUid: 'google-user');
+
+      final result = await serviceFor(
+        auth: auth,
+        google: _FakeGoogleCredentialProvider(identity: identity),
+        account: account,
+      ).signInWithGoogle();
+
+      expect(result, isA<AccountAuthResult>());
+      expect(result.isSuccess, isTrue);
+      expect(result.uid, 'google-user');
+      expect(account.googleSignInCalls, 1);
+      expect(auth.linkCalls, 0);
+    },
+  );
+
+  test(
+    'keeps the session unchanged when Google sign-in is cancelled',
+    () async {
+      final account = _FakeAuthAccountGateway();
+      final result = await serviceFor(
+        auth: _FakeAuthLinkGateway(currentUserId: null),
+        google: _FakeGoogleCredentialProvider(
+          error: const GoogleCredentialException(
+            GoogleCredentialFailure.cancelled,
+          ),
+        ),
+        account: account,
+      ).signInWithGoogle();
+
+      expect(result.status, AccountAuthStatus.cancelled);
+      expect(account.googleSignInCalls, 0);
+    },
+  );
+
+  test('maps email sign-in failures to controlled result states', () async {
+    final expectedStatuses = <String, AccountAuthStatus>{
+      'wrong-password': AccountAuthStatus.invalidCredential,
+      'user-disabled': AccountAuthStatus.userDisabled,
+      'network-request-failed': AccountAuthStatus.networkRequestFailed,
+    };
+
+    for (final entry in expectedStatuses.entries) {
+      final result =
+          await serviceFor(
+            auth: _FakeAuthLinkGateway(currentUserId: null),
+            google: _FakeGoogleCredentialProvider(identity: identity),
+            account: _FakeAuthAccountGateway(
+              emailSignInError: FirebaseAuthException(code: entry.key),
+            ),
+          ).signInWithEmailAndPassword(
+            email: 'person@example.com',
+            password: 'wrong-password',
+          );
+
+      expect(result.status, entry.value, reason: entry.key);
+    }
+  });
+
+  test(
+    'registers a new email account without using credential linking',
+    () async {
+      final auth = _FakeAuthLinkGateway(currentUserId: null);
+      final account = _FakeAuthAccountGateway(registrationUid: 'new-user');
+      final result =
+          await serviceFor(
+            auth: auth,
+            google: _FakeGoogleCredentialProvider(identity: identity),
+            account: account,
+          ).registerWithEmailAndPassword(
+            email: 'new@example.com',
+            password: 'secure-password',
+          );
+
+      expect(result.isSuccess, isTrue);
+      expect(result.uid, 'new-user');
+      expect(account.registrationCalls, 1);
+      expect(auth.emailLinkCalls, 0);
+    },
+  );
+
+  test('new email registration sends a verification email', () async {
+    final account = _FakeAuthAccountGateway(registrationUid: 'new-user');
+    final verification = _FakeAuthVerificationGateway();
+    final result =
+        await serviceFor(
+          auth: _FakeAuthLinkGateway(currentUserId: null),
+          google: _FakeGoogleCredentialProvider(identity: identity),
+          account: account,
+          verification: verification,
+        ).registerWithEmailAndPassword(
+          email: 'new@example.com',
+          password: 'secure-password',
+        );
+
+    expect(result.isSuccess, isTrue);
+    expect(result.uid, 'new-user');
+    expect(account.registrationCalls, 1);
+    expect(verification.sendCalls, 1);
+  });
+
+  test(
+    'maps weak registration passwords without changing an existing user',
+    () async {
+      final expectedStatuses = <String, AccountAuthStatus>{
+        'weak-password': AccountAuthStatus.weakPassword,
+        'email-already-in-use': AccountAuthStatus.emailAlreadyInUse,
+        'invalid-email': AccountAuthStatus.invalidEmail,
+      };
+
+      for (final entry in expectedStatuses.entries) {
+        final result =
+            await serviceFor(
+              auth: _FakeAuthLinkGateway(currentUserId: null),
+              google: _FakeGoogleCredentialProvider(identity: identity),
+              account: _FakeAuthAccountGateway(
+                registrationError: FirebaseAuthException(code: entry.key),
+              ),
+            ).registerWithEmailAndPassword(
+              email: 'new@example.com',
+              password: 'short',
+            );
+
+        expect(result.status, entry.value, reason: entry.key);
+      }
+    },
+  );
+
+  test('requires verification only for unverified password accounts', () {
+    AuthService serviceForVerification(_FakeAuthVerificationGateway gateway) {
+      return serviceFor(
+        auth: _FakeAuthLinkGateway(currentUserId: gateway.currentUserId),
+        google: _FakeGoogleCredentialProvider(identity: identity),
+        verification: gateway,
+      );
+    }
+
+    expect(
+      serviceForVerification(
+        _FakeAuthVerificationGateway(providerIds: const ['password']),
+      ).requiresCurrentUserEmailVerification,
+      isTrue,
+    );
+    expect(
+      serviceForVerification(
+        _FakeAuthVerificationGateway(
+          providerIds: const ['password'],
+          emailVerified: true,
+        ),
+      ).requiresCurrentUserEmailVerification,
+      isFalse,
+    );
+    expect(
+      serviceForVerification(
+        _FakeAuthVerificationGateway(anonymous: true),
+      ).requiresCurrentUserEmailVerification,
+      isFalse,
+    );
+    expect(
+      serviceForVerification(
+        _FakeAuthVerificationGateway(providerIds: const ['google.com']),
+      ).requiresCurrentUserEmailVerification,
+      isFalse,
+    );
+    expect(
+      serviceForVerification(
+        _FakeAuthVerificationGateway(
+          providerIds: const ['password', 'google.com'],
+        ),
+      ).requiresCurrentUserEmailVerification,
+      isFalse,
+    );
+  });
+
+  test(
+    'sends and reloads email verification through the auth gateway',
+    () async {
+      final verification = _FakeAuthVerificationGateway(
+        providerIds: const ['password'],
+        becomesVerifiedOnReload: true,
+      );
+      final service = serviceFor(
+        auth: _FakeAuthLinkGateway(currentUserId: 'existing-uid'),
+        google: _FakeGoogleCredentialProvider(identity: identity),
+        verification: verification,
+      );
+
+      final sent = await service.sendCurrentUserEmailVerification();
+      final reloaded = await service.reloadCurrentUser();
+
+      expect(sent.isSuccess, isTrue);
+      expect(verification.sendCalls, 1);
+      expect(reloaded.isVerified, isTrue);
+      expect(verification.reloadCalls, 1);
+    },
+  );
+
+  test('maps verification send failures to controlled result states', () async {
+    final service = serviceFor(
+      auth: _FakeAuthLinkGateway(currentUserId: 'existing-uid'),
+      google: _FakeGoogleCredentialProvider(identity: identity),
+      verification: _FakeAuthVerificationGateway(
+        sendError: FirebaseAuthException(code: 'network-request-failed'),
+      ),
+    );
+
+    final result = await service.sendCurrentUserEmailVerification();
+
+    expect(result.status, EmailVerificationStatus.networkRequestFailed);
+  });
+
+  test('email binding preserves UID and sends a verification email', () async {
+    final verification = _FakeAuthVerificationGateway();
+    final result =
+        await serviceFor(
+          auth: _FakeAuthLinkGateway(
+            currentUserId: 'existing-uid',
+            linkedUid: 'existing-uid',
+          ),
+          google: _FakeGoogleCredentialProvider(identity: identity),
+          verification: verification,
+        ).linkCurrentUserWithEmailAndPassword(
+          email: 'person@example.com',
+          password: 'secure-password',
+        );
+
+    expect(result.isSuccess, isTrue);
+    expect(result.uid, 'existing-uid');
+    expect(result.verificationStatus, EmailVerificationStatus.success);
+    expect(verification.sendCalls, 1);
+  });
+
+  group('incomplete profile onboarding exit', () {
+    test('deletes a new anonymous user without a Firestore profile', () async {
+      final verification = _FakeAuthVerificationGateway(anonymous: true);
+      final result = await serviceFor(
+        auth: _FakeAuthLinkGateway(currentUserId: 'anonymous-uid'),
+        google: _FakeGoogleCredentialProvider(identity: identity),
+        verification: verification,
+        userProfileExists: (_) async => false,
+      ).exitIncompleteProfileOnboarding();
+
+      expect(result.isSuccess, isTrue);
+      expect(result.action, IncompleteProfileExitAction.anonymousUserDeleted);
+      expect(verification.deleteCalls, 1);
+      expect(verification.signOutCalls, 0);
+    });
+
+    test('signs out an anonymous user when deletion fails', () async {
+      final verification = _FakeAuthVerificationGateway(
+        anonymous: true,
+        deleteError: FirebaseAuthException(code: 'requires-recent-login'),
+      );
+      final result = await serviceFor(
+        auth: _FakeAuthLinkGateway(currentUserId: 'anonymous-uid'),
+        google: _FakeGoogleCredentialProvider(identity: identity),
+        verification: verification,
+        userProfileExists: (_) async => false,
+      ).exitIncompleteProfileOnboarding();
+
+      expect(result.isSuccess, isTrue);
+      expect(result.action, IncompleteProfileExitAction.anonymousUserSignedOut);
+      expect(verification.deleteCalls, 1);
+      expect(verification.signOutCalls, 1);
+    });
+
+    test('signs out email and Google accounts without deleting them', () async {
+      for (final providers in const <List<String>>[
+        <String>['password'],
+        <String>['google.com'],
+      ]) {
+        final verification = _FakeAuthVerificationGateway(
+          providerIds: providers,
+        );
+        final result = await serviceFor(
+          auth: _FakeAuthLinkGateway(currentUserId: 'account-uid'),
+          google: _FakeGoogleCredentialProvider(identity: identity),
+          verification: verification,
+          userProfileExists: (_) async => false,
+        ).exitIncompleteProfileOnboarding();
+
+        expect(result.isSuccess, isTrue, reason: providers.single);
+        expect(
+          result.action,
+          IncompleteProfileExitAction.accountSignedOut,
+          reason: providers.single,
+        );
+        expect(verification.deleteCalls, 0, reason: providers.single);
+        expect(verification.signOutCalls, 1, reason: providers.single);
+      }
+    });
+
+    test('does nothing when the profile lookup cannot be completed', () async {
+      final verification = _FakeAuthVerificationGateway(anonymous: true);
+      final result = await serviceFor(
+        auth: _FakeAuthLinkGateway(currentUserId: 'profile-owner'),
+        google: _FakeGoogleCredentialProvider(identity: identity),
+        verification: verification,
+        userProfileExists: (_) async => throw StateError('lookup failed'),
+      ).exitIncompleteProfileOnboarding();
+
+      expect(result.status, IncompleteProfileExitStatus.unknownFailure);
+      expect(verification.deleteCalls, 0);
+      expect(verification.signOutCalls, 0);
+    });
+
+    test('refuses cleanup when the Firestore profile already exists', () async {
+      final verification = _FakeAuthVerificationGateway(anonymous: true);
+      final result = await serviceFor(
+        auth: _FakeAuthLinkGateway(currentUserId: 'existing-uid'),
+        google: _FakeGoogleCredentialProvider(identity: identity),
+        verification: verification,
+        userProfileExists: (_) async => true,
+      ).exitIncompleteProfileOnboarding();
+
+      expect(result.status, IncompleteProfileExitStatus.profileAlreadyExists);
+      expect(verification.deleteCalls, 0);
+      expect(verification.signOutCalls, 0);
+    });
+  });
 }
 
 class _FakeAuthLinkGateway implements AuthLinkGateway {
@@ -332,6 +666,118 @@ class _FakeGoogleCredentialProvider implements GoogleCredentialProvider {
     final failure = error;
     if (failure != null) throw failure;
     return identity!;
+  }
+}
+
+class _FakeAuthVerificationGateway implements AuthVerificationGateway {
+  _FakeAuthVerificationGateway({
+    this.anonymous = false,
+    this.emailVerified = false,
+    this.providerIds = const ['password'],
+    this.becomesVerifiedOnReload = false,
+    this.sendError,
+    this.deleteError,
+  });
+
+  @override
+  String? currentUserId = 'existing-uid';
+
+  @override
+  String? currentUserEmail = 'person@example.com';
+
+  final bool anonymous;
+
+  bool emailVerified;
+
+  @override
+  final List<String> providerIds;
+
+  final bool becomesVerifiedOnReload;
+  final FirebaseAuthException? sendError;
+  final FirebaseAuthException? deleteError;
+  int sendCalls = 0;
+  int reloadCalls = 0;
+  int deleteCalls = 0;
+  int signOutCalls = 0;
+
+  @override
+  bool get isCurrentUserAnonymous => anonymous;
+
+  @override
+  bool get isCurrentUserEmailVerified => emailVerified;
+
+  @override
+  Future<void> reloadCurrentUser() async {
+    reloadCalls += 1;
+    if (becomesVerifiedOnReload) emailVerified = true;
+  }
+
+  @override
+  Future<void> deleteCurrentUser() async {
+    deleteCalls += 1;
+    final error = deleteError;
+    if (error != null) throw error;
+    currentUserId = null;
+    currentUserEmail = null;
+  }
+
+  @override
+  Future<void> sendEmailVerification() async {
+    sendCalls += 1;
+    final error = sendError;
+    if (error != null) throw error;
+  }
+
+  @override
+  Future<void> signOut() async {
+    signOutCalls += 1;
+    currentUserId = null;
+    currentUserEmail = null;
+  }
+}
+
+class _FakeAuthAccountGateway implements AuthAccountGateway {
+  _FakeAuthAccountGateway({
+    this.googleUid = 'google-user',
+    this.registrationUid = 'registered-user',
+    this.emailSignInError,
+    this.registrationError,
+  });
+
+  final String googleUid;
+  final String registrationUid;
+  final FirebaseAuthException? emailSignInError;
+  final FirebaseAuthException? registrationError;
+  int googleSignInCalls = 0;
+  int emailSignInCalls = 0;
+  int registrationCalls = 0;
+
+  @override
+  Future<String> registerWithEmailPassword({
+    required String email,
+    required String password,
+  }) async {
+    registrationCalls += 1;
+    final error = registrationError;
+    if (error != null) throw error;
+    return registrationUid;
+  }
+
+  @override
+  Future<String> signInWithEmailPassword({
+    required String email,
+    required String password,
+  }) async {
+    emailSignInCalls += 1;
+    final error = emailSignInError;
+    if (error != null) throw error;
+    return 'email-user';
+  }
+
+  @override
+  Future<String> signInWithGoogleIdToken(String idToken) async {
+    googleSignInCalls += 1;
+    return googleUid;
   }
 }
 

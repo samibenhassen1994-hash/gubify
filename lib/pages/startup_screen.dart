@@ -1,65 +1,178 @@
 import 'package:flutter/material.dart';
 
+import 'auth_entry_screen.dart';
 import '../pages/name_screen.dart';
 import '../screens/welcome_screen.dart';
 import '../services/auth_service.dart';
 import '../services/user_service.dart';
 import '../widgets/startup_artwork_background.dart';
+import 'verify_email_screen.dart';
 
 class StartupScreen extends StatefulWidget {
-  final VoidCallback onNavigationReady;
+  const StartupScreen({
+    super.key,
+    required this.onNavigationReady,
+    this.authService,
+    this.onAnonymousSignIn,
+    this.userProfileExists,
+    this.authenticatedAppBuilder,
+    this.minimumDisplayDuration = const Duration(seconds: 2),
+  });
 
-  const StartupScreen({super.key, required this.onNavigationReady});
+  final VoidCallback onNavigationReady;
+  final AuthService? authService;
+  final Future<void> Function()? onAnonymousSignIn;
+  final Future<bool> Function(String userId)? userProfileExists;
+  final WidgetBuilder? authenticatedAppBuilder;
+  final Duration minimumDisplayDuration;
 
   @override
   State<StartupScreen> createState() => _StartupScreenState();
 }
 
 class _StartupScreenState extends State<StartupScreen> {
-  final AuthService _auth = AuthService();
-  final UserService _userService = UserService();
+  late final AuthService _auth;
+  UserService? _userService;
+  bool _showAuthEntry = false;
+  bool _showVerifyEmail = false;
+  bool _isRouting = false;
 
   @override
   void initState() {
     super.initState();
+    _auth = widget.authService ?? AuthService();
     _start();
   }
 
   Future<void> _start() async {
-    final minimumDisplayTime = Future<void>.delayed(const Duration(seconds: 2));
+    if (widget.minimumDisplayDuration > Duration.zero) {
+      await Future<void>.delayed(widget.minimumDisplayDuration);
+    }
 
-    if (_auth.currentUser == null) {
+    if (_auth.currentUserId == null) {
+      if (mounted) setState(() => _showAuthEntry = true);
+      return;
+    }
+
+    await _routeCurrentUser();
+  }
+
+  Future<void> _continueAnonymously() async {
+    final onAnonymousSignIn = widget.onAnonymousSignIn;
+    if (onAnonymousSignIn != null) {
+      await onAnonymousSignIn();
+    } else {
       await _auth.signInAnonymously();
     }
+    await _routeCurrentUser();
+  }
 
-    final uid = _auth.currentUser!.uid;
-    final exists = await _userService.userExists(uid);
-
-    await minimumDisplayTime;
-
-    if (!mounted) return;
-
-    if (exists) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const WelcomeScreen()),
-      );
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        widget.onNavigationReady();
-      });
-    } else {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (_) =>
-              NameScreen(onNavigationReady: widget.onNavigationReady),
-        ),
-      );
+  Future<void> _routeCurrentUser() async {
+    if (_isRouting) return;
+    final uid = _auth.currentUserId;
+    if (uid == null) {
+      if (mounted) {
+        setState(() {
+          _showAuthEntry = true;
+          _showVerifyEmail = false;
+        });
+      }
+      return;
     }
+
+    if (_auth.requiresCurrentUserEmailVerification) {
+      if (mounted) {
+        setState(() {
+          _showAuthEntry = false;
+          _showVerifyEmail = true;
+        });
+      }
+      return;
+    }
+
+    _isRouting = true;
+    try {
+      final exists =
+          await (widget.userProfileExists?.call(uid) ??
+              (_userService ??= UserService()).userExists(uid));
+
+      if (!mounted) return;
+
+      if (exists) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) =>
+                widget.authenticatedAppBuilder?.call(context) ??
+                const WelcomeScreen(),
+          ),
+        );
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          widget.onNavigationReady();
+        });
+      } else {
+        final authService = _auth;
+        final onNavigationReady = widget.onNavigationReady;
+        final userProfileExists = widget.userProfileExists;
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (nameScreenContext) => NameScreen(
+              authService: authService,
+              onNavigationReady: onNavigationReady,
+              onBackToSignIn: () async {
+                if (!nameScreenContext.mounted) return;
+                Navigator.of(nameScreenContext).pushAndRemoveUntil(
+                  MaterialPageRoute(
+                    builder: (_) => StartupScreen(
+                      authService: authService,
+                      userProfileExists: userProfileExists,
+                      authenticatedAppBuilder: widget.authenticatedAppBuilder,
+                      minimumDisplayDuration: Duration.zero,
+                      onNavigationReady: onNavigationReady,
+                    ),
+                  ),
+                  (_) => false,
+                );
+              },
+            ),
+          ),
+        );
+      }
+    } on Object {
+      _isRouting = false;
+      rethrow;
+    }
+  }
+
+  Future<void> _useAnotherAccount() async {
+    await _auth.signOutForAuthSwitch();
+    if (!mounted) return;
+    setState(() {
+      _isRouting = false;
+      _showVerifyEmail = false;
+      _showAuthEntry = true;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
+    if (_showAuthEntry) {
+      return AuthEntryScreen(
+        authService: _auth,
+        onAuthenticated: _routeCurrentUser,
+        onContinueAnonymously: _continueAnonymously,
+      );
+    }
+
+    if (_showVerifyEmail) {
+      return VerifyEmailScreen(
+        authService: _auth,
+        onVerified: _routeCurrentUser,
+        onUseAnotherAccount: _useAnotherAccount,
+      );
+    }
+
     return const StartupArtworkBackground(
       child: Center(
         child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),

@@ -63,7 +63,12 @@ class _GoogleAccountConnectionSectionState
 
     if (result.isSuccess) {
       setState(() => _isAccountSecured = true);
-      _showMessage('Account secured', duration: const Duration(seconds: 3));
+      _showMessage(
+        result.verificationStatus == EmailVerificationStatus.success
+            ? 'Account secured. Check your email to verify your address.'
+            : 'Account secured. We could not send the verification email.',
+        duration: const Duration(seconds: 4),
+      );
     }
   }
 

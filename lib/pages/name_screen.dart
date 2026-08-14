@@ -1,17 +1,24 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../modules/legal/privacy_policy_screen.dart';
 import '../modules/legal/terms_screen.dart';
+import '../screens/welcome_screen.dart';
 import '../services/auth_service.dart';
 import '../widgets/startup_artwork_background.dart';
-import '../screens/welcome_screen.dart';
-import 'package:flutter/services.dart';
 
 class NameScreen extends StatefulWidget {
   final VoidCallback? onNavigationReady;
+  final AuthService? authService;
+  final Future<void> Function()? onBackToSignIn;
 
-  const NameScreen({super.key, this.onNavigationReady});
+  const NameScreen({
+    super.key,
+    this.onNavigationReady,
+    this.authService,
+    this.onBackToSignIn,
+  });
 
   @override
   State<NameScreen> createState() => _NameScreenState();
@@ -19,14 +26,44 @@ class NameScreen extends StatefulWidget {
 
 class _NameScreenState extends State<NameScreen> {
   final TextEditingController _controller = TextEditingController();
+  late final AuthService _authService;
 
   bool _isLoading = false;
+  bool _isExiting = false;
   bool _acceptedTerms = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _authService = widget.authService ?? AuthService();
+  }
 
   @override
   void dispose() {
     _controller.dispose();
     super.dispose();
+  }
+
+  Future<void> _backToSignIn() async {
+    if (_isLoading || _isExiting || widget.onBackToSignIn == null) return;
+    setState(() => _isExiting = true);
+
+    final result = await _authService.exitIncompleteProfileOnboarding();
+    if (!mounted) return;
+
+    if (result.isSuccess) {
+      await widget.onBackToSignIn!.call();
+      return;
+    }
+
+    setState(() => _isExiting = false);
+    final message =
+        result.status == IncompleteProfileExitStatus.profileAlreadyExists
+        ? 'Your Gubify profile already exists. Please reopen the app.'
+        : 'Unable to return to sign in. Please try again.';
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
   }
 
   @override
@@ -39,12 +76,16 @@ class _NameScreenState extends State<NameScreen> {
 
     return StartupArtworkBackground(
       child: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-            padding: const EdgeInsets.symmetric(horizontal: 30),
-            child: Column(
-              children: [
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            Center(
+              child: SingleChildScrollView(
+                keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior.onDrag,
+                padding: const EdgeInsets.symmetric(horizontal: 30),
+                child: Column(
+                  children: [
                 AnimatedContainer(
                   duration: const Duration(milliseconds: 220),
                   curve: Curves.easeOut,
@@ -196,7 +237,8 @@ class _NameScreenState extends State<NameScreen> {
                               borderRadius: BorderRadius.circular(16),
                             ),
                           ),
-                          onPressed: (_isLoading || !_acceptedTerms)
+                          onPressed:
+                              (_isLoading || _isExiting || !_acceptedTerms)
                               ? null
                               : () async {
                                   final name = _controller.text.trim();
@@ -260,7 +302,7 @@ class _NameScreenState extends State<NameScreen> {
                                   setState(() => _isLoading = true);
 
                                   try {
-                                    await AuthService().createProfile(name);
+                                    await _authService.createProfile(name);
 
                                     if (!context.mounted) return;
 
@@ -312,9 +354,40 @@ class _NameScreenState extends State<NameScreen> {
                     ],
                   ),
                 ),
-              ],
+                  ],
+                ),
+              ),
             ),
-          ),
+            if (widget.onBackToSignIn != null)
+              Positioned(
+                top: 8,
+                left: 8,
+                child: Material(
+                  color: Colors.white.withValues(alpha: 0.9),
+                  shape: const CircleBorder(),
+                  elevation: 2,
+                  child: IconButton(
+                    tooltip: 'Back to sign in',
+                    onPressed: _isLoading || _isExiting
+                        ? null
+                        : _backToSignIn,
+                    icon: _isExiting
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Color(0xFF2563EB),
+                            ),
+                          )
+                        : const Icon(
+                            Icons.arrow_back_rounded,
+                            color: Color(0xFF1E3A5F),
+                          ),
+                  ),
+                ),
+              ),
+          ],
         ),
       ),
     );

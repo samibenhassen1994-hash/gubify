@@ -23,9 +23,11 @@ void main() {
   AuthService serviceFor({
     _FakeAuthLinkGateway? auth,
     GoogleCredentialProvider? google,
+    AuthVerificationGateway? verification,
   }) {
     return AuthService(
       authLinkGateway: auth ?? _FakeAuthLinkGateway(),
+      authVerificationGateway: verification ?? _FakeVerificationGateway(),
       googleCredentialProvider:
           google ?? _FakeGoogleCredentialProvider(identity: identity),
     );
@@ -88,7 +90,10 @@ void main() {
     await tester.tap(find.text('Create login'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Account secured'), findsOneWidget);
+    expect(
+      find.text('Account secured. Check your email to verify your address.'),
+      findsOneWidget,
+    );
     expect(find.text('Secure your account'), findsNothing);
   });
 
@@ -314,6 +319,35 @@ class _FakeGoogleCredentialProvider implements GoogleCredentialProvider {
     if (failure != null) throw failure;
     return identity!;
   }
+}
+
+class _FakeVerificationGateway implements AuthVerificationGateway {
+  @override
+  String? get currentUserEmail => 'person@example.com';
+
+  @override
+  String? get currentUserId => 'existing-uid';
+
+  @override
+  bool get isCurrentUserAnonymous => false;
+
+  @override
+  bool get isCurrentUserEmailVerified => false;
+
+  @override
+  List<String> get providerIds => const ['password'];
+
+  @override
+  Future<void> reloadCurrentUser() async {}
+
+  @override
+  Future<void> deleteCurrentUser() async {}
+
+  @override
+  Future<void> sendEmailVerification() async {}
+
+  @override
+  Future<void> signOut() async {}
 }
 
 class _CompletingGoogleCredentialProvider implements GoogleCredentialProvider {
