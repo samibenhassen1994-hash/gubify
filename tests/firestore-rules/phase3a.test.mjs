@@ -444,7 +444,6 @@ describe('users and profiles', () => {
   test('owner can update client-supported profile fields', async () => {
     await seedProfiles([ids.outsider]);
     await assertSucceeds(updateDoc(doc(db(ids.outsider), 'users', ids.outsider), {
-      displayName: 'Updated',
       photoUrl: 'https://example.test/photo.png',
       updatedAt: serverTimestamp(),
     }));

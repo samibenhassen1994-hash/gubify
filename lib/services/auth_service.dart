@@ -139,6 +139,29 @@ enum PasswordResetStatus {
   unknownFailure,
 }
 
+enum PasswordChangeStatus {
+  success,
+  noCurrentUser,
+  noEmail,
+  wrongPassword,
+  weakPassword,
+  requiresRecentLogin,
+  networkRequestFailed,
+  tooManyRequests,
+  unknownFailure,
+}
+
+class PasswordChangeResult {
+  const PasswordChangeResult._(this.status);
+
+  final PasswordChangeStatus status;
+  bool get isSuccess => status == PasswordChangeStatus.success;
+
+  const PasswordChangeResult.success() : this._(PasswordChangeStatus.success);
+  const PasswordChangeResult.failure(PasswordChangeStatus status)
+    : this._(status);
+}
+
 class PasswordResetResult {
   const PasswordResetResult._(this.status);
 
@@ -148,7 +171,8 @@ class PasswordResetResult {
 
   const PasswordResetResult.success() : this._(PasswordResetStatus.success);
 
-  const PasswordResetResult.failure(PasswordResetStatus status) : this._(status);
+  const PasswordResetResult.failure(PasswordResetStatus status)
+    : this._(status);
 }
 
 enum LogoutStatus { success, noCurrentUser, anonymousUser, unknownFailure }
@@ -210,13 +234,11 @@ class IncompleteProfileExitResult {
 
   bool get isSuccess => status == IncompleteProfileExitStatus.success;
 
-  const IncompleteProfileExitResult.success(
-    IncompleteProfileExitAction action,
-  ) : this._(status: IncompleteProfileExitStatus.success, action: action);
+  const IncompleteProfileExitResult.success(IncompleteProfileExitAction action)
+    : this._(status: IncompleteProfileExitStatus.success, action: action);
 
-  const IncompleteProfileExitResult.failure(
-    IncompleteProfileExitStatus status,
-  ) : this._(status: status);
+  const IncompleteProfileExitResult.failure(IncompleteProfileExitStatus status)
+    : this._(status: status);
 }
 
 class EmailVerificationResult {
@@ -232,12 +254,14 @@ class EmailVerificationResult {
 
   bool get isSuccess => status == EmailVerificationStatus.success;
 
-  const EmailVerificationResult.success({String? email, bool isVerified = false})
-    : this._(
-        status: EmailVerificationStatus.success,
-        email: email,
-        isVerified: isVerified,
-      );
+  const EmailVerificationResult.success({
+    String? email,
+    bool isVerified = false,
+  }) : this._(
+         status: EmailVerificationStatus.success,
+         email: email,
+         isVerified: isVerified,
+       );
 
   const EmailVerificationResult.failure(
     EmailVerificationStatus status, {
@@ -299,6 +323,18 @@ abstract interface class PasswordResetGateway {
   Future<void> sendPasswordResetEmail(String email);
 }
 
+abstract interface class PasswordChangeGateway {
+  String? get currentUserId;
+  String? get currentUserEmail;
+
+  Future<void> reauthenticateWithPassword({
+    required String email,
+    required String password,
+  });
+
+  Future<void> updatePassword(String password);
+}
+
 abstract interface class GoogleSignOutGateway {
   Future<void> signOut();
 }
@@ -319,6 +355,7 @@ class AuthService {
     AuthVerificationGateway? authVerificationGateway,
     GoogleCredentialProvider? googleCredentialProvider,
     PasswordResetGateway? passwordResetGateway,
+    PasswordChangeGateway? passwordChangeGateway,
     GoogleSignOutGateway? googleSignOutGateway,
     this.clearUserCache,
     this.userProfileExists,
@@ -343,6 +380,11 @@ class AuthService {
            (authLinkGateway == null
                ? FirebasePasswordResetGateway(auth ?? FirebaseAuth.instance)
                : const _UnavailablePasswordResetGateway()),
+       _passwordChangeGateway =
+           passwordChangeGateway ??
+           (authLinkGateway == null
+               ? FirebasePasswordChangeGateway(auth ?? FirebaseAuth.instance)
+               : const _UnavailablePasswordChangeGateway()),
        _googleSignOutGateway =
            googleSignOutGateway ??
            (authLinkGateway == null
@@ -358,6 +400,7 @@ class AuthService {
   final AuthVerificationGateway _authVerificationGateway;
   final GoogleCredentialProvider _googleCredentialProvider;
   final PasswordResetGateway _passwordResetGateway;
+  final PasswordChangeGateway _passwordChangeGateway;
   final GoogleSignOutGateway _googleSignOutGateway;
   final void Function()? clearUserCache;
   final Future<bool> Function(String userId)? userProfileExists;
@@ -487,11 +530,6 @@ class AuthService {
         EmailPasswordLinkStatus.noCurrentUser,
       );
     }
-    if (!isCurrentUserAnonymous) {
-      return const EmailPasswordLinkResult.failure(
-        EmailPasswordLinkStatus.userNotAnonymous,
-      );
-    }
     if (isPasswordLinked) {
       return const EmailPasswordLinkResult.failure(
         EmailPasswordLinkStatus.providerAlreadyLinked,
@@ -575,9 +613,9 @@ class AuthService {
   }) async {
     try {
       final uid = await _authAccountGateway.registerWithEmailPassword(
-          email: email,
-          password: password,
-        );
+        email: email,
+        password: password,
+      );
       await sendCurrentUserEmailVerification();
       return AccountAuthResult.success(uid);
     } on FirebaseAuthException catch (error) {
@@ -600,7 +638,46 @@ class AuthService {
       }
       return PasswordResetResult.failure(_passwordResetErrorStatus(error.code));
     } catch (_) {
-      return const PasswordResetResult.failure(PasswordResetStatus.unknownFailure);
+      return const PasswordResetResult.failure(
+        PasswordResetStatus.unknownFailure,
+      );
+    }
+  }
+
+  Future<PasswordChangeResult> changePassword({
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    if (_passwordChangeGateway.currentUserId == null) {
+      return const PasswordChangeResult.failure(
+        PasswordChangeStatus.noCurrentUser,
+      );
+    }
+    final email = _passwordChangeGateway.currentUserEmail;
+    if (email == null || email.trim().isEmpty) {
+      return const PasswordChangeResult.failure(PasswordChangeStatus.noEmail);
+    }
+    try {
+      await _passwordChangeGateway.reauthenticateWithPassword(
+        email: email,
+        password: currentPassword,
+      );
+      await _passwordChangeGateway.updatePassword(newPassword);
+      return const PasswordChangeResult.success();
+    } on FirebaseAuthException catch (error) {
+      return PasswordChangeResult.failure(switch (error.code) {
+        'wrong-password' ||
+        'invalid-credential' => PasswordChangeStatus.wrongPassword,
+        'weak-password' => PasswordChangeStatus.weakPassword,
+        'requires-recent-login' => PasswordChangeStatus.requiresRecentLogin,
+        'network-request-failed' => PasswordChangeStatus.networkRequestFailed,
+        'too-many-requests' => PasswordChangeStatus.tooManyRequests,
+        _ => PasswordChangeStatus.unknownFailure,
+      });
+    } catch (_) {
+      return const PasswordChangeResult.failure(
+        PasswordChangeStatus.unknownFailure,
+      );
     }
   }
 
@@ -692,8 +769,7 @@ class AuthService {
 
   Future<void> signOutForAuthSwitch() => _authVerificationGateway.signOut();
 
-  Future<IncompleteProfileExitResult>
-  exitIncompleteProfileOnboarding() async {
+  Future<IncompleteProfileExitResult> exitIncompleteProfileOnboarding() async {
     final uid = _authVerificationGateway.currentUserId;
     if (uid == null) {
       return const IncompleteProfileExitResult.failure(
@@ -702,8 +778,9 @@ class AuthService {
     }
 
     try {
-      final profileExists = await (userProfileExists?.call(uid) ??
-          (_userService ??= UserService()).userExists(uid));
+      final profileExists =
+          await (userProfileExists?.call(uid) ??
+              (_userService ??= UserService()).userExists(uid));
       if (profileExists) {
         return const IncompleteProfileExitResult.failure(
           IncompleteProfileExitStatus.profileAlreadyExists,
@@ -973,6 +1050,39 @@ class FirebasePasswordResetGateway implements PasswordResetGateway {
   }
 }
 
+class FirebasePasswordChangeGateway implements PasswordChangeGateway {
+  FirebasePasswordChangeGateway(this._auth);
+
+  final FirebaseAuth _auth;
+
+  User? get _currentUser => _auth.currentUser;
+
+  @override
+  String? get currentUserEmail => _currentUser?.email;
+
+  @override
+  String? get currentUserId => _currentUser?.uid;
+
+  @override
+  Future<void> reauthenticateWithPassword({
+    required String email,
+    required String password,
+  }) async {
+    final user = _currentUser;
+    if (user == null) throw StateError('No authenticated user.');
+    await user.reauthenticateWithCredential(
+      EmailAuthProvider.credential(email: email, password: password),
+    );
+  }
+
+  @override
+  Future<void> updatePassword(String password) async {
+    final user = _currentUser;
+    if (user == null) throw StateError('No authenticated user.');
+    await user.updatePassword(password);
+  }
+}
+
 class GoogleSignInSessionGateway implements GoogleSignOutGateway {
   GoogleSignInSessionGateway({GoogleSignIn? googleSignIn})
     : _googleSignIn = googleSignIn ?? GoogleSignIn.instance;
@@ -1048,6 +1158,27 @@ class _UnavailablePasswordResetGateway implements PasswordResetGateway {
   Future<void> sendPasswordResetEmail(String email) {
     throw StateError('FirebaseAuth is unavailable.');
   }
+}
+
+class _UnavailablePasswordChangeGateway implements PasswordChangeGateway {
+  const _UnavailablePasswordChangeGateway();
+
+  Never _unavailable() => throw StateError('FirebaseAuth is unavailable.');
+
+  @override
+  String? get currentUserEmail => null;
+
+  @override
+  String? get currentUserId => null;
+
+  @override
+  Future<void> reauthenticateWithPassword({
+    required String email,
+    required String password,
+  }) async => _unavailable();
+
+  @override
+  Future<void> updatePassword(String password) async => _unavailable();
 }
 
 class _UnavailableGoogleSignOutGateway implements GoogleSignOutGateway {

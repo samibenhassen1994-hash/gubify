@@ -63,7 +63,7 @@ class _GoogleAccountConnectionSectionState
       isScrollControlled: true,
       useSafeArea: true,
       builder: (context) =>
-          _EmailPasswordBindSheet(authService: widget.authService),
+          EmailPasswordLinkSheet(authService: widget.authService),
     );
     if (!mounted || result == null) return;
 
@@ -194,17 +194,16 @@ class _GoogleAccountConnectionSectionState
   }
 }
 
-class _EmailPasswordBindSheet extends StatefulWidget {
-  const _EmailPasswordBindSheet({required this.authService});
+class EmailPasswordLinkSheet extends StatefulWidget {
+  const EmailPasswordLinkSheet({super.key, required this.authService});
 
   final AuthService authService;
 
   @override
-  State<_EmailPasswordBindSheet> createState() =>
-      _EmailPasswordBindSheetState();
+  State<EmailPasswordLinkSheet> createState() => _EmailPasswordBindSheetState();
 }
 
-class _EmailPasswordBindSheetState extends State<_EmailPasswordBindSheet> {
+class _EmailPasswordBindSheetState extends State<EmailPasswordLinkSheet> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();

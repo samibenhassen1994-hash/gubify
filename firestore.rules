@@ -34,11 +34,13 @@ service cloud.firestore {
     }
     function validUserProfile(data) {
       return data.keys().hasOnly([
-          'displayName','createdAt','updatedAt','activeHub','avatar','photoUrl','photoURL'
+          'displayName','displayNameChangedAt','createdAt','updatedAt','activeHub','avatar','photoUrl','photoURL'
         ])
         && data.displayName is string
         && data.createdAt is timestamp
         && data.updatedAt is timestamp
+        && (!data.keys().hasAny(['displayNameChangedAt'])
+          || data.displayNameChangedAt is timestamp)
         && (data.get('activeHub', null) == null || data.activeHub is string)
         && (data.get('avatar', null) == null || data.avatar is string)
         && (data.get('photoUrl', null) == null || data.photoUrl is string)
@@ -715,9 +717,26 @@ service cloud.firestore {
 
     match /users/{uid} {
       allow read: if signedIn();
-      allow create: if own(uid) && validUserProfile(request.resource.data);
+      allow create: if own(uid) && validUserProfile(request.resource.data)
+        && !request.resource.data.keys().hasAny(['displayNameChangedAt']);
       allow update: if own(uid) && validUserProfile(request.resource.data)
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['displayName', 'photoUrl', 'photoURL', 'updatedAt']);
+        && (
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['photoUrl', 'photoURL', 'updatedAt'])
+            && request.resource.data.displayName == resource.data.displayName
+          || (
+            request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['displayName', 'displayNameChangedAt', 'updatedAt'])
+            && request.resource.data.displayName != resource.data.displayName
+            && request.resource.data.displayNameChangedAt == request.time
+            && request.resource.data.updatedAt == request.time
+            && (
+              !resource.data.keys().hasAny(['displayNameChangedAt'])
+              || resource.data.displayNameChangedAt
+                <= request.time - duration.value(30, 'd')
+            )
+          )
+        );
 
       match /gubs/{id} {
         allow read: if own(uid);

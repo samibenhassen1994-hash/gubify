@@ -255,24 +255,30 @@ void main() {
     }
   });
 
-  test('does not bind email credentials for a non-anonymous user', () async {
-    final auth = _FakeAuthLinkGateway(
-      currentUserId: 'existing-uid',
-      anonymous: false,
-    );
+  test(
+    'adds email credentials to a Google-only user without changing UID',
+    () async {
+      final auth = _FakeAuthLinkGateway(
+        currentUserId: 'existing-uid',
+        anonymous: false,
+        providerIds: const ['google.com'],
+        linkedProviderIds: const ['google.com', 'password'],
+      );
 
-    final result =
-        await serviceFor(
-          auth: auth,
-          google: _FakeGoogleCredentialProvider(identity: identity),
-        ).linkCurrentUserWithEmailAndPassword(
-          email: 'person@example.com',
-          password: 'secure-password',
-        );
+      final result =
+          await serviceFor(
+            auth: auth,
+            google: _FakeGoogleCredentialProvider(identity: identity),
+          ).linkCurrentUserWithEmailAndPassword(
+            email: 'person@example.com',
+            password: 'secure-password',
+          );
 
-    expect(result.status, EmailPasswordLinkStatus.userNotAnonymous);
-    expect(auth.emailLinkCalls, 0);
-  });
+      expect(result.isSuccess, isTrue);
+      expect(result.uid, 'existing-uid');
+      expect(auth.emailLinkCalls, 1);
+    },
+  );
 
   test(
     'signs in with Google without using the account-linking gateway',
@@ -598,17 +604,20 @@ void main() {
       expect(verification.signOutCalls, 0);
     });
 
-    test('sends a password reset without changing authentication state', () async {
-      final reset = _FakePasswordResetGateway();
-      final result = await serviceFor(
-        auth: _FakeAuthLinkGateway(currentUserId: 'existing-uid'),
-        google: _FakeGoogleCredentialProvider(identity: identity),
-        passwordReset: reset,
-      ).sendPasswordResetEmail(email: '  person@example.com  ');
+    test(
+      'sends a password reset without changing authentication state',
+      () async {
+        final reset = _FakePasswordResetGateway();
+        final result = await serviceFor(
+          auth: _FakeAuthLinkGateway(currentUserId: 'existing-uid'),
+          google: _FakeGoogleCredentialProvider(identity: identity),
+          passwordReset: reset,
+        ).sendPasswordResetEmail(email: '  person@example.com  ');
 
-      expect(result.isSuccess, isTrue);
-      expect(reset.emails, ['person@example.com']);
-    });
+        expect(result.isSuccess, isTrue);
+        expect(reset.emails, ['person@example.com']);
+      },
+    );
 
     test('maps controlled password reset failures', () async {
       final reset = _FakePasswordResetGateway(

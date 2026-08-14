@@ -876,3 +876,121 @@ describe('Step 1D invite regeneration', () => {
     await assertFails(joinGub({ actor: ids.member, proof: otherCode }));
   });
 });
+
+describe('Phase E display name cooldown', () => {
+  for (const [provider, uid] of [
+    ['anonymous', 'rename-anonymous'],
+    ['google.com', 'rename-google'],
+    ['password', 'rename-password'],
+  ]) {
+    test(`first rename succeeds for ${provider} authenticated owner`, async () => {
+      await env.withSecurityRulesDisabled(async (context) => {
+        await setDoc(doc(context.firestore(), 'users', uid), profile(uid));
+      });
+      const providerDb = env.authenticatedContext(uid, {
+        firebase: { sign_in_provider: provider },
+      }).firestore();
+      await assertSucceeds(updateDoc(doc(providerDb, 'users', uid), {
+        displayName: `${provider} renamed`,
+        displayNameChangedAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      }));
+      await assertFails(updateDoc(doc(providerDb, 'users', uid), {
+        displayName: `${provider} too soon`,
+        displayNameChangedAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      }));
+    });
+  }
+
+  test('onboarding profile creation remains valid and cannot seed a cooldown', async () => {
+    const newUid = 'new-profile';
+    await assertSucceeds(setDoc(doc(db(newUid), 'users', newUid), profile(newUid)));
+    await assertFails(setDoc(doc(db('forged-profile'), 'users', 'forged-profile'), {
+      ...profile('forged-profile'),
+      displayNameChangedAt: serverTimestamp(),
+    }));
+  });
+
+  test('owner can perform the first post-onboarding name change', async () => {
+    await assertSucceeds(updateDoc(doc(db(ids.member), 'users', ids.member), {
+      displayName: 'New name',
+      displayNameChangedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    }));
+  });
+
+  test('a second name change inside 30 days is denied', async () => {
+    await env.withSecurityRulesDisabled(async (context) => {
+      await updateDoc(doc(context.firestore(), 'users', ids.member), {
+        displayNameChangedAt: new Date(),
+      });
+    });
+    await assertFails(updateDoc(doc(db(ids.member), 'users', ids.member), {
+      displayName: 'Too soon',
+      displayNameChangedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    }));
+  });
+
+  test('name change after 30 days is allowed', async () => {
+    await env.withSecurityRulesDisabled(async (context) => {
+      await updateDoc(doc(context.firestore(), 'users', ids.member), {
+        displayNameChangedAt: new Date('2020-01-01T00:00:00Z'),
+      });
+    });
+    await assertSucceeds(updateDoc(doc(db(ids.member), 'users', ids.member), {
+      displayName: 'Allowed again',
+      displayNameChangedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    }));
+  });
+
+  test('normal profile updates need no cooldown metadata and cannot alter it', async () => {
+    await assertSucceeds(updateDoc(doc(db(ids.member), 'users', ids.member), {
+      photoUrl: 'https://example.test/photo.png',
+      updatedAt: serverTimestamp(),
+    }));
+
+    await env.withSecurityRulesDisabled(async (context) => {
+      await updateDoc(doc(context.firestore(), 'users', ids.member), {
+        displayNameChangedAt: new Date('2020-01-01T00:00:00Z'),
+      });
+    });
+    await assertSucceeds(updateDoc(doc(db(ids.member), 'users', ids.member), {
+      photoUrl: 'https://example.test/second.png',
+      updatedAt: serverTimestamp(),
+    }));
+    await assertFails(updateDoc(doc(db(ids.member), 'users', ids.member), {
+      photoUrl: 'https://example.test/forged.png',
+      displayNameChangedAt: deleteField(),
+      updatedAt: serverTimestamp(),
+    }));
+    await assertFails(updateDoc(doc(db(ids.member), 'users', ids.member), {
+      photoUrl: 'https://example.test/forged.png',
+      displayNameChangedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    }));
+  });
+
+  test('timestamp backdating and unrelated field changes are denied', async () => {
+    await assertFails(updateDoc(doc(db(ids.member), 'users', ids.member), {
+      displayName: 'Backdated',
+      displayNameChangedAt: new Date('2020-01-01T00:00:00Z'),
+      updatedAt: serverTimestamp(),
+    }));
+    await assertFails(updateDoc(doc(db(ids.member), 'users', ids.member), {
+      displayName: 'Extra change',
+      displayNameChangedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+      activeHub: 'forged',
+    }));
+  });
+
+  test('another user cannot change a profile name', () =>
+    assertFails(updateDoc(doc(db(ids.outsider), 'users', ids.member), {
+      displayName: 'Forged',
+      displayNameChangedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    })));
+});
