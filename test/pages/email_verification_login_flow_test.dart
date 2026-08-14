@@ -9,6 +9,161 @@ import 'package:gubify/services/auth_service.dart';
 
 void main() {
   testWidgets(
+    'unverified password-only startup skips profile lookup and shows verification',
+    (tester) async {
+      final session = _FakeEmailSession()
+        ..currentUid = 'unverified-email-uid'
+        ..registeredUid = 'unverified-email-uid'
+        ..email = 'person@example.com';
+      var profileLookups = 0;
+
+      await tester.pumpWidget(
+        _startupForSession(
+          session,
+          userProfileExists: (_) async {
+            profileLookups += 1;
+            return true;
+          },
+        ),
+      );
+      await tester.pump();
+
+      expect(find.byType(VerifyEmailScreen), findsOneWidget);
+      expect(find.byType(AuthEntryScreen), findsNothing);
+      expect(find.byType(NameScreen), findsNothing);
+      expect(profileLookups, 0);
+    },
+  );
+
+  testWidgets('verified password startup performs normal profile routing', (
+    tester,
+  ) async {
+    final session = _FakeEmailSession()
+      ..currentUid = 'verified-email-uid'
+      ..registeredUid = 'verified-email-uid'
+      ..emailVerified = true;
+    var profileLookups = 0;
+
+    await tester.pumpWidget(
+      _startupForSession(
+        session,
+        userProfileExists: (_) async {
+          profileLookups += 1;
+          return true;
+        },
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(profileLookups, 1);
+    expect(find.text('TEST_APP_DESTINATION'), findsOneWidget);
+  });
+
+  testWidgets('anonymous startup bypasses verification and routes by profile', (
+    tester,
+  ) async {
+    final session = _FakeEmailSession()
+      ..currentUid = 'anonymous-uid'
+      ..anonymous = true
+      ..providerIds = const [];
+    var profileLookups = 0;
+
+    await tester.pumpWidget(
+      _startupForSession(
+        session,
+        userProfileExists: (_) async {
+          profileLookups += 1;
+          return true;
+        },
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(profileLookups, 1);
+    expect(find.text('TEST_APP_DESTINATION'), findsOneWidget);
+    expect(find.byType(VerifyEmailScreen), findsNothing);
+  });
+
+  testWidgets('Google-only startup bypasses password verification gate', (
+    tester,
+  ) async {
+    final session = _FakeEmailSession()
+      ..currentUid = 'google-uid'
+      ..providerIds = const ['google.com'];
+    var profileLookups = 0;
+
+    await tester.pumpWidget(
+      _startupForSession(
+        session,
+        userProfileExists: (_) async {
+          profileLookups += 1;
+          return true;
+        },
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(profileLookups, 1);
+    expect(find.text('TEST_APP_DESTINATION'), findsOneWidget);
+    expect(find.byType(VerifyEmailScreen), findsNothing);
+  });
+
+  testWidgets('Google and password startup preserves audited Google access', (
+    tester,
+  ) async {
+    final session = _FakeEmailSession()
+      ..currentUid = 'multi-provider-uid'
+      ..providerIds = const ['password', 'google.com'];
+    var profileLookups = 0;
+
+    await tester.pumpWidget(
+      _startupForSession(
+        session,
+        userProfileExists: (_) async {
+          profileLookups += 1;
+          return true;
+        },
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(profileLookups, 1);
+    expect(find.text('TEST_APP_DESTINATION'), findsOneWidget);
+    expect(find.byType(VerifyEmailScreen), findsNothing);
+  });
+
+  testWidgets('restored startup offers retry after a profile lookup failure', (
+    tester,
+  ) async {
+    final session = _FakeEmailSession()
+      ..currentUid = 'verified-email-uid'
+      ..emailVerified = true;
+    var profileLookups = 0;
+
+    await tester.pumpWidget(
+      _startupForSession(
+        session,
+        userProfileExists: (_) async {
+          profileLookups += 1;
+          if (profileLookups == 1) throw StateError('temporary failure');
+          return true;
+        },
+      ),
+    );
+    await tester.pump();
+
+    expect(
+      find.text('Unable to open your account. Please try again.'),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('Retry'));
+    await tester.pumpAndSettle();
+
+    expect(profileLookups, 2);
+    expect(find.text('TEST_APP_DESTINATION'), findsOneWidget);
+  });
+
+  testWidgets(
     'verified registration keeps its session and reaches NameScreen',
     (tester) async {
       final session = _FakeEmailSession();
@@ -226,12 +381,37 @@ void main() {
   });
 }
 
+Widget _startupForSession(
+  _FakeEmailSession session, {
+  required Future<bool> Function(String userId) userProfileExists,
+}) {
+  final service = AuthService(
+    authLinkGateway: _SessionLinkGateway(session),
+    authAccountGateway: _SessionAccountGateway(session),
+    authVerificationGateway: _SessionVerificationGateway(session),
+    googleCredentialProvider: const _UnusedGoogleProvider(),
+  );
+
+  return MaterialApp(
+    home: StartupScreen(
+      authService: service,
+      minimumDisplayDuration: Duration.zero,
+      onNavigationReady: () {},
+      userProfileExists: userProfileExists,
+      authenticatedAppBuilder: (_) =>
+          const Scaffold(body: Text('TEST_APP_DESTINATION')),
+    ),
+  );
+}
+
 class _FakeEmailSession {
   String? currentUid;
   String? registeredUid;
   String? lastSignedInUid;
   String? email;
+  bool anonymous = false;
   bool emailVerified = false;
+  List<String> providerIds = const ['password'];
 }
 
 class _SessionVerificationGateway implements AuthVerificationGateway {
@@ -250,14 +430,14 @@ class _SessionVerificationGateway implements AuthVerificationGateway {
   String? get currentUserEmail => session.email;
 
   @override
-  bool get isCurrentUserAnonymous => false;
+  bool get isCurrentUserAnonymous => session.anonymous;
 
   @override
   bool get isCurrentUserEmailVerified => session.emailVerified;
 
   @override
   List<String> get providerIds =>
-      session.currentUid == null ? const [] : const ['password'];
+      session.currentUid == null ? const [] : session.providerIds;
 
   @override
   Future<void> deleteCurrentUser() async {
@@ -294,7 +474,9 @@ class _SessionAccountGateway implements AuthAccountGateway {
     session.registeredUid = 'verified-email-uid';
     session.currentUid = session.registeredUid;
     session.email = email;
+    session.anonymous = false;
     session.emailVerified = false;
+    session.providerIds = const ['password'];
     return session.registeredUid!;
   }
 
@@ -307,6 +489,8 @@ class _SessionAccountGateway implements AuthAccountGateway {
     session.currentUid = session.registeredUid;
     session.lastSignedInUid = session.currentUid;
     session.email = email;
+    session.anonymous = false;
+    session.providerIds = const ['password'];
     return session.currentUid!;
   }
 
@@ -324,11 +508,11 @@ class _SessionLinkGateway implements AuthLinkGateway {
   String? get currentUserId => session.currentUid;
 
   @override
-  bool get isCurrentUserAnonymous => false;
+  bool get isCurrentUserAnonymous => session.anonymous;
 
   @override
   List<String> get providerIds =>
-      session.currentUid == null ? const [] : const ['password'];
+      session.currentUid == null ? const [] : session.providerIds;
 
   @override
   Future<AuthLinkState> linkEmailPassword({

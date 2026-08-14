@@ -18,6 +18,7 @@ class UserHeader extends StatefulWidget {
   final bool personalProfileEnabled;
   final bool showCard;
   final bool darkCard;
+  final double? bottomPadding;
   final VoidCallback? onExploreCommunities;
 
   const UserHeader({
@@ -27,6 +28,7 @@ class UserHeader extends StatefulWidget {
     this.personalProfileEnabled = false,
     this.showCard = false,
     this.darkCard = false,
+    this.bottomPadding,
     this.onExploreCommunities,
   }) : assert(!darkCard || showCard, "darkCard requires showCard.");
 
@@ -93,7 +95,9 @@ class _UserHeaderState extends State<UserHeader> {
           const placeholder = SizedBox(height: 44);
 
           return Padding(
-            padding: EdgeInsets.only(bottom: widget.showCard ? 20 : 24),
+            padding: EdgeInsets.only(
+              bottom: widget.bottomPadding ?? (widget.showCard ? 20 : 24),
+            ),
             child: widget.showCard
                 ? _UserHeaderCard(dark: widget.darkCard, child: placeholder)
                 : placeholder,
@@ -246,7 +250,9 @@ class _UserHeaderState extends State<UserHeader> {
         );
 
         return Padding(
-          padding: const EdgeInsets.only(bottom: 20),
+          padding: EdgeInsets.only(
+            bottom: widget.bottomPadding ?? 20,
+          ),
           child: widget.showCard
               ? _UserHeaderCard(dark: widget.darkCard, child: headerContent)
               : headerContent,
@@ -258,7 +264,9 @@ class _UserHeaderState extends State<UserHeader> {
   Widget _buildPlaceholder() {
     const placeholder = SizedBox(height: 44);
     return Padding(
-      padding: EdgeInsets.only(bottom: widget.showCard ? 20 : 24),
+      padding: EdgeInsets.only(
+        bottom: widget.bottomPadding ?? (widget.showCard ? 20 : 24),
+      ),
       child: widget.showCard
           ? _UserHeaderCard(dark: widget.darkCard, child: placeholder)
           : placeholder,

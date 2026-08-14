@@ -13,7 +13,14 @@ import 'gub/join_gub_screen.dart';
 import 'gub/my_gubs_screen.dart';
 
 class WelcomeScreen extends StatefulWidget {
-  const WelcomeScreen({super.key});
+  const WelcomeScreen({
+    super.key,
+    this.headerOverride,
+    this.greetingOverride,
+  });
+
+  final Widget? headerOverride;
+  final Widget? greetingOverride;
 
   @override
   State<WelcomeScreen> createState() => _WelcomeScreenState();
@@ -81,120 +88,157 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   Widget build(BuildContext context) {
     return GubifyBackground(
       child: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          child: Column(
-            children: [
-              UserHeader(
-                darkMode: true,
-                personalProfileEnabled: true,
-                showCard: true,
-                darkCard: true,
-                onExploreCommunities: _goToCommunityExplorer,
-              ),
-
-              // Il logo resta centrato nella parte libera della schermata.
-              Expanded(
-                flex: 5,
-                child: Center(
-                  child: Stack(
-                    alignment: Alignment.center,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final compact = constraints.maxHeight < 560;
+            final veryCompact = constraints.maxHeight < 480;
+            final compactLogoSize = (constraints.maxHeight *
+                    (veryCompact ? 0.06 : 0.105))
+                .clamp(veryCompact ? 22.0 : 40.0, veryCompact ? 32.0 : 52.0)
+                .toDouble();
+            return Padding(
+              padding: EdgeInsets.symmetric(horizontal: compact ? 16 : 20),
+              child: Column(
                     children: [
-                      Container(
-                        width: 190,
-                        height: 190,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: const Color(
-                                0xFF3B82F6,
-                              ).withValues(alpha: 0.50),
-                              blurRadius: 150,
-                              spreadRadius: 45,
+                      widget.headerOverride ??
+                          UserHeader(
+                            darkMode: true,
+                            personalProfileEnabled: true,
+                            showCard: !compact,
+                            darkCard: !compact,
+                        bottomPadding: compact ? (veryCompact ? 0 : 4) : null,
+                            onExploreCommunities: _goToCommunityExplorer,
+                          ),
+
+                      if (compact)
+                        Flexible(
+                          fit: FlexFit.loose,
+                          child: Center(
+                            child: SizedBox(
+                              height: compactLogoSize,
+                              child: Center(
+                                child: _buildLogo(
+                                  glowSize: compactLogoSize,
+                                  logoWidth: compactLogoSize,
+                                ),
+                              ),
                             ),
-                          ],
+                          ),
+                        )
+                      else
+                        Expanded(
+                          flex: 5,
+                          child: Center(
+                            child: _buildLogo(glowSize: 190, logoWidth: 260),
+                          ),
                         ),
+
+                      widget.greetingOverride ??
+                          _buildGreeting(
+                            compact: compact,
+                            veryCompact: veryCompact,
+                          ),
+
+                      SizedBox(height: veryCompact ? 0 : (compact ? 2 : 10)),
+
+                      _CommunityExplorerPortal(
+                        onPressed: _goToCommunityExplorer,
+                        compact: compact,
+                        veryCompact: veryCompact,
                       ),
 
-                      // Non cambiare questo valore con clamp o calcoli.
-                      // Il PNG ritagliato farà apparire il logo molto grande.
-                      const GubifyLogo(width: 260.0),
-                    ],
-                  ),
-                ),
-              ),
+                      SizedBox(height: veryCompact ? 2 : (compact ? 4 : 14)),
 
-              _buildGreeting(),
-
-              const SizedBox(height: 10),
-
-              _CommunityExplorerPortal(onPressed: _goToCommunityExplorer),
-
-              const SizedBox(height: 14),
-
-              const Text(
+              Text(
                 'Create your Gub or join an existing one\nto collaborate with your group.',
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  fontSize: 15,
-                  height: 1.5,
-                  color: Color(0xFFB5BCC9),
+                  fontSize: veryCompact ? 11 : (compact ? 12 : 15),
+                  height: veryCompact ? 1.1 : (compact ? 1.2 : 1.5),
+                  color: const Color(0xFFB5BCC9),
                 ),
               ),
 
-              const SizedBox(height: 20),
+              SizedBox(height: veryCompact ? 2 : (compact ? 6 : 20)),
 
-              PrimaryButton(text: 'Create Gub', onPressed: _goToCreateGub),
+              PrimaryButton(
+                text: 'Create Gub',
+                onPressed: _goToCreateGub,
+                height: compact ? 44 : 55,
+              ),
 
-              const SizedBox(height: 12),
+              SizedBox(height: veryCompact ? 2 : (compact ? 4 : 12)),
 
               _outlinedButton(
                 icon: Icons.home_work_outlined,
                 label: 'My Gubs',
                 onPressed: _goToMyGubs,
+                height: compact ? 44 : 54,
               ),
 
-              const SizedBox(height: 12),
+              SizedBox(height: veryCompact ? 2 : (compact ? 4 : 12)),
 
               _outlinedButton(
                 icon: Icons.group_outlined,
                 label: 'Join a Gub',
                 onPressed: _goToJoinGub,
+                height: compact ? 44 : 54,
               ),
 
-              const SizedBox(height: 4),
+              SizedBox(height: veryCompact ? 0 : (compact ? 2 : 4)),
 
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
+              Wrap(
+                alignment: WrapAlignment.center,
+                spacing: veryCompact ? 4 : 8,
                 children: [
                   TextButton.icon(
                     onPressed: _openWebsite,
-                    icon: const Icon(
+                    style: compact
+                        ? TextButton.styleFrom(
+                            minimumSize: const Size(0, 40),
+                            padding: EdgeInsets.symmetric(
+                              horizontal: veryCompact ? 2 : 4,
+                            ),
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            visualDensity: VisualDensity.compact,
+                          )
+                        : null,
+                    icon: Icon(
                       Icons.language,
-                      size: 19,
-                      color: Color(0xFF60A5FA),
+                      size: veryCompact ? 16 : (compact ? 17 : 19),
+                      color: const Color(0xFF60A5FA),
                     ),
-                    label: const Text(
+                    label: Text(
                       'Learn More',
                       style: TextStyle(
-                        color: Color(0xFF60A5FA),
+                        color: const Color(0xFF60A5FA),
+                        fontSize: veryCompact ? 12 : (compact ? 13 : 14),
                         fontWeight: FontWeight.w600,
                       ),
                     ),
                   ),
-                  const SizedBox(width: 8),
                   TextButton.icon(
                     onPressed: _openSupport,
-                    icon: const Icon(
+                    style: compact
+                        ? TextButton.styleFrom(
+                            minimumSize: const Size(0, 40),
+                            padding: EdgeInsets.symmetric(
+                              horizontal: veryCompact ? 2 : 4,
+                            ),
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            visualDensity: VisualDensity.compact,
+                          )
+                        : null,
+                    icon: Icon(
                       Icons.favorite_border,
-                      size: 19,
-                      color: Color(0xFFF87171),
+                      size: veryCompact ? 16 : (compact ? 17 : 19),
+                      color: const Color(0xFFF87171),
                     ),
-                    label: const Text(
+                    label: Text(
                       'Support Us',
                       style: TextStyle(
-                        color: Color(0xFFF87171),
+                        color: const Color(0xFFF87171),
+                        fontSize: veryCompact ? 12 : (compact ? 13 : 14),
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -202,22 +246,50 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                 ],
               ),
 
-              const SizedBox(height: 4),
+              SizedBox(height: veryCompact ? 0 : (compact ? 2 : 4)),
             ],
           ),
+        );
+          },
         ),
       ),
     );
   }
 
-  Widget _buildGreeting() {
+  Widget _buildLogo({required double glowSize, required double logoWidth}) {
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        Container(
+          width: glowSize,
+          height: glowSize,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF3B82F6).withValues(alpha: 0.50),
+                blurRadius: glowSize * 0.79,
+                spreadRadius: glowSize * 0.24,
+              ),
+            ],
+          ),
+        ),
+        GubifyLogo(width: logoWidth),
+      ],
+    );
+  }
+
+  Widget _buildGreeting({
+    required bool compact,
+    required bool veryCompact,
+  }) {
     final user = FirebaseAuth.instance.currentUser;
 
     if (user == null) {
-      return const Text(
+      return Text(
         'Hi, User',
         style: TextStyle(
-          fontSize: 30,
+          fontSize: veryCompact ? 24 : (compact ? 26 : 30),
           fontWeight: FontWeight.w700,
           color: Colors.white,
         ),
@@ -233,8 +305,8 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
         return Text(
           'Hi, $name',
           textAlign: TextAlign.center,
-          style: const TextStyle(
-            fontSize: 30,
+          style: TextStyle(
+            fontSize: veryCompact ? 24 : (compact ? 26 : 30),
             fontWeight: FontWeight.w700,
             color: Colors.white,
           ),
@@ -247,10 +319,11 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     required IconData icon,
     required String label,
     required VoidCallback onPressed,
+    required double height,
   }) {
     return SizedBox(
       width: double.infinity,
-      height: 54,
+      height: height,
       child: OutlinedButton(
         onPressed: onPressed,
         style: OutlinedButton.styleFrom(
@@ -282,8 +355,14 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
 
 class _CommunityExplorerPortal extends StatelessWidget {
   final VoidCallback onPressed;
+  final bool compact;
+  final bool veryCompact;
 
-  const _CommunityExplorerPortal({required this.onPressed});
+  const _CommunityExplorerPortal({
+    required this.onPressed,
+    this.compact = false,
+    this.veryCompact = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -314,12 +393,17 @@ class _CommunityExplorerPortal extends StatelessWidget {
           child: InkWell(
             borderRadius: BorderRadius.circular(20),
             onTap: onPressed,
-            child: const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+            child: Padding(
+              padding: EdgeInsets.symmetric(
+                horizontal: veryCompact ? 12 : (compact ? 14 : 16),
+                vertical: veryCompact ? 2 : (compact ? 5 : 13),
+              ),
               child: Row(
                 children: [
-                  _CommunityPortalIcon(),
-                  SizedBox(width: 13),
+                  _CommunityPortalIcon(
+                    size: veryCompact ? 28 : (compact ? 34 : 42),
+                  ),
+                  SizedBox(width: veryCompact ? 8 : (compact ? 10 : 13)),
                   Expanded(
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
@@ -329,25 +413,25 @@ class _CommunityExplorerPortal extends StatelessWidget {
                           'Explore Communities',
                           style: TextStyle(
                             color: Colors.white,
-                            fontSize: 16,
+                            fontSize: veryCompact ? 14 : (compact ? 15 : 16),
                             fontWeight: FontWeight.w700,
                           ),
                         ),
-                        SizedBox(height: 3),
+                        SizedBox(height: veryCompact ? 1 : (compact ? 2 : 3)),
                         Text(
                           'Discover public Gubs by interests, language and people.',
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             color: Color(0xFFDCEBFF),
-                            fontSize: 12,
-                            height: 1.25,
+                            fontSize: veryCompact ? 10 : (compact ? 11 : 12),
+                            height: veryCompact ? 1 : (compact ? 1.15 : 1.25),
                           ),
                         ),
                       ],
                     ),
                   ),
-                  SizedBox(width: 8),
+                  SizedBox(width: veryCompact ? 4 : (compact ? 6 : 8)),
                   Icon(Icons.arrow_forward_rounded, color: Colors.white),
                 ],
               ),
@@ -360,13 +444,15 @@ class _CommunityExplorerPortal extends StatelessWidget {
 }
 
 class _CommunityPortalIcon extends StatelessWidget {
-  const _CommunityPortalIcon();
+  const _CommunityPortalIcon({required this.size});
+
+  final double size;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 42,
-      height: 42,
+      width: size,
+      height: size,
       decoration: BoxDecoration(
         color: const Color(0xFF93C5FD).withValues(alpha: 0.24),
         shape: BoxShape.circle,
@@ -377,7 +463,11 @@ class _CommunityPortalIcon extends StatelessWidget {
           ),
         ],
       ),
-      child: const Icon(Icons.public_rounded, color: Colors.white),
+        child: Icon(
+          Icons.public_rounded,
+          color: Colors.white,
+          size: size * 0.57,
+        ),
     );
   }
 }

@@ -36,6 +36,7 @@ class _StartupScreenState extends State<StartupScreen> {
   bool _showAuthEntry = false;
   bool _showVerifyEmail = false;
   bool _isRouting = false;
+  bool _hasStartupRoutingError = false;
 
   @override
   void initState() {
@@ -54,7 +55,15 @@ class _StartupScreenState extends State<StartupScreen> {
       return;
     }
 
-    await _routeCurrentUser();
+    await _routeCurrentUserFromStartup();
+  }
+
+  Future<void> _routeCurrentUserFromStartup() async {
+    try {
+      await _routeCurrentUser();
+    } on Object {
+      if (mounted) setState(() => _hasStartupRoutingError = true);
+    }
   }
 
   Future<void> _continueAnonymously() async {
@@ -75,6 +84,7 @@ class _StartupScreenState extends State<StartupScreen> {
         setState(() {
           _showAuthEntry = true;
           _showVerifyEmail = false;
+          _hasStartupRoutingError = false;
         });
       }
       return;
@@ -85,6 +95,7 @@ class _StartupScreenState extends State<StartupScreen> {
         setState(() {
           _showAuthEntry = false;
           _showVerifyEmail = true;
+          _hasStartupRoutingError = false;
         });
       }
       return;
@@ -152,6 +163,7 @@ class _StartupScreenState extends State<StartupScreen> {
       _isRouting = false;
       _showVerifyEmail = false;
       _showAuthEntry = true;
+      _hasStartupRoutingError = false;
     });
   }
 
@@ -170,6 +182,34 @@ class _StartupScreenState extends State<StartupScreen> {
         authService: _auth,
         onVerified: _routeCurrentUser,
         onUseAnotherAccount: _useAnotherAccount,
+      );
+    }
+
+    if (_hasStartupRoutingError) {
+      return StartupArtworkBackground(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Unable to open your account. Please try again.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.white),
+                ),
+                const SizedBox(height: 16),
+                FilledButton(
+                  onPressed: () {
+                    setState(() => _hasStartupRoutingError = false);
+                    _routeCurrentUserFromStartup();
+                  },
+                  child: const Text('Retry'),
+                ),
+              ],
+            ),
+          ),
+        ),
       );
     }
 
