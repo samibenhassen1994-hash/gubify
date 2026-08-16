@@ -253,6 +253,8 @@ class _EventSummaryCard extends StatelessWidget {
               DeletedUserIdentityBuilder(
                 userId: event.originUserId ?? '',
                 currentDisplayName: event.sourceAuthorName ?? 'User',
+                resolveCurrentDisplayName:
+                    event.originUserId?.trim().isNotEmpty == true,
                 builder: (context, displayName, deleted) =>
                     _EventChatSourceCard(
                       message: event.sourcePreview!,

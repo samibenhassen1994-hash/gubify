@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../repositories/user_repository.dart';
 import '../models/chat_message_model.dart';
 import 'chat_user_avatar.dart';
 import 'deleted_user_identity_builder.dart';
@@ -11,6 +12,7 @@ class ChatMessageBubble extends StatelessWidget {
   final VoidCallback? onAvatarTap;
   final bool isHighlighted;
   final Stream<bool>? profileExists;
+  final Stream<UserIdentity>? identity;
 
   const ChatMessageBubble({
     super.key,
@@ -20,6 +22,7 @@ class ChatMessageBubble extends StatelessWidget {
     this.onAvatarTap,
     this.isHighlighted = false,
     this.profileExists,
+    this.identity,
   });
 
   @override
@@ -28,6 +31,8 @@ class ChatMessageBubble extends StatelessWidget {
       userId: message.senderId,
       currentDisplayName: message.senderName,
       profileExists: profileExists,
+      identity: identity,
+      resolveCurrentDisplayName: true,
       builder: (context, displayName, deleted) =>
           _buildBubble(context, displayName: displayName, deleted: deleted),
     );

@@ -54,6 +54,11 @@ class _DeletedUserIdentityBuilderState
       return;
     }
 
+    if (widget.userId.trim().isEmpty) {
+      _identity = Stream.value(const UserIdentity.existing(null));
+      return;
+    }
+
     _identity =
         widget.identity ??
         (widget.resolveCurrentDisplayName
@@ -85,15 +90,18 @@ class _DeletedUserIdentityBuilderState
         final fallbackDisplayName = widget.currentDisplayName.trim().isEmpty
             ? 'User'
             : widget.currentDisplayName;
-        final displayName = deleted
-            ? 'Deleted user'
-            : widget.resolveCurrentDisplayName
-            ? !hasTransientError && hasCanonicalDisplayName
-                  ? canonicalDisplayName
-                  : fallbackDisplayName
-            : identity?.exists == true
-            ? fallbackDisplayName
-            : 'User';
+        final String displayName;
+        if (widget.userId == '__deleted_user__') {
+          displayName = 'Deleted user';
+        } else if (deleted) {
+          displayName = 'Deleted user';
+        } else if (widget.resolveCurrentDisplayName &&
+            !hasTransientError &&
+            hasCanonicalDisplayName) {
+          displayName = canonicalDisplayName;
+        } else {
+          displayName = fallbackDisplayName;
+        }
         return widget.builder(context, displayName, deleted);
       },
     );

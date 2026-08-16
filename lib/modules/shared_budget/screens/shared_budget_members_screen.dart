@@ -211,6 +211,9 @@ class _SharedBudgetMembersScreenState extends State<SharedBudgetMembersScreen> {
                           userId: sharedBudget.originUserId ?? '',
                           currentDisplayName:
                               sharedBudget.sourceAuthorName ?? 'User',
+                          resolveCurrentDisplayName:
+                              sharedBudget.originUserId?.trim().isNotEmpty ==
+                              true,
                           builder: (context, displayName, deleted) =>
                               _SharedBudgetChatSourceCard(
                                 message: sharedBudget.sourcePreview!,

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../widgets/gub_screen_background.dart';
+import '../../chat/widgets/deleted_user_identity_builder.dart';
 import '../models/gub_event_model.dart';
 import '../services/gub_event_service.dart';
 
@@ -146,9 +147,17 @@ class _CreateGubEventScreenState extends State<CreateGubEventScreen> {
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           if (widget.isChatConversion) ...[
-                            _ChatSourceCard(
-                              authorName: widget.sourceAuthorName,
-                              message: widget.sourcePreview!,
+                            DeletedUserIdentityBuilder(
+                              userId: widget.originUserId ?? '',
+                              currentDisplayName: widget.sourceAuthorName ?? '',
+                              resolveCurrentDisplayName:
+                                  widget.originUserId?.trim().isNotEmpty ==
+                                  true,
+                              builder: (context, displayName, deleted) =>
+                                  _ChatSourceCard(
+                                    authorName: displayName,
+                                    message: widget.sourcePreview!,
+                                  ),
                             ),
                             const SizedBox(height: 20),
                           ],

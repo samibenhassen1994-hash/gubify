@@ -203,6 +203,8 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
                         DeletedUserIdentityBuilder(
                           userId: task.originUserId ?? '',
                           currentDisplayName: task.sourceAuthorName ?? 'User',
+                          resolveCurrentDisplayName:
+                              task.originUserId?.trim().isNotEmpty == true,
                           builder: (context, displayName, deleted) =>
                               _ChatSourceCard(
                                 message: task.sourcePreview!,

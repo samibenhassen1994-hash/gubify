@@ -186,6 +186,8 @@ class _ProposalDetailsScreenState extends State<ProposalDetailsScreen> {
                                 userId: p.originUserId ?? '',
                                 currentDisplayName:
                                     p.sourceAuthorName ?? 'User',
+                                resolveCurrentDisplayName:
+                                    p.originUserId?.trim().isNotEmpty == true,
                                 builder: (context, displayName, deleted) =>
                                     _ProposalChatSourceCard(
                                       message: p.sourcePreview!,

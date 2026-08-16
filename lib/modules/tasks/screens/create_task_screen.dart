@@ -7,6 +7,7 @@ import '../../../repositories/user_repository.dart';
 import '../../../services/gub_service.dart';
 import '../../../widgets/gub_content_card.dart';
 import '../../../widgets/gub_screen_background.dart';
+import '../../chat/widgets/deleted_user_identity_builder.dart';
 import '../../chat/widgets/gub_chat_overlay.dart';
 import '../models/task_model.dart';
 import '../repositories/task_repository.dart';
@@ -184,9 +185,16 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       if (widget.isChatConversion) ...[
-                        _ChatSourceCard(
-                          message: widget.sourcePreview!,
-                          authorName: widget.sourceAuthorName,
+                        DeletedUserIdentityBuilder(
+                          userId: widget.originUserId ?? '',
+                          currentDisplayName: widget.sourceAuthorName ?? '',
+                          resolveCurrentDisplayName:
+                              widget.originUserId?.trim().isNotEmpty == true,
+                          builder: (context, displayName, deleted) =>
+                              _ChatSourceCard(
+                                message: widget.sourcePreview!,
+                                authorName: displayName,
+                              ),
                         ),
                         const SizedBox(height: 20),
                         TextField(

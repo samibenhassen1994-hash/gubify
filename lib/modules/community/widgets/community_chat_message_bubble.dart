@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../repositories/user_repository.dart';
 import '../../chat/widgets/chat_user_avatar.dart';
 import '../../chat/widgets/deleted_user_identity_builder.dart';
 import '../models/community_chat_message_model.dart';
@@ -8,12 +9,14 @@ class CommunityChatMessageBubble extends StatelessWidget {
   final CommunityChatMessageModel message;
   final bool isCurrentUser;
   final Stream<bool>? profileExists;
+  final Stream<UserIdentity>? identity;
 
   const CommunityChatMessageBubble({
     super.key,
     required this.message,
     required this.isCurrentUser,
     this.profileExists,
+    this.identity,
   });
 
   @override
@@ -22,6 +25,8 @@ class CommunityChatMessageBubble extends StatelessWidget {
       userId: message.senderId,
       currentDisplayName: message.senderName,
       profileExists: profileExists,
+      identity: identity,
+      resolveCurrentDisplayName: true,
       builder: (context, displayName, deleted) =>
           _buildBubble(context, displayName: displayName),
     );

@@ -44,23 +44,31 @@ void main() {
     expect(find.text('User'), findsNothing);
   });
 
-  test('reuses one live identity stream for Board posts by the same author', () {
-    final cache = UserIdentityStreamCache();
-    final identities = StreamController<UserIdentity>.broadcast(sync: true);
-    addTearDown(identities.close);
-    var streamCreations = 0;
+  test(
+    'reuses one live identity stream for Board posts by the same author',
+    () async {
+      final cache = UserIdentityStreamCache();
+      final identities = StreamController<UserIdentity>.broadcast(sync: true);
+      addTearDown(identities.close);
+      var streamCreations = 0;
 
-    Stream<UserIdentity> create() {
-      streamCreations++;
-      return identities.stream;
-    }
+      Stream<UserIdentity> create() {
+        streamCreations++;
+        return identities.stream;
+      }
 
-    final first = cache.forUser('user-a', create);
-    final second = cache.forUser('user-a', create);
+      final first = cache.forUser('user-a', create);
+      final second = cache.forUser('user-a', create);
 
-    expect(identical(first, second), isTrue);
-    expect(streamCreations, 1);
-  });
+      expect(identical(first, second), isTrue);
+      expect(streamCreations, 0);
+
+      final subscription = first.listen((_) {});
+      expect(streamCreations, 1);
+      await subscription.cancel();
+      cache.clear();
+    },
+  );
 
   testWidgets('keeps a deleted Board author distinct from an active user', (
     tester,

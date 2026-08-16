@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 
 import '../../../core/formatters/monetary_amount_input_formatter.dart';
 import '../../../widgets/gub_screen_background.dart';
+import '../../chat/widgets/deleted_user_identity_builder.dart';
 import '../../chat/widgets/gub_chat_overlay.dart';
 import '../services/shared_budget_service.dart';
 
@@ -235,16 +236,20 @@ class _CreateSharedBudgetScreenState extends State<CreateSharedBudgetScreen> {
               ),
             ],
           ),
-          if (widget.sourceAuthorName?.trim().isNotEmpty == true) ...[
-            const SizedBox(height: 8),
-            Text(
-              widget.sourceAuthorName!.trim(),
+          const SizedBox(height: 8),
+          DeletedUserIdentityBuilder(
+            userId: widget.originUserId ?? '',
+            currentDisplayName: widget.sourceAuthorName ?? '',
+            resolveCurrentDisplayName:
+                widget.originUserId?.trim().isNotEmpty == true,
+            builder: (context, displayName, deleted) => Text(
+              displayName,
               style: const TextStyle(
                 color: _secondaryTextColor,
                 fontWeight: FontWeight.w600,
               ),
             ),
-          ],
+          ),
           const SizedBox(height: 6),
           Text(
             '“${widget.sourcePreview}”',

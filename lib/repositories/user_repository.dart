@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class UserRepository {
@@ -62,24 +64,18 @@ class UserRepository {
   Stream<UserIdentity> userIdentityStream(String uid) {
     return _identityStreamCache.forUser(
       uid,
-      () => _firestore
-          .collection('users')
-          .doc(uid)
-          .snapshots()
-          .map((snapshot) {
-            final data = snapshot.data();
-            if (data == null) {
-              _userCache.remove(uid);
-              _markUserMissing(uid);
-              return const UserIdentity.missing();
-            }
+      () => _firestore.collection('users').doc(uid).snapshots().map((snapshot) {
+        final data = snapshot.data();
+        if (data == null) {
+          _userCache.remove(uid);
+          _markUserMissing(uid);
+          return const UserIdentity.missing();
+        }
 
-            _missingUsers.remove(uid);
-            _userCache[uid] = data;
-            return UserIdentity.existing(_nonEmptyString(data['displayName']));
-          })
-          .distinct()
-          .asBroadcastStream(),
+        _missingUsers.remove(uid);
+        _userCache[uid] = data;
+        return UserIdentity.existing(_nonEmptyString(data['displayName']));
+      }).distinct(),
     );
   }
 
@@ -144,14 +140,112 @@ class UserExistenceStreamCache {
 }
 
 class UserIdentityStreamCache {
-  final Map<String, Stream<UserIdentity>> _streams = {};
+  final Map<String, _ReplayLatestUserIdentityStream> _streams = {};
 
   Stream<UserIdentity> forUser(
     String userId,
     Stream<UserIdentity> Function() create,
   ) {
-    return _streams.putIfAbsent(userId, create);
+    return _streams
+        .putIfAbsent(userId, () => _ReplayLatestUserIdentityStream(create))
+        .stream;
   }
 
-  void clear() => _streams.clear();
+  void clear() {
+    for (final stream in _streams.values) {
+      stream.dispose();
+    }
+    _streams.clear();
+  }
+}
+
+class _ReplayLatestUserIdentityStream {
+  _ReplayLatestUserIdentityStream(this._create) {
+    _controller = StreamController<UserIdentity>.broadcast(
+      sync: true,
+      onListen: _startOrResumeSource,
+      onCancel: _pauseSource,
+    );
+    stream = Stream<UserIdentity>.multi(_listen, isBroadcast: true);
+  }
+
+  final Stream<UserIdentity> Function() _create;
+  late final StreamController<UserIdentity> _controller;
+  late final Stream<UserIdentity> stream;
+
+  StreamSubscription<UserIdentity>? _sourceSubscription;
+  UserIdentity? _latest;
+  var _hasLatest = false;
+  var _sourcePaused = false;
+  var _disposed = false;
+  var _version = 0;
+
+  void _listen(MultiStreamController<UserIdentity> listener) {
+    var lastForwardedVersion = -1;
+    final subscription = _controller.stream.listen(
+      (identity) {
+        lastForwardedVersion = _version;
+        listener.add(identity);
+      },
+      onError: (Object error, StackTrace stackTrace) {
+        listener.addError(error, stackTrace);
+      },
+      onDone: listener.close,
+    );
+
+    if (_hasLatest && lastForwardedVersion != _version) {
+      listener.add(_latest!);
+    }
+
+    listener.onPause = subscription.pause;
+    listener.onResume = subscription.resume;
+    listener.onCancel = subscription.cancel;
+  }
+
+  void _startOrResumeSource() {
+    if (_disposed) return;
+    final sourceSubscription = _sourceSubscription;
+    if (sourceSubscription == null) {
+      _sourceSubscription = _create().listen(
+        (identity) {
+          _latest = identity;
+          _hasLatest = true;
+          _version++;
+          if (!_controller.isClosed) {
+            _controller.add(identity);
+          }
+        },
+        onError: (Object error, StackTrace stackTrace) {
+          if (!_controller.isClosed) {
+            _controller.addError(error, stackTrace);
+          }
+        },
+        onDone: () {
+          _sourceSubscription = null;
+          _sourcePaused = false;
+        },
+      );
+      return;
+    }
+
+    if (_sourcePaused) {
+      sourceSubscription.resume();
+      _sourcePaused = false;
+    }
+  }
+
+  void _pauseSource() {
+    final sourceSubscription = _sourceSubscription;
+    if (sourceSubscription != null && !_sourcePaused) {
+      sourceSubscription.pause();
+      _sourcePaused = true;
+    }
+  }
+
+  void dispose() {
+    _disposed = true;
+    _sourceSubscription?.cancel();
+    _sourceSubscription = null;
+    _controller.close();
+  }
 }
