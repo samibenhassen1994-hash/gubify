@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../../../widgets/gub_screen_background.dart';
-import '../../shared_budget/screens/shared_budget_members_screen.dart';
+import '../../organized_events/screens/gub_event_details_screen.dart';
 import '../../proposals/screens/proposal_details_screen.dart';
+import '../../shared_budget/screens/shared_budget_members_screen.dart';
 import '../../tasks/screens/task_details_screen.dart';
 import '../models/user_profile_model.dart';
 import '../services/user_profile_service.dart';
@@ -142,12 +143,14 @@ class _UserActivityScreenState extends State<UserActivityScreen> {
   bool _canOpen(UserActivityEntry activity) {
     return activity.task != null ||
         activity.proposal != null ||
+        activity.organizedEvent != null ||
         activity.sharedBudget != null;
   }
 
   void _openActivity(UserActivityEntry activity) {
     final task = activity.task;
     final proposal = activity.proposal;
+    final organizedEvent = activity.organizedEvent;
     final sharedBudget = activity.sharedBudget;
 
     if (task != null) {
@@ -161,6 +164,15 @@ class _UserActivityScreenState extends State<UserActivityScreen> {
       Navigator.of(context).push(
         MaterialPageRoute(
           builder: (_) => ProposalDetailsScreen(proposal: proposal),
+        ),
+      );
+    } else if (organizedEvent != null) {
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => GubEventDetailsScreen(
+            gubId: organizedEvent.gubId,
+            eventId: organizedEvent.eventId,
+          ),
         ),
       );
     } else if (sharedBudget != null) {

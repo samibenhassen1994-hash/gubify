@@ -10,7 +10,7 @@ import '../../../modules/shared_budget/widgets/delete_shared_budget_dialog.dart'
 import '../../../modules/shared_budget/widgets/shared_budget_empty_card.dart';
 import '../../../modules/gub_calendar/screens/gub_calendar_screen.dart';
 import '../../../modules/proposals/screens/create_proposal_screen.dart';
-import '../../../modules/proposals/screens/proposal_details_screen.dart';
+import '../../../modules/proposals/screens/proposals_screen.dart';
 import '../../../modules/proposals/models/proposal_model.dart';
 import '../../../modules/tasks/models/task_model.dart';
 import '../../../modules/tasks/screens/task_details_screen.dart';
@@ -30,6 +30,15 @@ class GubDashboardSection extends StatefulWidget {
     required this.ownerId,
     required this.memberCount,
   });
+
+  @visibleForTesting
+  static Widget proposalDestination({
+    required ProposalModel? activeProposal,
+    required String gubId,
+    required int memberCount,
+  }) => activeProposal == null
+      ? CreateProposalScreen(gubId: gubId, memberCount: memberCount)
+      : ProposalsScreen(gubId: gubId, memberCount: memberCount);
 
   @override
   State<GubDashboardSection> createState() => _GubDashboardSectionState();
@@ -299,12 +308,11 @@ class _GubDashboardSectionState extends State<GubDashboardSection> {
     }
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => activeProposal == null
-            ? CreateProposalScreen(
-                gubId: widget.gubId,
-                memberCount: widget.memberCount,
-              )
-            : ProposalDetailsScreen(proposal: activeProposal),
+        builder: (_) => GubDashboardSection.proposalDestination(
+          activeProposal: activeProposal,
+          gubId: widget.gubId,
+          memberCount: widget.memberCount,
+        ),
       ),
     );
   }

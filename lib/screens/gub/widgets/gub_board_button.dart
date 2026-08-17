@@ -8,8 +8,15 @@ import '../board_screen.dart';
 
 class GubBoardButton extends StatefulWidget {
   final String gubId;
+  final Stream<int>? unreadCountStream;
+  final VoidCallback? onOpenBoard;
 
-  const GubBoardButton({super.key, required this.gubId});
+  const GubBoardButton({
+    super.key,
+    required this.gubId,
+    this.unreadCountStream,
+    this.onOpenBoard,
+  });
 
   @override
   State<GubBoardButton> createState() => _GubBoardButtonState();
@@ -37,15 +44,17 @@ class _GubBoardButtonState extends State<GubBoardButton> {
   }
 
   Stream<int> _buildUnreadCountStream() {
-    return BoardReadService.instance.unreadCountStream(widget.gubId).map((count) {
-      if (_unreadCountInitialized && count > _lastUnreadCount) {
-        unawaited(AppSoundService.instance.playNotification());
-      }
+    return (widget.unreadCountStream ??
+            BoardReadService.instance.unreadCountStream(widget.gubId))
+        .map((count) {
+          if (_unreadCountInitialized && count > _lastUnreadCount) {
+            unawaited(AppSoundService.instance.playNotification());
+          }
 
-      _unreadCountInitialized = true;
-      _lastUnreadCount = count;
-      return count;
-    });
+          _unreadCountInitialized = true;
+          _lastUnreadCount = count;
+          return count;
+        });
   }
 
   @override
@@ -80,14 +89,17 @@ class _GubBoardButtonState extends State<GubBoardButton> {
                     ),
                     child: InkWell(
                       customBorder: const CircleBorder(),
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => BoardScreen(gubId: widget.gubId),
-                          ),
-                        );
-                      },
+                      onTap:
+                          widget.onOpenBoard ??
+                          () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) =>
+                                    BoardScreen(gubId: widget.gubId),
+                              ),
+                            );
+                          },
                       child: const SizedBox(
                         width: 42,
                         height: 42,

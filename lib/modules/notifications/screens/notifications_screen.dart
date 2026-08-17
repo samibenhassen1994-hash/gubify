@@ -9,6 +9,7 @@ import '../../../widgets/gub_content_card.dart';
 import '../../../widgets/gub_screen_background.dart';
 import '../models/notification_model.dart';
 import '../services/notification_service.dart';
+import '../widgets/notification_card.dart';
 
 class NotificationsScreen extends StatefulWidget {
   final String gubId;
@@ -118,31 +119,23 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 final isOpening =
                     _openingNotificationId == notification.notificationId;
 
-                return Card(
-                  color: Colors.white,
-                  margin: const EdgeInsets.only(bottom: 12),
-                  child: ListTile(
-                    onTap: _openingNotificationId != null
-                        ? null
-                        : () => _openNotification(notification: notification),
-                    leading: const CircleAvatar(
-                      child: Icon(Icons.notifications),
-                    ),
-                    title: Text(notification.title),
-                    subtitle: Text(notification.body),
-                    trailing: isOpening
-                        ? const SizedBox.square(
-                            dimension: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : Text(
-                            _formatDate(notification.createdAt),
-                            style: const TextStyle(
-                              fontSize: 11,
-                              color: Colors.grey,
-                            ),
+                return NotificationCard(
+                  notification: notification,
+                  onTap: _openingNotificationId != null
+                      ? null
+                      : () => _openNotification(notification: notification),
+                  trailing: isOpening
+                      ? const SizedBox.square(
+                          dimension: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : Text(
+                          _formatDate(notification.createdAt),
+                          style: const TextStyle(
+                            fontSize: 11,
+                            color: Colors.grey,
                           ),
-                  ),
+                        ),
                 );
               },
             );

@@ -62,9 +62,13 @@ class NotificationRepository {
                 data["data"] = routingData;
                 return NotificationModel.fromFirestore(data);
               })
+              .where(isGeneralNotification)
               .toList(growable: false),
         );
   }
+
+  static bool isGeneralNotification(NotificationModel notification) =>
+      notification.type != "board_post";
 
   static bool shouldCountUnreadNotification({
     required NotificationModel notification,
@@ -106,6 +110,7 @@ class NotificationRepository {
 
     for (final doc in snapshot.docs) {
       final data = doc.data();
+      if (data["type"] == "board_post") continue;
       if (!NotificationModel.targetsUser(data, uid)) continue;
 
       final List readBy = List.from(data["readBy"] ?? []);

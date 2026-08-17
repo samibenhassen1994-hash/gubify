@@ -1,8 +1,6 @@
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import '../../config/app_limits.dart';
 
-import '../../modules/notifications/services/notification_service.dart';
 import '../../services/post_service.dart';
 
 class CreatePostScreen extends StatefulWidget {
@@ -49,20 +47,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     setState(() => _loading = true);
 
     try {
-      final displayName = await PostService().createPost(
-        gubId: widget.gubId,
-        message: message,
-      );
-      final user = FirebaseAuth.instance.currentUser!;
-      await NotificationService.instance.send(
-        gubId: widget.gubId,
-        title: "New Board post",
-        body: "$displayName published a new post.",
-        type: "board_post",
-        senderId: user.uid,
-        senderName: displayName,
-        data: {"message": message},
-      );
+      await PostService().createPost(gubId: widget.gubId, message: message);
 
       if (mounted) {
         Navigator.pop(context);

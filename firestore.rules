@@ -34,11 +34,13 @@ service cloud.firestore {
     }
     function validUserProfile(data) {
       return data.keys().hasOnly([
-          'displayName','createdAt','updatedAt','activeHub','avatar','photoUrl','photoURL'
+          'displayName','displayNameChangedAt','createdAt','updatedAt','activeHub','avatar','photoUrl','photoURL'
         ])
         && data.displayName is string
         && data.createdAt is timestamp
         && data.updatedAt is timestamp
+        && (!data.keys().hasAny(['displayNameChangedAt'])
+          || data.displayNameChangedAt is timestamp)
         && (data.get('activeHub', null) == null || data.activeHub is string)
         && (data.get('avatar', null) == null || data.avatar is string)
         && (data.get('photoUrl', null) == null || data.photoUrl is string)
@@ -212,6 +214,102 @@ service cloud.firestore {
 
     function validNullableString(value) { return value == null || value is string; }
     function validNullableTimestamp(value) { return value == null || value is timestamp; }
+    function deletedUserId() { return '__deleted_user__'; }
+    function deletedUserName() { return 'Deleted user'; }
+    function validIdentityAnonymization(beforeId, beforeName, afterId, afterName) {
+      return beforeId == request.auth.uid
+        && afterId == deletedUserId()
+        && afterName == deletedUserName();
+    }
+    function validIdAnonymization(beforeId, afterId) {
+      return beforeId == request.auth.uid && afterId == deletedUserId();
+    }
+    function validTaskAnonymization(id) {
+      let changed = request.resource.data.diff(resource.data).affectedKeys();
+      return isGubMember(id) && gubActive(id)
+        && changed.hasOnly(['creatorId','creatorName','assignedUserId','assignedUserName',
+          'originUserId','sourceAuthorName','completedBy'])
+        && changed.hasAny(['creatorId','assignedUserId','originUserId','completedBy'])
+        && (!changed.hasAny(['creatorId','creatorName'])
+          || validIdentityAnonymization(resource.data.creatorId, resource.data.creatorName,
+            request.resource.data.creatorId, request.resource.data.creatorName))
+        && (!changed.hasAny(['assignedUserId','assignedUserName'])
+          || validIdentityAnonymization(resource.data.assignedUserId, resource.data.assignedUserName,
+            request.resource.data.assignedUserId, request.resource.data.assignedUserName))
+        && (!changed.hasAny(['originUserId','sourceAuthorName'])
+          || validIdentityAnonymization(resource.data.originUserId, resource.data.sourceAuthorName,
+            request.resource.data.originUserId, request.resource.data.sourceAuthorName))
+        && (!changed.hasAny(['completedBy'])
+          || validIdAnonymization(resource.data.completedBy, request.resource.data.completedBy));
+    }
+    function validOrganizedEventAnonymization(id) {
+      let changed = request.resource.data.diff(resource.data).affectedKeys();
+      return isGubMember(id) && gubActive(id)
+        && changed.hasOnly(['createdBy','createdByName','originUserId','sourceAuthorName'])
+        && changed.hasAny(['createdBy','originUserId'])
+        && (!changed.hasAny(['createdBy','createdByName'])
+          || validIdentityAnonymization(resource.data.createdBy, resource.data.createdByName,
+            request.resource.data.createdBy, request.resource.data.createdByName))
+        && (!changed.hasAny(['originUserId','sourceAuthorName'])
+          || validIdentityAnonymization(resource.data.originUserId, resource.data.sourceAuthorName,
+            request.resource.data.originUserId, request.resource.data.sourceAuthorName));
+    }
+    function validOrganizedAssignmentIdentityAnonymization(before, after) {
+      let changed = after.diff(before).affectedKeys();
+      return changed.hasOnly(['userId','userName'])
+        && changed.hasAny(['userId'])
+        && before.userId == request.auth.uid
+        && after.userId == deletedUserId()
+        && after.userName == deletedUserName();
+    }
+    function validOrganizedAssignmentAnonymizationAt(index) {
+      return resource.data.assignments.size() <= index
+        || request.resource.data.assignments[index] == resource.data.assignments[index]
+        || validOrganizedAssignmentIdentityAnonymization(
+          resource.data.assignments[index], request.resource.data.assignments[index]);
+    }
+    function validOrganizedAssignmentsAnonymization(id) {
+      let changed = request.resource.data.diff(resource.data).affectedKeys();
+      return isGubMember(id) && gubActive(id)
+        && changed.hasOnly(['assignments'])
+        && changed.hasAny(['assignments'])
+        && resource.data.assignments is list
+        && request.resource.data.assignments is list
+        && request.resource.data.assignments.size() == resource.data.assignments.size()
+        && request.resource.data.assignments.size() <= 20
+        && validOrganizedAssignmentAnonymizationAt(0)
+        && validOrganizedAssignmentAnonymizationAt(1)
+        && validOrganizedAssignmentAnonymizationAt(2)
+        && validOrganizedAssignmentAnonymizationAt(3)
+        && validOrganizedAssignmentAnonymizationAt(4)
+        && validOrganizedAssignmentAnonymizationAt(5)
+        && validOrganizedAssignmentAnonymizationAt(6)
+        && validOrganizedAssignmentAnonymizationAt(7)
+        && validOrganizedAssignmentAnonymizationAt(8)
+        && validOrganizedAssignmentAnonymizationAt(9)
+        && validOrganizedAssignmentAnonymizationAt(10)
+        && validOrganizedAssignmentAnonymizationAt(11)
+        && validOrganizedAssignmentAnonymizationAt(12)
+        && validOrganizedAssignmentAnonymizationAt(13)
+        && validOrganizedAssignmentAnonymizationAt(14)
+        && validOrganizedAssignmentAnonymizationAt(15)
+        && validOrganizedAssignmentAnonymizationAt(16)
+        && validOrganizedAssignmentAnonymizationAt(17)
+        && validOrganizedAssignmentAnonymizationAt(18)
+        && validOrganizedAssignmentAnonymizationAt(19);
+    }
+    function validProposalAnonymization(id) {
+      let changed = request.resource.data.diff(resource.data).affectedKeys();
+      return isGubMember(id) && gubActive(id)
+        && changed.hasOnly(['creatorId','creatorName','originUserId','sourceAuthorName'])
+        && changed.hasAny(['creatorId','originUserId'])
+        && (!changed.hasAny(['creatorId','creatorName'])
+          || validIdentityAnonymization(resource.data.creatorId, resource.data.creatorName,
+            request.resource.data.creatorId, request.resource.data.creatorName))
+        && (!changed.hasAny(['originUserId','sourceAuthorName'])
+          || validIdentityAnonymization(resource.data.originUserId, resource.data.sourceAuthorName,
+            request.resource.data.originUserId, request.resource.data.sourceAuthorName));
+    }
     function validChatSource(data, id) {
       let message = get(messagePath(id, data.sourceId)).data;
       return data.sourceType == 'chat'
@@ -562,6 +660,42 @@ service cloud.firestore {
         && resource.data.readBy.toSet().difference(request.resource.data.readBy.toSet()).size() == 0
         && request.resource.data.readBy.toSet().difference(resource.data.readBy.toSet()).hasOnly([request.auth.uid]);
     }
+    function validOwnNotificationReadRemoval() {
+      return resource.data.readBy is list
+        && request.resource.data.readBy is list
+        && resource.data.readBy.toSet().hasAny([request.auth.uid])
+        && request.resource.data.readBy.toSet()
+          == resource.data.readBy.toSet().difference([request.auth.uid].toSet())
+        && request.resource.data.readBy.size() == request.resource.data.readBy.toSet().size();
+    }
+    function validDeletedNotificationBody(id) {
+      let data = request.resource.data;
+      return (data.type == 'task_created'
+          && data.body == 'Deleted user assigned a new task: '
+            + get(taskPath(id, data.data.taskId)).data.title)
+        || (data.type == 'proposal_created'
+          && data.body == 'Deleted user created a new proposal.')
+        || (data.type == 'organized_event_created'
+          && data.body == 'Deleted user assigned you a task for '
+            + get(organizedEventPath(id, data.data.eventId)).data.title + '.')
+        || (data.type == 'goal_created'
+          && data.body == 'Deleted user created “'
+            + get(goalPath(id, data.data.goalId)).data.title + '”.')
+        || (data.type == 'goal_confirmation'
+          && data.body == 'Deleted user confirmed a contribution.')
+        || (data.type == 'board_post'
+          && data.body == 'Deleted user published a new post.');
+    }
+    function validNotificationIdentityAnonymization(id) {
+      let changed = request.resource.data.diff(resource.data).affectedKeys();
+      return isGubMember(id) && gubActive(id)
+        && changed.hasOnly(['senderId','senderName','body','readBy'])
+        && changed.hasAny(['senderId'])
+        && validIdentityAnonymization(resource.data.senderId, resource.data.senderName,
+          request.resource.data.senderId, request.resource.data.senderName)
+        && (!changed.hasAny(['body']) || validDeletedNotificationBody(id))
+        && (!changed.hasAny(['readBy']) || validOwnNotificationReadRemoval());
+    }
 
     function communityPath(id) { return /databases/$(database)/documents/communities/$(id); }
     function communityDoc(id) { return get(communityPath(id)); }
@@ -715,9 +849,27 @@ service cloud.firestore {
 
     match /users/{uid} {
       allow read: if signedIn();
-      allow create: if own(uid) && validUserProfile(request.resource.data);
+      allow delete: if own(uid);
+      allow create: if own(uid) && validUserProfile(request.resource.data)
+        && !request.resource.data.keys().hasAny(['displayNameChangedAt']);
       allow update: if own(uid) && validUserProfile(request.resource.data)
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['displayName', 'photoUrl', 'photoURL', 'updatedAt']);
+        && (
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['photoUrl', 'photoURL', 'updatedAt'])
+            && request.resource.data.displayName == resource.data.displayName
+          || (
+            request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['displayName', 'displayNameChangedAt', 'updatedAt'])
+            && request.resource.data.displayName != resource.data.displayName
+            && request.resource.data.displayNameChangedAt == request.time
+            && request.resource.data.updatedAt == request.time
+            && (
+              !resource.data.keys().hasAny(['displayNameChangedAt'])
+              || resource.data.displayNameChangedAt
+                <= request.time - duration.value(30, 'd')
+            )
+          )
+        );
 
       match /gubs/{id} {
         allow read: if own(uid);
@@ -750,6 +902,10 @@ service cloud.firestore {
       }
     }
 
+    match /{path=**}/members/{memberId} {
+      allow list: if signedIn() && resource.data.uid == request.auth.uid;
+    }
+
     match /inviteTokens/{canonicalCode} {
       allow get: if signedIn() && validInviteTokenCode(canonicalCode);
       allow list: if false;
@@ -771,6 +927,11 @@ service cloud.firestore {
         && validGubMemberAndCopy(id, request.auth.uid, 'owner');
       allow update: if (
         validInviteRegeneration(id)
+        || (isGubOwner(id) && gubActive(id)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['pinnedBoardPostId'])
+          && (request.resource.data.pinnedBoardPostId == null
+            || (request.resource.data.pinnedBoardPostId is string
+              && exists(/databases/$(database)/documents/gubs/$(id)/posts/$(request.resource.data.pinnedBoardPostId)))))
         || (signedIn() && gubActive(id) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memberCount'])
           && (request.resource.data.memberCount == resource.data.memberCount + 1
             || request.resource.data.memberCount == resource.data.memberCount - 1)
@@ -811,7 +972,11 @@ service cloud.firestore {
           && request.resource.data.role == (gubAfter(id).data.ownerId == uid ? 'owner' : 'member')
           && validGubMemberAndCopy(id, uid, request.resource.data.role);
         allow update: if own(uid) && gubActive(id)
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['antiSpamRulesAccepted','antiSpamRulesAcceptedAt','antiSpamRulesVersion']);
+          && (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['antiSpamRulesAccepted','antiSpamRulesAcceptedAt','antiSpamRulesVersion'])
+            || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['displayName'])
+              && validText(request.resource.data.displayName, 1, 25)
+              && request.resource.data.displayName
+                == getAfter(/databases/$(database)/documents/users/$(uid)).data.displayName));
         allow delete: if (isGubOwner(id) && uid != request.auth.uid)
           || (own(uid) && uid != gubDoc(id).data.ownerId
             && gubActive(id)
@@ -843,6 +1008,10 @@ service cloud.firestore {
           && request.resource.data.senderName == get(gubMemberPath(id, request.auth.uid)).data.displayName
           && request.resource.data.text is string
           && request.resource.data.createdAt is timestamp;
+        allow update: if isGubMember(id) && gubActive(id)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['senderId','senderName'])
+          && validIdentityAnonymization(resource.data.senderId, resource.data.senderName,
+            request.resource.data.senderId, request.resource.data.senderName);
         allow delete: if gubDeletingOwner(id);
       }
       match /chatReads/{uid} {
@@ -852,14 +1021,16 @@ service cloud.firestore {
           && request.resource.data.userId == uid
           && request.resource.data.gubId == id
           && request.resource.data.lastReadAt is timestamp;
-        allow delete: if gubDeletingOwner(id);
+        allow delete: if (own(uid) && isGubMember(id) && gubActive(id))
+          || gubDeletingOwner(id);
       }
       match /boardReads/{uid} {
         allow read: if (own(uid) && isGubMember(id)) || gubDeletingOwner(id);
         allow create, update: if own(uid) && isGubMember(id) && gubActive(id)
           && request.resource.data.keys().hasOnly(['lastReadAt'])
           && request.resource.data.lastReadAt is timestamp;
-        allow delete: if gubDeletingOwner(id);
+        allow delete: if (own(uid) && isGubMember(id) && gubActive(id))
+          || gubDeletingOwner(id);
       }
       match /posts/{postId} {
         allow read: if isGubMember(id) || gubDeletingOwner(id);
@@ -876,25 +1047,84 @@ service cloud.firestore {
           && request.resource.data.comments == 0
           && request.resource.data.createdAt is timestamp
           && request.resource.data.updatedAt is timestamp;
+        allow update: if isGubMember(id) && gubActive(id)
+          && ((request.resource.data.diff(resource.data).affectedKeys().hasOnly(['authorId','authorName','authorPhoto'])
+              && validIdentityAnonymization(resource.data.authorId, resource.data.authorName,
+                request.resource.data.authorId, request.resource.data.authorName)
+              && request.resource.data.authorPhoto == null)
+            || (request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+                'comments','updatedAt','lastCommentAuthorId','lastCommentId'
+              ])
+              && request.resource.data.comments == resource.data.comments + 1
+              && request.resource.data.updatedAt == request.time
+              && request.resource.data.lastCommentAuthorId == request.auth.uid
+              && request.resource.data.lastCommentId is string
+              && getAfter(/databases/$(database)/documents/gubs/$(id)/posts/$(postId)/comments/$(request.resource.data.lastCommentId)).data.authorId == request.auth.uid)
+            || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes'])
+              && ((request.resource.data.likes == resource.data.likes + 1
+                    && existsAfter(/databases/$(database)/documents/gubs/$(id)/posts/$(postId)/likes/$(request.auth.uid))
+                    && !exists(/databases/$(database)/documents/gubs/$(id)/posts/$(postId)/likes/$(request.auth.uid)))
+                || (request.resource.data.likes == resource.data.likes - 1
+                    && request.resource.data.likes >= 0
+                    && exists(/databases/$(database)/documents/gubs/$(id)/posts/$(postId)/likes/$(request.auth.uid))
+                    && !existsAfter(/databases/$(database)/documents/gubs/$(id)/posts/$(postId)/likes/$(request.auth.uid))))));
         allow delete: if gubDeletingOwner(id);
+
+        match /comments/{commentId} {
+          allow read: if gubDeletingOwner(id);
+          allow read: if isGubMember(id)
+            && resource.data.createdAt >= get(gubMemberPath(id, request.auth.uid)).data.joinedAt;
+          allow create: if isGubMember(id) && gubActive(id)
+            && request.resource.data.keys().hasOnly(['commentId','authorId','authorName','text','createdAt'])
+            && request.resource.data.commentId == commentId
+            && request.resource.data.authorId == request.auth.uid
+            && request.resource.data.authorName == get(gubMemberPath(id, request.auth.uid)).data.displayName
+            && validText(request.resource.data.text, 1, 1000)
+            && request.resource.data.createdAt == request.time
+            && getAfter(/databases/$(database)/documents/gubs/$(id)/posts/$(postId)).data.lastCommentId == commentId
+            && getAfter(/databases/$(database)/documents/gubs/$(id)/posts/$(postId)).data.comments
+              == get(/databases/$(database)/documents/gubs/$(id)/posts/$(postId)).data.comments + 1;
+          allow update, delete: if false;
+        }
+
+        match /likes/{uid} {
+          allow read: if isGubMember(id) || gubDeletingOwner(id);
+          allow create: if own(uid) && isGubMember(id) && gubActive(id)
+            && request.resource.data.keys().hasOnly(['userId','createdAt'])
+            && request.resource.data.userId == uid
+            && request.resource.data.createdAt == request.time
+            && getAfter(/databases/$(database)/documents/gubs/$(id)/posts/$(postId)).data.likes
+              == get(/databases/$(database)/documents/gubs/$(id)/posts/$(postId)).data.likes + 1;
+          allow update: if false;
+          allow delete: if own(uid) && isGubMember(id) && gubActive(id)
+            && getAfter(/databases/$(database)/documents/gubs/$(id)/posts/$(postId)).data.likes
+              == get(/databases/$(database)/documents/gubs/$(id)/posts/$(postId)).data.likes - 1;
+        }
       }
       match /tasks/{taskId} {
         allow read: if isGubMember(id) || gubDeletingOwner(id);
         allow create: if isGubMember(id) && gubActive(id) && validTaskCreate(id, taskId);
-        allow update: if validTaskCompletion(id) || validTaskSelfUnassignment(id);
+        allow update: if validTaskCompletion(id) || validTaskSelfUnassignment(id)
+          || validTaskAnonymization(id);
         allow delete: if validHardDeleteWithCooldown(id, resource.data.creatorId, 'task', taskId)
           || gubDeletingOwner(id);
       }
       match /events/{eventId} {
         allow read: if isGubMember(id) || gubDeletingOwner(id);
         allow create: if isGubMember(id) && gubActive(id) && validCalendarEventCreate(id, eventId);
+        allow update: if isGubMember(id) && gubActive(id)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['creatorId','creatorName'])
+          && validIdentityAnonymization(resource.data.creatorId, resource.data.creatorName,
+            request.resource.data.creatorId, request.resource.data.creatorName);
         allow delete: if (gubActive(id) && (resource.data.creatorId == request.auth.uid || isGubOwner(id)))
           || gubDeletingOwner(id);
       }
       match /organizedEvents/{eventId} {
         allow read: if isGubMember(id) || gubDeletingOwner(id);
         allow create: if isGubMember(id) && gubActive(id) && validOrganizedEventCreate(id, eventId);
-        allow update: if validOrganizedCompletion(id);
+        allow update: if validOrganizedCompletion(id)
+          || validOrganizedEventAnonymization(id)
+          || validOrganizedAssignmentsAnonymization(id);
         allow delete: if validHardDeleteWithCooldown(id, resource.data.createdBy, 'organizedEvent', eventId)
           || gubDeletingOwner(id);
       }
@@ -905,7 +1135,8 @@ service cloud.firestore {
           && (validVoteAggregate(id, proposalId)
             || validProposalResult()
             || validProposalEventFlag()
-            || validSoftDelete(id, resource.data.creatorId, 'proposal', proposalId));
+            || validSoftDelete(id, resource.data.creatorId, 'proposal', proposalId)
+            || validProposalAnonymization(id));
         allow delete: if gubDeletingOwner(id);
       }
       match /proposals/{proposalId}/votes/{uid} {
@@ -924,7 +1155,10 @@ service cloud.firestore {
         allow update: if gubActive(id)
           && (validGoalProgress(id)
             || validGoalMemberDepartureProgress(id, goalId)
-            || validSoftDelete(id, resource.data.ownerId, 'sharedBudget', goalId));
+            || validSoftDelete(id, resource.data.ownerId, 'sharedBudget', goalId)
+            || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['originUserId','sourceAuthorName'])
+              && validIdentityAnonymization(resource.data.originUserId, resource.data.sourceAuthorName,
+                request.resource.data.originUserId, request.resource.data.sourceAuthorName)));
         allow delete: if gubDeletingOwner(id);
       }
       match /goals/{goalId}/members/{uid} {
@@ -943,10 +1177,16 @@ service cloud.firestore {
         allow create: if isGubMember(id) && gubActive(id)
           && validNotificationCreate(id, notificationId);
         allow update: if isGubMember(id) && gubActive(id)
-          && resource.data.createdAt is timestamp
-          && get(gubMemberPath(id, request.auth.uid)).data.joinedAt is timestamp
-          && resource.data.createdAt >= get(gubMemberPath(id, request.auth.uid)).data.joinedAt
-          && validReadByUpdate();
+          && ((resource.data.createdAt is timestamp
+              && get(gubMemberPath(id, request.auth.uid)).data.joinedAt is timestamp
+              && resource.data.createdAt >= get(gubMemberPath(id, request.auth.uid)).data.joinedAt
+              && validReadByUpdate())
+            || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['senderId','senderName'])
+              && validIdentityAnonymization(resource.data.senderId, resource.data.senderName,
+                request.resource.data.senderId, request.resource.data.senderName))
+            || validNotificationIdentityAnonymization(id)
+            || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readBy'])
+              && validOwnNotificationReadRemoval()));
         allow delete: if gubDeletingOwner(id);
       }
       match /creationCooldowns/{cooldownId} {
@@ -999,6 +1239,11 @@ service cloud.firestore {
           && validCommunityMemberAndCopy(id,uid,request.resource.data.role))
           || (validCommunityApprovalSignal(id, uid)
             && validCommunityApprovalMember(id, uid));
+        allow update: if own(uid) && communityActive(id)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['displayName'])
+          && validText(request.resource.data.displayName, 1, 25)
+          && request.resource.data.displayName
+            == getAfter(/databases/$(database)/documents/users/$(uid)).data.displayName;
         allow delete: if communityDeletingOwner(id)
           || (isCommunityOwner(id) && uid != request.auth.uid
             && communityActive(id)
@@ -1033,6 +1278,10 @@ service cloud.firestore {
           && validText(request.resource.data.senderName, 1, 25)
           && validText(request.resource.data.text, 1, 2000)
           && request.resource.data.createdAt == request.time;
+        allow update: if isCommunityMember(id) && communityActive(id)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['senderId','senderName'])
+          && validIdentityAnonymization(resource.data.senderId, resource.data.senderName,
+            request.resource.data.senderId, request.resource.data.senderName);
         allow delete: if communityDeletingOwner(id);
       }
       match /deletionMembers/{uid} {

@@ -1,5 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import '../../chat/widgets/deleted_user_identity_builder.dart';
 
 import '../../../widgets/gub_content_card.dart';
 import '../../../widgets/gub_screen_background.dart';
@@ -199,14 +200,22 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
 
                       if (task.sourceType == "chat" &&
                           task.sourcePreview?.isNotEmpty == true) ...[
-                        _ChatSourceCard(
-                          message: task.sourcePreview!,
-                          authorName: task.sourceAuthorName,
-                          onTap:
-                              task.sourceId != null && task.sourceId!.isNotEmpty
-                              ? () => _openOriginalMessage(task)
-                              : null,
-                          opening: _openingOriginalMessage,
+                        DeletedUserIdentityBuilder(
+                          userId: task.originUserId ?? '',
+                          currentDisplayName: task.sourceAuthorName ?? 'User',
+                          resolveCurrentDisplayName:
+                              task.originUserId?.trim().isNotEmpty == true,
+                          builder: (context, displayName, deleted) =>
+                              _ChatSourceCard(
+                                message: task.sourcePreview!,
+                                authorName: displayName,
+                                onTap:
+                                    task.sourceId != null &&
+                                        task.sourceId!.isNotEmpty
+                                    ? () => _openOriginalMessage(task)
+                                    : null,
+                                opening: _openingOriginalMessage,
+                              ),
                         ),
                         const SizedBox(height: 20),
                       ],
@@ -230,14 +239,33 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
 
                       const SizedBox(height: 20),
 
-                      _InfoRow(title: "Created by", value: task.creatorName),
+                      DeletedUserIdentityBuilder(
+                        userId: task.creatorId,
+                        currentDisplayName: task.creatorName,
+                        resolveCurrentDisplayName: task.creatorId
+                            .trim()
+                            .isNotEmpty,
+                        builder: (context, displayName, deleted) =>
+                            _InfoRow(title: "Created by", value: displayName),
+                      ),
 
                       const SizedBox(height: 12),
 
-                      _InfoRow(
-                        title: "Assigned to",
-                        value: task.assignedUserName ?? "Nobody",
-                      ),
+                      if (task.assignedUserId?.trim().isNotEmpty == true)
+                        DeletedUserIdentityBuilder(
+                          userId: task.assignedUserId!,
+                          currentDisplayName: task.assignedUserName ?? '',
+                          resolveCurrentDisplayName: true,
+                          builder: (context, displayName, deleted) => _InfoRow(
+                            title: "Assigned to",
+                            value: displayName,
+                          ),
+                        )
+                      else
+                        _InfoRow(
+                          title: "Assigned to",
+                          value: task.assignedUserName ?? "Nobody",
+                        ),
 
                       const SizedBox(height: 12),
 

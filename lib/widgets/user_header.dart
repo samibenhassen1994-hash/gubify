@@ -7,9 +7,14 @@ import '../modules/notifications/models/notification_model.dart';
 import '../modules/notifications/screens/notifications_screen.dart';
 import '../modules/notifications/services/notification_service.dart';
 import '../modules/profile/screens/personal_profile_screen.dart';
+import '../modules/profile/screens/account_screen.dart';
 import '../modules/profile/screens/user_profile_screen.dart';
+import '../modules/profile/widgets/account_session_section.dart';
+import '../modules/profile/widgets/google_account_connection_section.dart';
+import '../pages/startup_screen.dart';
 import '../repositories/user_repository.dart';
 import '../services/app_sound_service.dart';
+import '../services/auth_service.dart';
 import 'gub_content_card.dart';
 
 class UserHeader extends StatefulWidget {
@@ -18,6 +23,7 @@ class UserHeader extends StatefulWidget {
   final bool personalProfileEnabled;
   final bool showCard;
   final bool darkCard;
+  final double? bottomPadding;
   final VoidCallback? onExploreCommunities;
 
   const UserHeader({
@@ -27,6 +33,7 @@ class UserHeader extends StatefulWidget {
     this.personalProfileEnabled = false,
     this.showCard = false,
     this.darkCard = false,
+    this.bottomPadding,
     this.onExploreCommunities,
   }) : assert(!darkCard || showCard, "darkCard requires showCard.");
 
@@ -67,16 +74,19 @@ class _UserHeaderState extends State<UserHeader> {
         context: context,
         showDragHandle: true,
         useSafeArea: true,
-        builder: (_) => const _UserSettingsSheet(),
+        isScrollControlled: true,
+        builder: (_) => const UserSettingsSheet(),
       );
     }
 
     if (widget.gubId == null) {
       await showSettings();
+      if (mounted) setState(_loadCurrentUser);
       return;
     }
 
     await GubChatOverlay.runWithChatOverlayHidden(showSettings);
+    if (mounted) setState(_loadCurrentUser);
   }
 
   @override
@@ -93,7 +103,9 @@ class _UserHeaderState extends State<UserHeader> {
           const placeholder = SizedBox(height: 44);
 
           return Padding(
-            padding: EdgeInsets.only(bottom: widget.showCard ? 20 : 24),
+            padding: EdgeInsets.only(
+              bottom: widget.bottomPadding ?? (widget.showCard ? 20 : 24),
+            ),
             child: widget.showCard
                 ? _UserHeaderCard(dark: widget.darkCard, child: placeholder)
                 : placeholder,
@@ -246,7 +258,7 @@ class _UserHeaderState extends State<UserHeader> {
         );
 
         return Padding(
-          padding: const EdgeInsets.only(bottom: 20),
+          padding: EdgeInsets.only(bottom: widget.bottomPadding ?? 20),
           child: widget.showCard
               ? _UserHeaderCard(dark: widget.darkCard, child: headerContent)
               : headerContent,
@@ -258,7 +270,9 @@ class _UserHeaderState extends State<UserHeader> {
   Widget _buildPlaceholder() {
     const placeholder = SizedBox(height: 44);
     return Padding(
-      padding: EdgeInsets.only(bottom: widget.showCard ? 20 : 24),
+      padding: EdgeInsets.only(
+        bottom: widget.bottomPadding ?? (widget.showCard ? 20 : 24),
+      ),
       child: widget.showCard
           ? _UserHeaderCard(dark: widget.darkCard, child: placeholder)
           : placeholder,
@@ -266,45 +280,120 @@ class _UserHeaderState extends State<UserHeader> {
   }
 }
 
-class _UserSettingsSheet extends StatelessWidget {
-  const _UserSettingsSheet();
+class UserSettingsSheet extends StatefulWidget {
+  const UserSettingsSheet({super.key, this.authService, this.onLoggedOut});
+
+  final AuthService? authService;
+  final Future<void> Function()? onLoggedOut;
+
+  @override
+  State<UserSettingsSheet> createState() => _UserSettingsSheetState();
+}
+
+class _UserSettingsSheetState extends State<UserSettingsSheet> {
+  late final AuthService _authService;
+
+  @override
+  void initState() {
+    super.initState();
+    _authService = widget.authService ?? AuthService();
+  }
+
+  Future<void> _openAccountSecurity() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (sheetContext) => Padding(
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+        child: GoogleAccountConnectionSection(
+          authService: _authService,
+          onAccountSecured: () => Navigator.of(sheetContext).pop(),
+        ),
+      ),
+    );
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _returnToAuthEntry() async {
+    final onLoggedOut = widget.onLoggedOut;
+    if (onLoggedOut != null) {
+      await onLoggedOut();
+      return;
+    }
+    if (!mounted) return;
+    Navigator.of(context, rootNavigator: true).pushAndRemoveUntil<void>(
+      MaterialPageRoute(
+        builder: (_) => StartupScreen(
+          authService: _authService,
+          minimumDisplayDuration: Duration.zero,
+          onNavigationReady: () {},
+        ),
+      ),
+      (_) => false,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const Text(
-            "Settings",
-            style: TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.w700,
-              color: Color(0xFF0F172A),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text(
+              "Settings",
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF0F172A),
+              ),
             ),
-          ),
-          const SizedBox(height: 12),
-          ValueListenableBuilder<bool>(
-            valueListenable: AppSoundService.instance.enabledListenable,
-            builder: (context, enabled, _) {
-              return SwitchListTile.adaptive(
-                contentPadding: EdgeInsets.zero,
-                secondary: const Icon(Icons.volume_up_outlined),
-                title: const Text(
-                  "App sounds",
-                  style: TextStyle(fontWeight: FontWeight.w600),
+            const SizedBox(height: 12),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.manage_accounts_outlined),
+              title: const Text(
+                'Account',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
+              trailing: const Icon(Icons.chevron_right_rounded),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => AccountScreen(authService: _authService),
                 ),
-                subtitle: const Text(
-                  "Play sounds for messages, notifications and actions.",
-                ),
-                value: enabled,
-                onChanged: AppSoundService.instance.setEnabled,
-              );
-            },
-          ),
-        ],
+              ),
+            ),
+            ValueListenableBuilder<bool>(
+              valueListenable: AppSoundService.instance.enabledListenable,
+              builder: (context, enabled, _) {
+                return SwitchListTile.adaptive(
+                  contentPadding: EdgeInsets.zero,
+                  secondary: const Icon(Icons.volume_up_outlined),
+                  title: const Text(
+                    "App sounds",
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  subtitle: const Text(
+                    "Play sounds for messages, notifications and actions.",
+                  ),
+                  value: enabled,
+                  onChanged: AppSoundService.instance.setEnabled,
+                );
+              },
+            ),
+            const SizedBox(height: 12),
+            AccountSessionSection(
+              authService: _authService,
+              onLoggedOut: _returnToAuthEntry,
+              onSecureAccount: () {
+                _openAccountSecurity();
+              },
+            ),
+          ],
+        ),
       ),
     );
   }

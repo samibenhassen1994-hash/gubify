@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../../../repositories/user_repository.dart';
 import '../models/chat_message_model.dart';
 import 'chat_user_avatar.dart';
+import 'deleted_user_identity_builder.dart';
 
 class ChatMessageBubble extends StatelessWidget {
   final ChatMessageModel message;
@@ -9,6 +11,8 @@ class ChatMessageBubble extends StatelessWidget {
   final VoidCallback? onLongPress;
   final VoidCallback? onAvatarTap;
   final bool isHighlighted;
+  final Stream<bool>? profileExists;
+  final Stream<UserIdentity>? identity;
 
   const ChatMessageBubble({
     super.key,
@@ -17,10 +21,28 @@ class ChatMessageBubble extends StatelessWidget {
     this.onLongPress,
     this.onAvatarTap,
     this.isHighlighted = false,
+    this.profileExists,
+    this.identity,
   });
 
   @override
   Widget build(BuildContext context) {
+    return DeletedUserIdentityBuilder(
+      userId: message.senderId,
+      currentDisplayName: message.senderName,
+      profileExists: profileExists,
+      identity: identity,
+      resolveCurrentDisplayName: true,
+      builder: (context, displayName, deleted) =>
+          _buildBubble(context, displayName: displayName, deleted: deleted),
+    );
+  }
+
+  Widget _buildBubble(
+    BuildContext context, {
+    required String displayName,
+    required bool deleted,
+  }) {
     return LayoutBuilder(
       builder: (context, constraints) {
         final maxBubbleWidth = constraints.maxWidth * 0.78;
@@ -66,7 +88,7 @@ class ChatMessageBubble extends StatelessWidget {
               children: [
                 if (!isCurrentUser) ...[
                   Text(
-                    message.senderName,
+                    displayName,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
@@ -105,9 +127,9 @@ class ChatMessageBubble extends StatelessWidget {
         final avatar = Padding(
           padding: const EdgeInsets.only(top: 2),
           child: ChatUserAvatar(
-            displayName: message.senderName,
+            displayName: displayName,
             userId: message.senderId,
-            onTap: onAvatarTap,
+            onTap: deleted ? null : onAvatarTap,
           ),
         );
 

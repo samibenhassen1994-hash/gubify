@@ -12,7 +12,20 @@
           "package_name": "com.gubify.app"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "741423330029-i2rkvqoq1jfcdqo1oj59f4afev02krrl.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.gubify.app",
+            "certificate_hash": "9c7d73670cfc4b503a0ea919d80aa06999711b96"
+          }
+        },
+        {
+          "client_id": "741423330029-43jaai128989db994ehkiosek6c4vk8f.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyDaruxeV3NfiWO7nU2VcD7rBbhdeZy1GsI"
@@ -20,7 +33,19 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "741423330029-43jaai128989db994ehkiosek6c4vk8f.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "741423330029-7rvnvnbcsk70in69tktfgnd9dukvo88m.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.Hubfy"
+              }
+            }
+          ]
         }
       }
     }

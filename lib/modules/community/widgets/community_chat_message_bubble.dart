@@ -1,20 +1,38 @@
 import 'package:flutter/material.dart';
 
+import '../../../repositories/user_repository.dart';
 import '../../chat/widgets/chat_user_avatar.dart';
+import '../../chat/widgets/deleted_user_identity_builder.dart';
 import '../models/community_chat_message_model.dart';
 
 class CommunityChatMessageBubble extends StatelessWidget {
   final CommunityChatMessageModel message;
   final bool isCurrentUser;
+  final Stream<bool>? profileExists;
+  final Stream<UserIdentity>? identity;
 
   const CommunityChatMessageBubble({
     super.key,
     required this.message,
     required this.isCurrentUser,
+    this.profileExists,
+    this.identity,
   });
 
   @override
   Widget build(BuildContext context) {
+    return DeletedUserIdentityBuilder(
+      userId: message.senderId,
+      currentDisplayName: message.senderName,
+      profileExists: profileExists,
+      identity: identity,
+      resolveCurrentDisplayName: true,
+      builder: (context, displayName, deleted) =>
+          _buildBubble(context, displayName: displayName),
+    );
+  }
+
+  Widget _buildBubble(BuildContext context, {required String displayName}) {
     return LayoutBuilder(
       builder: (context, constraints) {
         final bubble = Container(
@@ -49,7 +67,7 @@ class CommunityChatMessageBubble extends StatelessWidget {
             children: [
               if (!isCurrentUser) ...[
                 Text(
-                  message.senderName,
+                  displayName,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
@@ -86,7 +104,7 @@ class CommunityChatMessageBubble extends StatelessWidget {
         final avatar = Padding(
           padding: const EdgeInsets.only(top: 2),
           child: ChatUserAvatar(
-            displayName: message.senderName,
+            displayName: displayName,
             userId: message.senderId,
           ),
         );
