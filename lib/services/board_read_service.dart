@@ -97,11 +97,19 @@ class BoardReadService {
     required String userId,
     required Timestamp unreadAfter,
   }) {
-    final createdAt = post.createdAt;
-    if (createdAt == null || post.authorId == userId) return false;
-    return createdAt.seconds > unreadAfter.seconds ||
-        (createdAt.seconds == unreadAfter.seconds &&
-            createdAt.nanoseconds > unreadAfter.nanoseconds);
+    bool isAfter(Timestamp? value) =>
+        value != null &&
+        (value.seconds > unreadAfter.seconds ||
+            (value.seconds == unreadAfter.seconds &&
+                value.nanoseconds > unreadAfter.nanoseconds));
+
+    final unreadPost = post.authorId != userId && isAfter(post.createdAt);
+    final unreadComment =
+        post.authorId == userId &&
+        post.lastCommentAuthorId != null &&
+        post.lastCommentAuthorId != userId &&
+        isAfter(post.updatedAt);
+    return unreadPost || unreadComment;
   }
 
   Stream<int> unreadCountStream(String gubId) {

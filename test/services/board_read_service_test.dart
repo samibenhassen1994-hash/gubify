@@ -12,7 +12,13 @@ void main() {
 
   Timestamp at(int day) => Timestamp.fromDate(DateTime.utc(2026, 1, day));
 
-  BoardPostModel post(String id, int day, {String authorId = otherUserId}) {
+  BoardPostModel post(
+    String id,
+    int day, {
+    String authorId = otherUserId,
+    int? updatedDay,
+    String? lastCommentAuthorId,
+  }) {
     return BoardPostModel(
       postId: id,
       authorId: authorId,
@@ -21,6 +27,8 @@ void main() {
       likes: 0,
       comments: 0,
       createdAt: at(day),
+      updatedAt: at(updatedDay ?? day),
+      lastCommentAuthorId: lastCommentAuthorId,
     );
   }
 
@@ -118,6 +126,40 @@ void main() {
       reads.add(null);
       await flush();
       posts.add([post('own', 3, authorId: currentUserId)]);
+      await flush();
+
+      expect(counts, [0]);
+    });
+
+    test('the first comment by another member on my post is unread', () async {
+      reads.add(at(4));
+      await flush();
+      posts.add([
+        post(
+          'mine',
+          3,
+          authorId: currentUserId,
+          updatedDay: 5,
+          lastCommentAuthorId: otherUserId,
+        ),
+      ]);
+      await flush();
+
+      expect(counts, [1]);
+    });
+
+    test('own comment on own post is not unread', () async {
+      reads.add(at(4));
+      await flush();
+      posts.add([
+        post(
+          'mine',
+          3,
+          authorId: currentUserId,
+          updatedDay: 5,
+          lastCommentAuthorId: currentUserId,
+        ),
+      ]);
       await flush();
 
       expect(counts, [0]);

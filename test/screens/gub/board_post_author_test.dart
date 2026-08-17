@@ -26,7 +26,11 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
-          body: BoardPostAuthor(post: post, identity: identities.stream),
+          body: BoardPostAuthor(
+            post: post,
+            gubId: 'gub-1',
+            identity: identities.stream,
+          ),
         ),
       ),
     );
@@ -85,7 +89,9 @@ void main() {
 
     await tester.pumpWidget(
       const MaterialApp(
-        home: Scaffold(body: BoardPostAuthor(post: deletedPost)),
+        home: Scaffold(
+          body: BoardPostAuthor(post: deletedPost, gubId: 'gub-1'),
+        ),
       ),
     );
     await tester.pump();

@@ -8,6 +8,8 @@ class BoardPostModel {
   final int likes;
   final int comments;
   final Timestamp? createdAt;
+  final Timestamp? updatedAt;
+  final String? lastCommentAuthorId;
 
   const BoardPostModel({
     required this.postId,
@@ -17,6 +19,8 @@ class BoardPostModel {
     required this.likes,
     required this.comments,
     required this.createdAt,
+    this.updatedAt,
+    this.lastCommentAuthorId,
   });
 
   factory BoardPostModel.fromFirestore(
@@ -32,6 +36,8 @@ class BoardPostModel {
       likes: (data['likes'] as num?)?.toInt() ?? 0,
       comments: (data['comments'] as num?)?.toInt() ?? 0,
       createdAt: data['createdAt'] as Timestamp?,
+      updatedAt: data['updatedAt'] as Timestamp?,
+      lastCommentAuthorId: data['lastCommentAuthorId'] as String?,
     );
   }
 }
