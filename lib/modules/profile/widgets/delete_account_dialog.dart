@@ -8,10 +8,12 @@ class DeleteAccountDialog extends StatefulWidget {
     super.key,
     required this.service,
     required this.requiresPassword,
+    this.onDeleted,
   });
 
   final AccountDeletionService service;
   final bool requiresPassword;
+  final Future<void> Function(BuildContext context)? onDeleted;
 
   @override
   State<DeleteAccountDialog> createState() => _DeleteAccountDialogState();
@@ -41,6 +43,12 @@ class _DeleteAccountDialogState extends State<DeleteAccountDialog> {
     );
     if (!mounted) return;
     if (result.isSuccess) {
+      final onDeleted = widget.onDeleted;
+      if (onDeleted != null) {
+        await onDeleted(context);
+        return;
+      }
+      if (!mounted) return;
       Navigator.of(context).pop(true);
       return;
     }

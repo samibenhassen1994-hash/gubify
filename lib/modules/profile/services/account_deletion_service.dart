@@ -84,14 +84,12 @@ class AccountDeletionService {
           'persistRecoveryMarker',
           () => _markerStore.writeUserId(uid),
         );
-        final privateIds = await _atStage(
+        final memberships = await _atStage(
           'cleanupPersonalCopies',
-          () => _repository.loadPrivateMembershipIds(uid),
+          () => _repository.loadMemberships(uid),
         );
-        final communityIds = await _atStage(
-          'cleanupPersonalCopies',
-          () => _repository.loadCommunityMembershipIds(uid),
-        );
+        final privateIds = memberships.privateGubIds;
+        final communityIds = memberships.communityIds;
         await _atStage(
           'anonymizeSharedContent',
           () => _repository.anonymizeSharedContent(

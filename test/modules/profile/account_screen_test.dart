@@ -32,6 +32,12 @@ void main() {
     expect(find.text('Email'), findsOneWidget); // Section title only.
     expect(find.text('Not set'), findsNWidgets(2));
     expect(find.text('Secure your account'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('Delete account'),
+      200,
+      scrollable: find.byType(Scrollable),
+    );
+    expect(find.text('Delete account'), findsOneWidget);
   });
 
   testWidgets('Google-only account exposes no password or linking action', (
@@ -46,6 +52,7 @@ void main() {
     expect(find.text('Password'), findsNothing);
     expect(find.text('Add email & password'), findsNothing);
     expect(find.text('Change password'), findsNothing);
+    expect(find.text('Delete account'), findsOneWidget);
   });
 
   testWidgets('email account can change password', (tester) async {
@@ -56,6 +63,12 @@ void main() {
     expect(find.widgetWithText(Chip, 'Email'), findsOneWidget);
     expect(find.widgetWithText(Chip, 'Google'), findsNothing);
     expect(find.text('Change password'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('Delete account'),
+      200,
+      scrollable: find.byType(Scrollable),
+    );
+    expect(find.text('Delete account'), findsOneWidget);
   });
 
   testWidgets(

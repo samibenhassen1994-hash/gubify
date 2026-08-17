@@ -106,24 +106,26 @@ class _AccountScreenState extends State<AccountScreen> {
       );
       return;
     }
-    final deleted = await showDialog<bool>(
+    await showDialog<void>(
       context: context,
       barrierDismissible: false,
       builder: (_) => DeleteAccountDialog(
         service: deletionService,
         requiresPassword: widget.authService.isPasswordLinked,
+        onDeleted: (context) async {
+          if (!context.mounted) return;
+          Navigator.of(context, rootNavigator: true).pushAndRemoveUntil<void>(
+            MaterialPageRoute(
+              builder: (_) => StartupScreen(
+                authService: widget.authService,
+                minimumDisplayDuration: Duration.zero,
+                onNavigationReady: () {},
+              ),
+            ),
+            (_) => false,
+          );
+        },
       ),
-    );
-    if (!mounted || deleted != true) return;
-    Navigator.of(context, rootNavigator: true).pushAndRemoveUntil<void>(
-      MaterialPageRoute(
-        builder: (_) => StartupScreen(
-          authService: widget.authService,
-          minimumDisplayDuration: Duration.zero,
-          onNavigationReady: () {},
-        ),
-      ),
-      (_) => false,
     );
   }
 

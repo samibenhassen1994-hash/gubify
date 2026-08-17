@@ -8,6 +8,7 @@ import {
 } from '@firebase/rules-unit-testing';
 import {
   collection,
+  collectionGroup,
   deleteField,
   deleteDoc,
   doc,
@@ -1340,6 +1341,105 @@ describe('Phase F irreversible shared identity anonymization', () => {
     assert.equal(budget.title, 'Budget');
   });
 
+  test('deleting user anonymizes only their organized event assignments', async () => {
+    await seedIdentityDocuments();
+    await env.withSecurityRulesDisabled(async (context) => {
+      const seedDb = context.firestore();
+      await setDoc(doc(seedDb, 'gubs', 'g1', 'members', ids.second), member(ids.second));
+      await setDoc(doc(seedDb, 'users', ids.second, 'gubs', 'g1'), copy(ids.second));
+      await setDoc(doc(seedDb, 'gubs', 'g1', 'organizedEvents', 'assignment-event'), {
+        eventId: 'assignment-event', gubId: 'g1', title: 'Keep event',
+        description: 'Keep details', createdBy: ids.second,
+        createdByName: 'Surviving User', originUserId: null,
+        sourceAuthorName: null, assignments: [
+          {
+            userId: ids.member, userName: 'Deleting User', taskText: 'Keep task',
+            isCompleted: true, completedAt: now(),
+          },
+          {
+            userId: ids.second, userName: 'Surviving User', taskText: 'Keep other task',
+            isCompleted: false, completedAt: null,
+          },
+        ], status: 'active', createdAt: now(),
+      });
+    });
+
+    const reference = doc(
+      db(ids.member), 'gubs', 'g1', 'organizedEvents', 'assignment-event',
+    );
+    await assertSucceeds(updateDoc(reference, {
+      assignments: [
+        {
+          userId: '__deleted_user__', userName: 'Deleted user', taskText: 'Keep task',
+          isCompleted: true, completedAt: now(),
+        },
+        {
+          userId: ids.second, userName: 'Surviving User', taskText: 'Keep other task',
+          isCompleted: false, completedAt: null,
+        },
+      ],
+    }));
+    const event = (await getDoc(reference)).data();
+    assert.equal(event.title, 'Keep event');
+    assert.equal(event.description, 'Keep details');
+    assert.equal(event.createdBy, ids.second);
+    assert.equal(event.assignments[0].userId, '__deleted_user__');
+    assert.equal(event.assignments[0].userName, 'Deleted user');
+    assert.equal(event.assignments[0].taskText, 'Keep task');
+    assert.equal(event.assignments[1].userId, ids.second);
+    assert.equal(event.assignments[1].userName, 'Surviving User');
+  });
+
+  test('organized event assignment anonymization cannot target another user', async () => {
+    await seedIdentityDocuments();
+    await env.withSecurityRulesDisabled(async (context) => {
+      const seedDb = context.firestore();
+      await setDoc(doc(seedDb, 'gubs', 'g1', 'members', ids.second), member(ids.second));
+      await setDoc(doc(seedDb, 'users', ids.second, 'gubs', 'g1'), copy(ids.second));
+      await setDoc(doc(seedDb, 'gubs', 'g1', 'organizedEvents', 'other-assignment'), {
+        eventId: 'other-assignment', gubId: 'g1', title: 'Event',
+        createdBy: ids.owner, createdByName: ids.owner, originUserId: null,
+        sourceAuthorName: null, assignments: [{
+          userId: ids.second, userName: 'Surviving User', taskText: 'Keep task',
+          isCompleted: false, completedAt: null,
+        }], status: 'active', createdAt: now(),
+      });
+    });
+
+    await assertFails(updateDoc(
+      doc(db(ids.member), 'gubs', 'g1', 'organizedEvents', 'other-assignment'),
+      { assignments: [{
+        userId: '__deleted_user__', userName: 'Deleted user', taskText: 'Keep task',
+        isCompleted: false, completedAt: null,
+      }] },
+    ));
+  });
+
+  test('organized assignment cleanup cannot rewrite retained assignment data', async () => {
+    await seedIdentityDocuments();
+    await env.withSecurityRulesDisabled(async (context) => {
+      await setDoc(
+        doc(context.firestore(), 'gubs', 'g1', 'organizedEvents', 'protected-assignment'),
+        {
+          eventId: 'protected-assignment', gubId: 'g1', title: 'Event',
+          createdBy: ids.owner, createdByName: ids.owner, originUserId: null,
+          sourceAuthorName: null, assignments: [{
+            userId: ids.member, userName: 'Deleting User', taskText: 'Original task',
+            isCompleted: false, completedAt: null,
+          }], status: 'active', createdAt: now(),
+        },
+      );
+    });
+
+    await assertFails(updateDoc(
+      doc(db(ids.member), 'gubs', 'g1', 'organizedEvents', 'protected-assignment'),
+      { assignments: [{
+        userId: '__deleted_user__', userName: 'Deleted user', taskText: 'Changed task',
+        isCompleted: false, completedAt: null,
+      }] },
+    ));
+  });
+
   test('deleting member cannot delete owner profile and owner keeps normal writes', async () => {
     await env.withSecurityRulesDisabled(async (context) => {
       const seedDb = context.firestore();
@@ -1550,5 +1650,54 @@ describe('Phase F irreversible shared identity anonymization', () => {
     assert.deepEqual(data.readBy, [ids.second]);
     assert.equal(data.senderId, ids.second);
     assert.equal(data.body, 'Keep title has been completed.');
+  });
+});
+
+describe('Delete Account canonical membership discovery', () => {
+  test('user can discover canonical private and Community memberships without copies', async () => {
+    await env.withSecurityRulesDisabled(async (context) => {
+      const seedDb = context.firestore();
+      await setDoc(doc(seedDb, 'gubs', 'canonical-gub'), root({
+        gubId: 'canonical-gub', memberCount: 2,
+      }));
+      await setDoc(
+        doc(seedDb, 'gubs', 'canonical-gub', 'members', ids.member),
+        member(ids.member),
+      );
+      await setDoc(doc(seedDb, 'communities', 'canonical-community'), {
+        communityId: 'canonical-community', name: 'Community',
+        ownerId: ids.communityOwner, memberCount: 2, visibility: 'public',
+        accessMode: 'open', status: 'active', createdAt: now(),
+      });
+      await setDoc(
+        doc(seedDb, 'communities', 'canonical-community', 'members', ids.member),
+        member(ids.member),
+      );
+    });
+
+    const result = await assertSucceeds(getDocs(query(
+      collectionGroup(db(ids.member), 'members'),
+      where('uid', '==', ids.member),
+    )));
+    const paths = result.docs.map((document) => document.ref.path).sort();
+    assert.deepEqual(paths, [
+      `communities/canonical-community/members/${ids.member}`,
+      `gubs/canonical-gub/members/${ids.member}`,
+    ]);
+  });
+
+  test('membership discovery cannot list another user or all memberships', async () => {
+    await env.withSecurityRulesDisabled(async (context) => {
+      await setDoc(
+        doc(context.firestore(), 'gubs', 'g1', 'members', ids.second),
+        member(ids.second),
+      );
+    });
+
+    await assertFails(getDocs(query(
+      collectionGroup(db(ids.member), 'members'),
+      where('uid', '==', ids.second),
+    )));
+    await assertFails(getDocs(collectionGroup(db(ids.member), 'members')));
   });
 });

@@ -1,11 +1,11 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 
 import '../models/account_deletion_model.dart';
 
 abstract interface class AccountDeletionRepositoryContract {
   Future<AccountDeletionPreflight> loadPreflight(String userId);
-  Future<List<String>> loadPrivateMembershipIds(String userId);
-  Future<List<String>> loadCommunityMembershipIds(String userId);
+  Future<AccountDeletionMemberships> loadMemberships(String userId);
   Future<void> anonymizeSharedContent({
     required String userId,
     required List<String> privateGubIds,
@@ -25,6 +25,52 @@ class AccountDeletionRepository implements AccountDeletionRepositoryContract {
   final FirebaseFirestore _firestore;
   static const deletedUserId = '__deleted_user__';
   static const deletedUserName = 'Deleted user';
+
+  @visibleForTesting
+  static AccountDeletionMemberships mergeMembershipIds({
+    required String userId,
+    required Iterable<String> privateCopyIds,
+    required Iterable<String> communityCopyIds,
+    required Iterable<String> canonicalMembershipPaths,
+  }) {
+    final privateIds = privateCopyIds.toSet();
+    final communityIds = communityCopyIds.toSet();
+    for (final path in canonicalMembershipPaths) {
+      final segments = path.split('/');
+      if (segments.length != 4 ||
+          segments[2] != 'members' ||
+          segments[3] != userId) {
+        continue;
+      }
+      if (segments[0] == 'gubs') {
+        privateIds.add(segments[1]);
+      } else if (segments[0] == 'communities') {
+        communityIds.add(segments[1]);
+      }
+    }
+    final sortedPrivateIds = privateIds.toList()..sort();
+    final sortedCommunityIds = communityIds.toList()..sort();
+    return AccountDeletionMemberships(
+      privateGubIds: sortedPrivateIds,
+      communityIds: sortedCommunityIds,
+    );
+  }
+
+  @visibleForTesting
+  static List<Object?> anonymizeOrganizedEventAssignmentsData(
+    List<Object?> assignments,
+    String userId,
+  ) => assignments
+      .map<Object?>((assignment) {
+        if (assignment is! Map || assignment['userId'] != userId) {
+          return assignment;
+        }
+        final updated = Map<String, Object?>.from(assignment);
+        updated['userId'] = deletedUserId;
+        updated['userName'] = deletedUserName;
+        return updated;
+      })
+      .toList(growable: false);
 
   @override
   Future<AccountDeletionPreflight> loadPreflight(String userId) async {
@@ -59,20 +105,29 @@ class AccountDeletionRepository implements AccountDeletionRepositoryContract {
   }
 
   @override
-  Future<List<String>> loadPrivateMembershipIds(String userId) =>
-      _membershipIds(userId, 'gubs');
-
-  @override
-  Future<List<String>> loadCommunityMembershipIds(String userId) =>
-      _membershipIds(userId, 'communities');
-
-  Future<List<String>> _membershipIds(String userId, String collection) async {
-    final snapshot = await _firestore
-        .collection('users')
-        .doc(userId)
-        .collection(collection)
-        .get(const GetOptions(source: Source.server));
-    return snapshot.docs.map((document) => document.id).toList(growable: false);
+  Future<AccountDeletionMemberships> loadMemberships(String userId) async {
+    final user = _firestore.collection('users').doc(userId);
+    final results = await Future.wait([
+      user.collection('gubs').get(const GetOptions(source: Source.server)),
+      user
+          .collection('communities')
+          .get(const GetOptions(source: Source.server)),
+      _firestore
+          .collectionGroup('members')
+          .where('uid', isEqualTo: userId)
+          .get(const GetOptions(source: Source.server)),
+    ]);
+    return mergeMembershipIds(
+      userId: userId,
+      privateCopyIds: results[0].docs.map((document) => document.id),
+      communityCopyIds: results[1].docs.map((document) => document.id),
+      canonicalMembershipPaths: results[2].docs
+          .where(
+            (document) =>
+                document.id == userId && document.data()['uid'] == userId,
+          )
+          .map((document) => document.reference.path),
+    );
   }
 
   @override
@@ -119,6 +174,10 @@ class AccountDeletionRepository implements AccountDeletionRepositoryContract {
           ('createdBy', 'createdByName'),
           ('originUserId', 'sourceAuthorName'),
         ],
+      );
+      await _anonymizeOrganizedEventAssignments(
+        gub.collection('organizedEvents'),
+        userId,
       );
       await _anonymizeIdentityPairs(gub.collection('proposals'), userId, const [
         ('creatorId', 'creatorName'),
@@ -177,6 +236,30 @@ class AccountDeletionRepository implements AccountDeletionRepositoryContract {
         );
       }
       await _anonymizeQuery(query, (_) => _identityUpdate(idField, nameField));
+    }
+  }
+
+  Future<void> _anonymizeOrganizedEventAssignments(
+    CollectionReference<Map<String, dynamic>> collection,
+    String userId,
+  ) async {
+    final snapshot = await collection.get(
+      const GetOptions(source: Source.server),
+    );
+    for (final document in snapshot.docs) {
+      final assignments = document.data()['assignments'];
+      if (assignments is! List) continue;
+
+      final changed = assignments.any(
+        (assignment) => assignment is Map && assignment['userId'] == userId,
+      );
+      final updatedAssignments = anonymizeOrganizedEventAssignmentsData(
+        assignments.cast<Object?>(),
+        userId,
+      );
+      if (changed) {
+        await document.reference.update({'assignments': updatedAssignments});
+      }
     }
   }
 

@@ -11,11 +11,13 @@ import 'create_proposal_screen.dart';
 class ProposalsScreen extends StatelessWidget {
   final String gubId;
   final int memberCount;
+  final Stream<List<ProposalModel>>? proposals;
 
   const ProposalsScreen({
     super.key,
     required this.gubId,
     required this.memberCount,
+    this.proposals,
   });
 
   @override
@@ -53,7 +55,7 @@ class ProposalsScreen extends StatelessWidget {
           },
         ),
         body: StreamBuilder<List<ProposalModel>>(
-          stream: ProposalService.instance.proposalsStream(gubId),
+          stream: proposals ?? ProposalService.instance.proposalsStream(gubId),
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
               return const Center(child: CircularProgressIndicator());

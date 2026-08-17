@@ -42,6 +42,26 @@ void main() {
   }
 
   group('Private Gub notification unread membership boundary', () {
+    test('Board notifications stay outside the general notification flow', () {
+      final boardNotification = NotificationModel(
+        notificationId: 'board',
+        title: 'New Board post',
+        body: 'A post',
+        type: 'board_post',
+        senderId: otherMemberId,
+        senderName: 'Other member',
+        createdAt: at(7),
+        readBy: const [],
+        data: const {},
+      );
+
+      expect(
+        NotificationRepository.isGeneralNotification(boardNotification),
+        isFalse,
+      );
+      expect(isUnread(boardNotification, membershipBoundary: rejoin), isFalse);
+    });
+
     test('a new member has no unread notifications from before joining', () {
       expect(
         isUnread(

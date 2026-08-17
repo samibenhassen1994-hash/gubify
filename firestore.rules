@@ -254,6 +254,50 @@ service cloud.firestore {
           || validIdentityAnonymization(resource.data.originUserId, resource.data.sourceAuthorName,
             request.resource.data.originUserId, request.resource.data.sourceAuthorName));
     }
+    function validOrganizedAssignmentIdentityAnonymization(before, after) {
+      let changed = after.diff(before).affectedKeys();
+      return changed.hasOnly(['userId','userName'])
+        && changed.hasAny(['userId'])
+        && before.userId == request.auth.uid
+        && after.userId == deletedUserId()
+        && after.userName == deletedUserName();
+    }
+    function validOrganizedAssignmentAnonymizationAt(index) {
+      return resource.data.assignments.size() <= index
+        || request.resource.data.assignments[index] == resource.data.assignments[index]
+        || validOrganizedAssignmentIdentityAnonymization(
+          resource.data.assignments[index], request.resource.data.assignments[index]);
+    }
+    function validOrganizedAssignmentsAnonymization(id) {
+      let changed = request.resource.data.diff(resource.data).affectedKeys();
+      return isGubMember(id) && gubActive(id)
+        && changed.hasOnly(['assignments'])
+        && changed.hasAny(['assignments'])
+        && resource.data.assignments is list
+        && request.resource.data.assignments is list
+        && request.resource.data.assignments.size() == resource.data.assignments.size()
+        && request.resource.data.assignments.size() <= 20
+        && validOrganizedAssignmentAnonymizationAt(0)
+        && validOrganizedAssignmentAnonymizationAt(1)
+        && validOrganizedAssignmentAnonymizationAt(2)
+        && validOrganizedAssignmentAnonymizationAt(3)
+        && validOrganizedAssignmentAnonymizationAt(4)
+        && validOrganizedAssignmentAnonymizationAt(5)
+        && validOrganizedAssignmentAnonymizationAt(6)
+        && validOrganizedAssignmentAnonymizationAt(7)
+        && validOrganizedAssignmentAnonymizationAt(8)
+        && validOrganizedAssignmentAnonymizationAt(9)
+        && validOrganizedAssignmentAnonymizationAt(10)
+        && validOrganizedAssignmentAnonymizationAt(11)
+        && validOrganizedAssignmentAnonymizationAt(12)
+        && validOrganizedAssignmentAnonymizationAt(13)
+        && validOrganizedAssignmentAnonymizationAt(14)
+        && validOrganizedAssignmentAnonymizationAt(15)
+        && validOrganizedAssignmentAnonymizationAt(16)
+        && validOrganizedAssignmentAnonymizationAt(17)
+        && validOrganizedAssignmentAnonymizationAt(18)
+        && validOrganizedAssignmentAnonymizationAt(19);
+    }
     function validProposalAnonymization(id) {
       let changed = request.resource.data.diff(resource.data).affectedKeys();
       return isGubMember(id) && gubActive(id)
@@ -858,6 +902,10 @@ service cloud.firestore {
       }
     }
 
+    match /{path=**}/members/{memberId} {
+      allow list: if signedIn() && resource.data.uid == request.auth.uid;
+    }
+
     match /inviteTokens/{canonicalCode} {
       allow get: if signedIn() && validInviteTokenCode(canonicalCode);
       allow list: if false;
@@ -1023,7 +1071,8 @@ service cloud.firestore {
         allow read: if isGubMember(id) || gubDeletingOwner(id);
         allow create: if isGubMember(id) && gubActive(id) && validOrganizedEventCreate(id, eventId);
         allow update: if validOrganizedCompletion(id)
-          || validOrganizedEventAnonymization(id);
+          || validOrganizedEventAnonymization(id)
+          || validOrganizedAssignmentsAnonymization(id);
         allow delete: if validHardDeleteWithCooldown(id, resource.data.createdBy, 'organizedEvent', eventId)
           || gubDeletingOwner(id);
       }

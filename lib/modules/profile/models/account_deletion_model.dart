@@ -17,6 +17,16 @@ class AccountDeletionPreflight {
   bool get isBlocked => privateGubs.isNotEmpty || communities.isNotEmpty;
 }
 
+class AccountDeletionMemberships {
+  const AccountDeletionMemberships({
+    this.privateGubIds = const [],
+    this.communityIds = const [],
+  });
+
+  final List<String> privateGubIds;
+  final List<String> communityIds;
+}
+
 enum AccountDeletionReauthentication { none, password, google }
 
 enum AccountDeletionStatus {

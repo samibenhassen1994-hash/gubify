@@ -82,11 +82,36 @@ void main() {
     expect(await service.deleteCurrentAccountAuthUser(), isTrue);
     expect(deletion.deleteCalls, 2);
   });
+
+  test(
+    'pure anonymous Auth user can be deleted without reauthentication',
+    () async {
+      final deletion = _DeletionGateway();
+      final service = _service(
+        deletion: deletion,
+        anonymous: true,
+        providerIds: const [],
+      );
+
+      expect(
+        await service.reauthenticateForDeletion(),
+        AccountDeletionReauthStatus.success,
+      );
+      expect(deletion.reauthenticateTokens, isEmpty);
+      expect(await service.deleteCurrentAccountAuthUser(), isTrue);
+      expect(deletion.deleteCalls, 1);
+    },
+  );
 }
 
-AuthService _service({_GoogleProvider? google, _DeletionGateway? deletion}) {
+AuthService _service({
+  _GoogleProvider? google,
+  _DeletionGateway? deletion,
+  bool anonymous = false,
+  List<String> providerIds = const ['google.com'],
+}) {
   return AuthService(
-    authLinkGateway: _LinkGateway(),
+    authLinkGateway: _LinkGateway(anonymous, providerIds),
     authVerificationGateway: _VerificationGateway(),
     googleCredentialProvider: google ?? _GoogleProvider(),
     accountDeletionAuthGateway: deletion ?? _DeletionGateway(),
@@ -138,14 +163,16 @@ class _DeletionGateway implements AccountDeletionAuthGateway {
 }
 
 class _LinkGateway implements AuthLinkGateway {
+  const _LinkGateway(this.isCurrentUserAnonymous, this.providerIds);
+
   @override
   String? get currentUserId => 'uid';
 
   @override
-  bool get isCurrentUserAnonymous => false;
+  final bool isCurrentUserAnonymous;
 
   @override
-  List<String> get providerIds => const ['google.com'];
+  final List<String> providerIds;
 
   @override
   Future<AuthLinkState> linkEmailPassword({

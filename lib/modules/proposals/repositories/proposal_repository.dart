@@ -18,6 +18,12 @@ class ProposalRepository {
     return _firestore.collection("gubs").doc(gubId).collection("proposals");
   }
 
+  static String voteDocumentPath({
+    required String gubId,
+    required String proposalId,
+    required String uid,
+  }) => 'gubs/$gubId/proposals/$proposalId/votes/$uid';
+
   Future<void> createProposal(ProposalModel proposal) async {
     await proposalsCollection(
       proposal.gubId,
@@ -211,9 +217,9 @@ class ProposalRepository {
     required String vote,
   }) async {
     final gubReference = _firestore.collection('gubs').doc(gubId);
-    final voteReference = proposalsCollection(
-      gubId,
-    ).doc(proposalId).collection('votes').doc(uid);
+    final voteReference = _firestore.doc(
+      voteDocumentPath(gubId: gubId, proposalId: proposalId, uid: uid),
+    );
     await _firestore.runTransaction((transaction) async {
       final gub = await transaction.get(gubReference);
       if (!gub.exists || gub.data()?['deletionStatus'] == 'deleting') {
