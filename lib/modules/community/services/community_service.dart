@@ -59,8 +59,9 @@ class CommunityService {
 
     try {
       final nameKey = CommunityNameKey.fromName(normalizedName);
+      final legacyNameKey = CommunityNameKey.legacyFromName(normalizedName);
       final existingCommunityId = await CommunityNameRegistryRepository.instance
-          .findExistingCommunityId(nameKey);
+          .findExistingCommunityIdForKeys([nameKey, legacyNameKey]);
       if (existingCommunityId != null) {
         throw CommunityNameAlreadyExistsException(existingCommunityId);
       }
@@ -143,7 +144,7 @@ class CommunityService {
     final user = _auth.currentUser;
     if (user == null) {
       return Stream.error(
-        StateError("You must be signed in to view a community."),
+        StateError("You must be signed in to view communities."),
       );
     }
     final normalizedId = communityId.trim();
