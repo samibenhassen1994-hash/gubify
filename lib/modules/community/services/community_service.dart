@@ -5,7 +5,10 @@ import '../../../repositories/user_repository.dart';
 import '../../../services/app_sound_service.dart';
 import '../models/community_access_request_model.dart';
 import '../models/community_model.dart';
+import '../models/community_name_conflict.dart';
+import '../repositories/community_name_registry_repository.dart';
 import '../repositories/community_repository.dart';
+import '../utils/community_name_key.dart';
 
 class CommunityService {
   CommunityService._();
@@ -55,6 +58,13 @@ class CommunityService {
     }
 
     try {
+      final nameKey = CommunityNameKey.fromName(normalizedName);
+      final existingCommunityId = await CommunityNameRegistryRepository.instance
+          .findExistingCommunityId(nameKey);
+      if (existingCommunityId != null) {
+        throw CommunityNameAlreadyExistsException(existingCommunityId);
+      }
+
       final userData = await UserRepository.instance.getUser(user.uid);
       final storedDisplayName = userData?["displayName"];
       final displayName =
@@ -84,6 +94,8 @@ class CommunityService {
       }
       await AppSoundService.instance.playCreated();
       return community;
+    } on CommunityNameAlreadyExistsException {
+      rethrow;
     } on FirebaseException catch (error) {
       throw Exception(_firebaseErrorMessage(error));
     }
