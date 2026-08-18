@@ -61,6 +61,7 @@ class CommunityModel {
   final String language;
   final String description;
   final String accessMode;
+  final String? nameKey;
   final String? slug;
   final Timestamp? slugAssignedAt;
   final String? deletionStatus;
@@ -77,6 +78,7 @@ class CommunityModel {
     required this.language,
     required this.description,
     required this.accessMode,
+    this.nameKey,
     this.slug,
     this.slugAssignedAt,
     this.deletionStatus,
@@ -108,6 +110,7 @@ class CommunityModel {
       ),
       description: (data["description"] as String? ?? "").trim(),
       accessMode: normalizeAccessMode(data["accessMode"]),
+      nameKey: _optionalString(data['nameKey']),
       slug: _optionalString(data['slug']),
       slugAssignedAt: data['slugAssignedAt'] as Timestamp?,
       deletionStatus: data['deletionStatus'] as String?,
@@ -127,6 +130,7 @@ class CommunityModel {
       "language": language,
       "description": description,
       "accessMode": accessMode,
+      if (nameKey != null) "nameKey": nameKey,
       if (slug != null) "slug": slug,
       if (slugAssignedAt != null) "slugAssignedAt": slugAssignedAt,
     };
@@ -144,6 +148,7 @@ class CommunityModel {
       language: language,
       description: description,
       accessMode: accessMode,
+      nameKey: nameKey,
       slug: slug,
       slugAssignedAt: slugAssignedAt,
       deletionStatus: deletionStatus,

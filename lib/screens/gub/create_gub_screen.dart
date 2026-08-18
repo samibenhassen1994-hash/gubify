@@ -3,7 +3,9 @@ import 'package:flutter/services.dart';
 
 import '../../config/app_limits.dart';
 import '../../modules/community/models/community_model.dart';
+import '../../modules/community/models/community_name_conflict.dart';
 import '../../modules/community/screens/gub_community_home_screen.dart';
+import '../../modules/community/screens/community_public_details_screen.dart';
 import '../../modules/community/services/community_service.dart';
 import '../../modules/community/widgets/community_search_picker.dart';
 import '../../services/gub_service.dart';
@@ -311,6 +313,9 @@ class _CreateGubScreenState extends State<CreateGubScreen> {
         MaterialPageRoute(builder: (_) => GubScreen(gubId: gubId)),
         (_) => false,
       );
+    } on CommunityNameAlreadyExistsException catch (error) {
+      if (!mounted) return;
+      await _showCommunityAlreadyExistsDialog(error.communityId);
     } catch (e) {
       if (!mounted) return;
 
@@ -322,6 +327,37 @@ class _CreateGubScreenState extends State<CreateGubScreen> {
         setState(() => _loading = false);
       }
     }
+  }
+
+  Future<void> _showCommunityAlreadyExistsDialog(String communityId) async {
+    final shouldView = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Community already exists'),
+        content: const Text(
+          'A Community with this name already exists. You can view it and join it instead.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: communityId.isEmpty
+                ? null
+                : () => Navigator.pop(dialogContext, true),
+            child: const Text('View Community'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || shouldView != true || communityId.isEmpty) return;
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => CommunityPublicDetailsScreen(communityId: communityId),
+      ),
+    );
   }
 
   void _goBack() {

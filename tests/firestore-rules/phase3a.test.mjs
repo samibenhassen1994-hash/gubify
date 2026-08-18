@@ -90,6 +90,7 @@ const communityRoot = (
   language: 'English',
   description: '',
   accessMode: 'open',
+  nameKey: 'test community',
   slug: 'test-community',
   slugAssignedAt: new Date('2026-01-01T00:00:00Z'),
   ...overrides,
@@ -362,6 +363,12 @@ function createCommunityBatch({
       createdAt: serverTimestamp(),
     });
   }
+  batch.set(doc(clientDb, 'communityNames', rootData.nameKey), {
+    nameKey: rootData.nameKey,
+    communityId: id,
+    ownerId,
+    createdAt: serverTimestamp(),
+  });
   if (includePublicProjection) {
     batch.set(doc(clientDb, 'communityPublic', rootData.slug), {
       communityId: id,

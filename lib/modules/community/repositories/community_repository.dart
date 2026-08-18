@@ -5,6 +5,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 import '../models/community_access_request_model.dart';
 import '../models/community_model.dart';
+import '../models/community_name_conflict.dart';
+import '../utils/community_name_key.dart';
 import '../utils/community_slug.dart';
 
 class CommunityRepository {
@@ -39,6 +41,9 @@ class CommunityRepository {
   CollectionReference<Map<String, dynamic>> get _communityPublic =>
       _firestore.collection('communityPublic');
 
+  CollectionReference<Map<String, dynamic>> get _communityNames =>
+      _firestore.collection('communityNames');
+
   Future<CommunityModel?> createCommunity({
     required String name,
     required String ownerId,
@@ -60,6 +65,7 @@ class CommunityRepository {
         ? null
         : legacyOwnedSnapshot.docs.first;
     final baseSlug = CommunitySlug.fromName(name);
+    final nameKey = CommunityNameKey.fromName(name);
 
     for (var sequence = 1; sequence <= 100; sequence++) {
       final slug = CommunitySlug.withSuffix(baseSlug, sequence);
@@ -74,6 +80,7 @@ class CommunityRepository {
           description: description,
           accessMode: accessMode,
           slug: slug,
+          nameKey: nameKey,
           ownershipReference: ownershipReference,
           legacyOwnedCommunity: legacyOwnedCommunity,
         );
@@ -94,6 +101,7 @@ class CommunityRepository {
     required String description,
     required String accessMode,
     required String slug,
+    required String nameKey,
     required DocumentReference<Map<String, dynamic>> ownershipReference,
     required QueryDocumentSnapshot<Map<String, dynamic>>? legacyOwnedCommunity,
   }) async {
@@ -111,6 +119,7 @@ class CommunityRepository {
       language: language,
       description: description,
       accessMode: accessMode,
+      nameKey: nameKey,
       slug: slug,
       slugAssignedAt: localCreatedAt,
     );
@@ -118,6 +127,7 @@ class CommunityRepository {
       ..['createdAt'] = FieldValue.serverTimestamp()
       ..['slugAssignedAt'] = FieldValue.serverTimestamp();
     final slugReference = _communitySlugs.doc(slug);
+    final nameReference = _communityNames.doc(nameKey);
     final publicReference = _communityPublic.doc(slug);
     final ownerMemberReference = communityReference
         .collection('members')
@@ -143,8 +153,22 @@ class CommunityRepository {
 
       final slugSnapshot = await transaction.get(slugReference);
       if (slugSnapshot.exists) throw const _CommunitySlugCollision();
+      final nameSnapshot = await transaction.get(nameReference);
+      if (nameSnapshot.exists) {
+        final existingCommunityId = nameSnapshot.data()?['communityId'];
+        if (existingCommunityId is String && existingCommunityId.isNotEmpty) {
+          throw CommunityNameAlreadyExistsException(existingCommunityId);
+        }
+        throw const CommunityNameAlreadyExistsException('');
+      }
 
       transaction.set(communityReference, communityData);
+      transaction.set(nameReference, {
+        'nameKey': nameKey,
+        'communityId': communityId,
+        'ownerId': ownerId,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
       transaction.set(slugReference, {
         'slug': slug,
         'communityId': communityId,
@@ -769,9 +793,14 @@ class CommunityRepository {
       final communitySnapshot = await transaction.get(communityReference);
       final ownershipSnapshot = await transaction.get(ownershipReference);
       final slug = _nonEmptyString(communitySnapshot.data()?['slug']);
+      final nameKey = _nonEmptyString(communitySnapshot.data()?['nameKey']);
       final slugReference = slug == null ? null : _communitySlugs.doc(slug);
+      final nameReference = nameKey == null
+          ? null
+          : _communityNames.doc(nameKey);
       final publicReference = slug == null ? null : _communityPublic.doc(slug);
       if (slugReference != null) await transaction.get(slugReference);
+      if (nameReference != null) await transaction.get(nameReference);
       if (publicReference != null) await transaction.get(publicReference);
       if (!communitySnapshot.exists) {
         throw const CommunityDeletionException(
@@ -793,6 +822,7 @@ class CommunityRepository {
         transaction.delete(ownershipReference);
       }
       if (slugReference != null) transaction.delete(slugReference);
+      if (nameReference != null) transaction.delete(nameReference);
       if (publicReference != null) transaction.delete(publicReference);
       transaction.delete(communityReference);
     });

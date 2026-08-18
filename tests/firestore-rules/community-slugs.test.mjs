@@ -33,9 +33,12 @@ beforeEach(async () => env.clearFirestore());
 function createCommunity({
   actor = ids.owner,
   communityId = 'c1',
+  name = 'Football Italia',
+  nameKey = 'football italia',
   slug = 'football-italia',
   ownerId = actor,
   registryOverrides = {},
+  nameRegistryOverrides = {},
   publicOverrides = {},
   includeRegistry = true,
   includePublic = true,
@@ -44,7 +47,7 @@ function createCommunity({
   const batch = writeBatch(firestore);
   batch.set(doc(firestore, 'communities', communityId), {
     communityId,
-    name: 'Football Italia',
+    name,
     ownerId,
     memberCount: 1,
     visibility: 'public',
@@ -53,6 +56,7 @@ function createCommunity({
     language: 'Italian',
     description: 'Italian football fans.',
     accessMode: 'open',
+    nameKey,
     slug,
     slugAssignedAt: serverTimestamp(),
   });
@@ -65,11 +69,18 @@ function createCommunity({
       ...registryOverrides,
     });
   }
+  batch.set(doc(firestore, 'communityNames', nameKey), {
+    nameKey,
+    communityId,
+    ownerId,
+    createdAt: serverTimestamp(),
+    ...nameRegistryOverrides,
+  });
   if (includePublic) {
     batch.set(doc(firestore, 'communityPublic', slug), {
       communityId,
       slug,
-      name: 'Football Italia',
+      name,
       description: 'Italian football fans.',
       language: 'Italian',
       accessMode: 'open',
@@ -87,7 +98,7 @@ function createCommunity({
   });
   batch.set(doc(firestore, 'users', actor, 'communities', communityId), {
     communityId,
-    name: 'Football Italia',
+    name,
     ownerId,
     memberCount: 1,
     visibility: 'public',
@@ -114,6 +125,41 @@ describe('Community slugs and safe public projections', () => {
     });
     await assertFails(createCommunity());
   });
+
+  test('the same normalized name cannot be reserved twice', async () => {
+    await assertSucceeds(createCommunity());
+    await assertFails(
+      createCommunity({
+        actor: ids.outsider,
+        ownerId: ids.outsider,
+        communityId: 'c2',
+        slug: 'football-italia-fans',
+        name: '  FOOTBALL   ITALIA ',
+        nameKey: 'football italia',
+      }),
+    );
+  });
+
+  test('similar but different names remain valid', async () => {
+    await assertSucceeds(createCommunity());
+    await assertSucceeds(
+      createCommunity({
+        actor: ids.outsider,
+        ownerId: ids.outsider,
+        communityId: 'c2',
+        slug: 'football-italia-fans',
+        name: 'Football Italia Fans',
+        nameKey: 'football italia fans',
+      }),
+    );
+  });
+
+  test('a forged Community name registry is rejected', () =>
+    assertFails(
+      createCommunity({
+        nameRegistryOverrides: { communityId: 'other-community' },
+      }),
+    ));
 
   test('a non-owner cannot reserve a slug for another Community owner', () =>
     assertFails(createCommunity({ actor: ids.outsider, ownerId: ids.owner })));

@@ -5,7 +5,7 @@ class CommunitySlug {
   static const int maxLength = 60;
 
   static String fromName(String name) {
-    final normalized = _removeAccents(name.trim().toLowerCase());
+    final normalized = removeAccents(name.trim().toLowerCase());
     final separated = normalized.replaceAll(RegExp(r'[^a-z0-9]+'), '-');
     final collapsed = separated
         .replaceAll(RegExp(r'-+'), '-')
@@ -24,7 +24,7 @@ class CommunitySlug {
     return '${truncatedBase.isEmpty ? 'community' : truncatedBase}$suffix';
   }
 
-  static String _removeAccents(String value) {
+  static String removeAccents(String value) {
     const replacements = {
       'à': 'a',
       'á': 'a',

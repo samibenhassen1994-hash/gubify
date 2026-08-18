@@ -708,6 +708,7 @@ service cloud.firestore {
     function ownershipPath(uid) { return /databases/$(database)/documents/communityOwnership/$(uid); }
     function communitySlugPath(slug) { return /databases/$(database)/documents/communitySlugs/$(slug); }
     function communityPublicPath(slug) { return /databases/$(database)/documents/communityPublic/$(slug); }
+    function communityNamePath(nameKey) { return /databases/$(database)/documents/communityNames/$(nameKey); }
     function validCommunitySlug(slug) {
       return slug is string && slug.size() >= 1 && slug.size() <= 60
         && slug.matches('^[a-z0-9]+(-[a-z0-9]+)*$');
@@ -730,7 +731,7 @@ service cloud.firestore {
       let data = request.resource.data;
       return data.keys().hasOnly([
           'communityId','name','ownerId','memberCount','visibility','createdAt',
-          'type','language','description','accessMode','slug','slugAssignedAt'
+          'type','language','description','accessMode','nameKey','slug','slugAssignedAt'
         ])
         && data.communityId == id
         && validText(data.name, 3, 30)
@@ -751,6 +752,7 @@ service cloud.firestore {
         && data.description is string
         && data.description.size() <= 280
         && data.accessMode in ['open','approval']
+        && data.nameKey is string && data.nameKey.size() >= 1 && data.nameKey.size() <= 60
         && validCommunitySlug(data.slug)
         && data.slugAssignedAt == request.time;
     }
@@ -766,6 +768,20 @@ service cloud.firestore {
         && request.resource.data.createdAt == request.time
         && root.communityId == request.resource.data.communityId
         && root.slug == slug
+        && root.ownerId == request.auth.uid;
+    }
+    function validCommunityNameRegistryCreate(nameKey) {
+      let root = communityAfter(request.resource.data.communityId).data;
+      return request.resource.data.keys().hasOnly([
+          'nameKey','communityId','ownerId','createdAt'
+        ])
+        && nameKey is string && nameKey.size() >= 1 && nameKey.size() <= 60
+        && request.resource.data.nameKey == nameKey
+        && request.resource.data.communityId is string
+        && request.resource.data.ownerId == request.auth.uid
+        && request.resource.data.createdAt == request.time
+        && root.communityId == request.resource.data.communityId
+        && root.nameKey == nameKey
         && root.ownerId == request.auth.uid;
     }
     function validCommunityPublicCreate(slug) {
@@ -793,8 +809,10 @@ service cloud.firestore {
     function validCommunityRootSlugProjection(id) {
       let root = communityAfter(id).data;
       return existsAfter(communitySlugPath(root.slug))
+        && existsAfter(communityNamePath(root.nameKey))
         && existsAfter(communityPublicPath(root.slug))
         && getAfter(communitySlugPath(root.slug)).data.communityId == id
+        && getAfter(communityNamePath(root.nameKey)).data.communityId == id
         && getAfter(communityPublicPath(root.slug)).data.communityId == id;
     }
     function validCommunityCopyData(data, id, uid, role) {
@@ -1398,6 +1416,15 @@ service cloud.firestore {
       allow update: if false;
       allow delete: if communityDeletingOwner(resource.data.communityId)
         && resource.data.slug == slug;
+    }
+    match /communityNames/{nameKey} {
+      allow get: if signedIn();
+      allow list: if false;
+      allow create: if signedIn() && !exists(communityNamePath(nameKey))
+        && validCommunityNameRegistryCreate(nameKey);
+      allow update: if false;
+      allow delete: if communityDeletingOwner(resource.data.communityId)
+        && resource.data.nameKey == nameKey;
     }
     match /communityPublic/{slug} {
       allow get: if true;
