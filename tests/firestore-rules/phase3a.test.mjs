@@ -90,6 +90,8 @@ const communityRoot = (
   language: 'English',
   description: '',
   accessMode: 'open',
+  slug: 'test-community',
+  slugAssignedAt: new Date('2026-01-01T00:00:00Z'),
   ...overrides,
 });
 const communityCopy = (id, uid, role = 'member', overrides = {}) => ({
@@ -341,14 +343,37 @@ function createCommunityBatch({
   includeMember = true,
   includeCopy = true,
   includeMarker = true,
+  includeSlugRegistry = true,
+  includePublicProjection = true,
 } = {}) {
   const clientDb = db(actor);
   const batch = writeBatch(clientDb);
   const rootData = communityRoot(id, ownerId, {
     createdAt: serverTimestamp(),
+    slugAssignedAt: serverTimestamp(),
     ...rootOverrides,
   });
   batch.set(doc(clientDb, 'communities', id), rootData);
+  if (includeSlugRegistry) {
+    batch.set(doc(clientDb, 'communitySlugs', rootData.slug), {
+      slug: rootData.slug,
+      communityId: id,
+      ownerId,
+      createdAt: serverTimestamp(),
+    });
+  }
+  if (includePublicProjection) {
+    batch.set(doc(clientDb, 'communityPublic', rootData.slug), {
+      communityId: id,
+      slug: rootData.slug,
+      name: rootData.name,
+      description: rootData.description,
+      language: rootData.language,
+      accessMode: rootData.accessMode,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+  }
   if (includeMember) {
     batch.set(
       doc(clientDb, 'communities', id, 'members', memberUid),

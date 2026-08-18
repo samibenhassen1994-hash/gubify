@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 import '../models/community_access_request_model.dart';
 import '../models/community_model.dart';
+import '../utils/community_slug.dart';
 
 class CommunityRepository {
   CommunityRepository._();
@@ -32,6 +33,12 @@ class CommunityRepository {
   CollectionReference<Map<String, dynamic>> get _communities =>
       _firestore.collection("communities");
 
+  CollectionReference<Map<String, dynamic>> get _communitySlugs =>
+      _firestore.collection('communitySlugs');
+
+  CollectionReference<Map<String, dynamic>> get _communityPublic =>
+      _firestore.collection('communityPublic');
+
   Future<CommunityModel?> createCommunity({
     required String name,
     required String ownerId,
@@ -42,8 +49,6 @@ class CommunityRepository {
     required String description,
     required String accessMode,
   }) async {
-    final communityReference = _communities.doc();
-    final communityId = communityReference.id;
     final ownershipReference = _firestore
         .collection("communityOwnership")
         .doc(ownerId);
@@ -54,6 +59,46 @@ class CommunityRepository {
     final legacyOwnedCommunity = legacyOwnedSnapshot.docs.isEmpty
         ? null
         : legacyOwnedSnapshot.docs.first;
+    final baseSlug = CommunitySlug.fromName(name);
+
+    for (var sequence = 1; sequence <= 100; sequence++) {
+      final slug = CommunitySlug.withSuffix(baseSlug, sequence);
+      try {
+        return await _createCommunityWithSlug(
+          name: name,
+          ownerId: ownerId,
+          displayName: displayName,
+          photoUrl: photoUrl,
+          type: type,
+          language: language,
+          description: description,
+          accessMode: accessMode,
+          slug: slug,
+          ownershipReference: ownershipReference,
+          legacyOwnedCommunity: legacyOwnedCommunity,
+        );
+      } on _CommunitySlugCollision {
+        continue;
+      }
+    }
+    throw StateError('Unable to reserve a unique Community URL.');
+  }
+
+  Future<CommunityModel?> _createCommunityWithSlug({
+    required String name,
+    required String ownerId,
+    required String displayName,
+    required String? photoUrl,
+    required String type,
+    required String language,
+    required String description,
+    required String accessMode,
+    required String slug,
+    required DocumentReference<Map<String, dynamic>> ownershipReference,
+    required QueryDocumentSnapshot<Map<String, dynamic>>? legacyOwnedCommunity,
+  }) async {
+    final communityReference = _communities.doc();
+    final communityId = communityReference.id;
     final localCreatedAt = Timestamp.now();
     final community = CommunityModel(
       communityId: communityId,
@@ -66,17 +111,21 @@ class CommunityRepository {
       language: language,
       description: description,
       accessMode: accessMode,
+      slug: slug,
+      slugAssignedAt: localCreatedAt,
     );
     final communityData = community.toFirestore()
-      ..["createdAt"] = FieldValue.serverTimestamp();
-
+      ..['createdAt'] = FieldValue.serverTimestamp()
+      ..['slugAssignedAt'] = FieldValue.serverTimestamp();
+    final slugReference = _communitySlugs.doc(slug);
+    final publicReference = _communityPublic.doc(slug);
     final ownerMemberReference = communityReference
-        .collection("members")
+        .collection('members')
         .doc(ownerId);
     final userCommunityReference = _firestore
-        .collection("users")
+        .collection('users')
         .doc(ownerId)
-        .collection("communities")
+        .collection('communities')
         .doc(communityId);
 
     return _firestore.runTransaction<CommunityModel?>((transaction) async {
@@ -92,7 +141,26 @@ class CommunityRepository {
         return null;
       }
 
+      final slugSnapshot = await transaction.get(slugReference);
+      if (slugSnapshot.exists) throw const _CommunitySlugCollision();
+
       transaction.set(communityReference, communityData);
+      transaction.set(slugReference, {
+        'slug': slug,
+        'communityId': communityId,
+        'ownerId': ownerId,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+      transaction.set(publicReference, {
+        'communityId': communityId,
+        'slug': slug,
+        'name': name,
+        'description': description,
+        'language': language,
+        'accessMode': accessMode,
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
       transaction.set(ownerMemberReference, {
         "uid": ownerId,
         "displayName": displayName,
@@ -700,6 +768,11 @@ class CommunityRepository {
     return _firestore.runTransaction((transaction) async {
       final communitySnapshot = await transaction.get(communityReference);
       final ownershipSnapshot = await transaction.get(ownershipReference);
+      final slug = _nonEmptyString(communitySnapshot.data()?['slug']);
+      final slugReference = slug == null ? null : _communitySlugs.doc(slug);
+      final publicReference = slug == null ? null : _communityPublic.doc(slug);
+      if (slugReference != null) await transaction.get(slugReference);
+      if (publicReference != null) await transaction.get(publicReference);
       if (!communitySnapshot.exists) {
         throw const CommunityDeletionException(
           "This Community no longer exists.",
@@ -719,6 +792,8 @@ class CommunityRepository {
       if (ownershipSnapshot.data()?["communityId"] == communityId) {
         transaction.delete(ownershipReference);
       }
+      if (slugReference != null) transaction.delete(slugReference);
+      if (publicReference != null) transaction.delete(publicReference);
       transaction.delete(communityReference);
     });
   }
@@ -1320,4 +1395,8 @@ class CommunityDeletionException implements Exception {
 
   @override
   String toString() => message;
+}
+
+class _CommunitySlugCollision implements Exception {
+  const _CommunitySlugCollision();
 }

@@ -61,6 +61,8 @@ class CommunityModel {
   final String language;
   final String description;
   final String accessMode;
+  final String? slug;
+  final Timestamp? slugAssignedAt;
   final String? deletionStatus;
   final String? deletionRequestedBy;
 
@@ -75,6 +77,8 @@ class CommunityModel {
     required this.language,
     required this.description,
     required this.accessMode,
+    this.slug,
+    this.slugAssignedAt,
     this.deletionStatus,
     this.deletionRequestedBy,
   });
@@ -104,6 +108,8 @@ class CommunityModel {
       ),
       description: (data["description"] as String? ?? "").trim(),
       accessMode: normalizeAccessMode(data["accessMode"]),
+      slug: _optionalString(data['slug']),
+      slugAssignedAt: data['slugAssignedAt'] as Timestamp?,
       deletionStatus: data['deletionStatus'] as String?,
       deletionRequestedBy: data['deletionRequestedBy'] as String?,
     );
@@ -121,6 +127,8 @@ class CommunityModel {
       "language": language,
       "description": description,
       "accessMode": accessMode,
+      if (slug != null) "slug": slug,
+      if (slugAssignedAt != null) "slugAssignedAt": slugAssignedAt,
     };
   }
 
@@ -136,6 +144,8 @@ class CommunityModel {
       language: language,
       description: description,
       accessMode: accessMode,
+      slug: slug,
+      slugAssignedAt: slugAssignedAt,
       deletionStatus: deletionStatus,
       deletionRequestedBy: deletionRequestedBy,
     );
@@ -168,6 +178,12 @@ class CommunityModel {
   ) {
     final normalized = value is String ? value.trim() : "";
     return availableValues.contains(normalized) ? normalized : fallback;
+  }
+
+  static String? _optionalString(Object? value) {
+    if (value is! String) return null;
+    final normalized = value.trim();
+    return normalized.isEmpty ? null : normalized;
   }
 }
 
