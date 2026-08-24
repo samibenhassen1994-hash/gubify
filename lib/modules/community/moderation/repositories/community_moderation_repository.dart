@@ -21,29 +21,15 @@ class CommunityModerationRepository {
       final existingReport = await transaction.get(reportReference);
       if (existingReport.exists) return false;
 
-      final existingTarget = await transaction.get(targetReference);
-
       transaction.set(reportReference, report.toFirestore());
-      if (existingTarget.exists) {
-        final reportCount =
-            (existingTarget.data()?['reportCount'] as num?)?.toInt() ?? 0;
-        transaction.update(targetReference, {
-          'targetNameSnapshot': report.moderationTargetNameSnapshot,
-          'reportCount': reportCount + 1,
-          'lastReportedAt': FieldValue.serverTimestamp(),
-          'lastReportId': report.reportId,
-        });
-      } else {
-        transaction.set(targetReference, {
-          'targetType': report.targetType,
-          'targetId': report.targetId,
-          'targetNameSnapshot': report.moderationTargetNameSnapshot,
-          'reportCount': 1,
-          'firstReportedAt': FieldValue.serverTimestamp(),
-          'lastReportedAt': FieldValue.serverTimestamp(),
-          'lastReportId': report.reportId,
-        });
-      }
+      transaction.set(targetReference, {
+        'targetType': report.targetType,
+        'targetId': report.targetId,
+        'targetNameSnapshot': report.moderationTargetNameSnapshot,
+        'reportCount': FieldValue.increment(1),
+        'lastReportedAt': FieldValue.serverTimestamp(),
+        'lastReportId': report.reportId,
+      }, SetOptions(merge: true));
       return true;
     });
   }

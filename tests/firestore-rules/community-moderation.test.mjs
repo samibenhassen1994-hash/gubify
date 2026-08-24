@@ -12,6 +12,7 @@ import {
   doc,
   getDoc,
   getDocs,
+  increment,
   runTransaction,
   serverTimestamp,
   setDoc,
@@ -114,28 +115,25 @@ const submitReport = (uid, report) => {
     const existingReport = await transaction.get(reportReference);
     if (existingReport.exists()) return false;
 
-    const existingTarget = await transaction.get(targetReference);
     transaction.set(reportReference, report);
-    if (existingTarget.exists()) {
-      transaction.update(targetReference, {
-        targetNameSnapshot,
-        reportCount: existingTarget.data().reportCount + 1,
-        lastReportedAt: serverTimestamp(),
-        lastReportId: report.reportId,
-      });
-    } else {
-      transaction.set(targetReference, {
-        targetType: report.targetType,
-        targetId: report.targetId,
-        targetNameSnapshot,
-        reportCount: 1,
-        firstReportedAt: serverTimestamp(),
-        lastReportedAt: serverTimestamp(),
-        lastReportId: report.reportId,
-      });
-    }
+    transaction.set(targetReference, {
+      targetType: report.targetType,
+      targetId: report.targetId,
+      targetNameSnapshot,
+      reportCount: increment(1),
+      lastReportedAt: serverTimestamp(),
+      lastReportId: report.reportId,
+    }, { merge: true });
     return true;
   });
+};
+
+const readTargetSummary = async (targetKey) => {
+  let snapshot;
+  await env.withSecurityRulesDisabled(async (context) => {
+    snapshot = await getDoc(doc(context.firestore(), 'moderationTargets', targetKey));
+  });
+  return snapshot;
 };
 
 describe('central Community moderation reports', () => {
@@ -143,11 +141,19 @@ describe('central Community moderation reports', () => {
     const report = communityReport();
     await assertSucceeds(submitReport(ids.outsider, report));
 
-    const summary = await getDoc(targetRef(ids.outsider, 'community__c1'));
+    const summary = await readTargetSummary('community__c1');
     assert(summary.exists());
     assert.strictEqual(summary.data().reportCount, 1);
     assert.strictEqual(summary.data().targetNameSnapshot, 'Safe Community');
     assert.strictEqual(summary.data().lastReportId, report.reportId);
+    assert.deepEqual(Object.keys(summary.data()).sort(), [
+      'lastReportId',
+      'lastReportedAt',
+      'reportCount',
+      'targetId',
+      'targetNameSnapshot',
+      'targetType',
+    ]);
   });
 
   test('a second reporter increments the same Community summary', async () => {
@@ -155,7 +161,7 @@ describe('central Community moderation reports', () => {
     const report = communityReport(ids.other);
     await assertSucceeds(submitReport(ids.other, report));
 
-    const summary = await getDoc(targetRef(ids.other, 'community__c1'));
+    const summary = await readTargetSummary('community__c1');
     assert.strictEqual(summary.data().reportCount, 2);
     assert.strictEqual(summary.data().lastReportId, report.reportId);
   });
@@ -194,7 +200,7 @@ describe('central Community moderation reports', () => {
     await assertSucceeds(submitReport(ids.member, first));
     await assertSucceeds(submitReport(ids.member, second));
 
-    const summary = await getDoc(targetRef(ids.member, `user__${ids.target}`));
+    const summary = await readTargetSummary(`user__${ids.target}`);
     assert.strictEqual(summary.data().reportCount, 2);
     assert.strictEqual(summary.data().targetId, ids.target);
     assert.strictEqual(summary.data().lastReportId, second.reportId);
@@ -217,8 +223,25 @@ describe('central Community moderation reports', () => {
     await assertFails(updateDoc(reportRef(ids.outsider, id), { status: 'closed' }));
     await assertFails(deleteDoc(reportRef(ids.outsider, id)));
     await assertFails(deleteDoc(targetRef(ids.outsider, 'community__c1')));
+    await assertFails(getDoc(targetRef(ids.outsider, 'community__c1')));
     await assertFails(getDocs(collection(db(ids.outsider), 'moderationReports')));
     await assertFails(getDocs(collection(db(ids.outsider), 'moderationTargets')));
+  });
+
+  test('a report and its summary cannot be written independently', async () => {
+    const report = communityReport();
+    await assertFails(setDoc(reportRef(ids.outsider, report.reportId), report));
+    await env.withSecurityRulesDisabled(async (context) => {
+      const firestore = context.firestore();
+      const savedReport = await getDoc(
+        doc(firestore, 'moderationReports', report.reportId),
+      );
+      const savedSummary = await getDoc(
+        doc(firestore, 'moderationTargets', 'community__c1'),
+      );
+      assert.equal(savedReport.exists(), false);
+      assert.equal(savedSummary.exists(), false);
+    });
   });
 
   test("another user cannot read a reporter's report", async () => {
@@ -232,7 +255,7 @@ describe('central Community moderation reports', () => {
     const id = 'community__c1__outsider';
     await assertSucceeds(submitReport(ids.outsider, communityReport()));
     await assertSucceeds(submitReport(ids.outsider, communityReport(ids.outsider, { details: 'Again' })));
-    const summary = await getDoc(targetRef(ids.outsider, 'community__c1'));
+    const summary = await readTargetSummary('community__c1');
     assert.strictEqual(summary.data().reportCount, 1);
     await assertFails(setDoc(reportRef(ids.outsider, id), communityReport(ids.outsider, { details: 'Again' })));
   });
@@ -254,7 +277,6 @@ describe('central Community moderation reports', () => {
         targetId: 'c1',
         targetNameSnapshot: 'Safe Community',
         reportCount: 1,
-        firstReportedAt: serverTimestamp(),
         lastReportedAt: serverTimestamp(),
         lastReportId: 'community__c1__member',
       }),
@@ -269,14 +291,12 @@ describe('central Community moderation reports', () => {
     await assertFails(
       runTransaction(clientDb, async (transaction) => {
         await transaction.get(reportReference);
-        await transaction.get(targetReference);
         transaction.set(reportReference, report);
         transaction.set(targetReference, {
           targetType: 'community',
           targetId: 'c1',
           targetNameSnapshot: 'Safe Community',
           reportCount: 1,
-          firstReportedAt: serverTimestamp(),
           lastReportedAt: serverTimestamp(),
           lastReportId: 'community__c1__forged',
         });
@@ -285,14 +305,12 @@ describe('central Community moderation reports', () => {
     await assertFails(
       runTransaction(clientDb, async (transaction) => {
         await transaction.get(reportReference);
-        await transaction.get(targetReference);
         transaction.set(reportReference, report);
         transaction.set(targetReference, {
           targetType: 'community',
           targetId: 'other',
           targetNameSnapshot: 'Safe Community',
           reportCount: 1,
-          firstReportedAt: serverTimestamp(),
           lastReportedAt: serverTimestamp(),
           lastReportId: report.reportId,
         });

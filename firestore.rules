@@ -869,7 +869,7 @@ service cloud.firestore {
       let reportPath = moderationReportPath(target.lastReportId);
       return target.keys().hasOnly([
           'targetType','targetId','targetNameSnapshot','reportCount',
-          'firstReportedAt','lastReportedAt','lastReportId'
+          'lastReportedAt','lastReportId'
         ])
         && target.targetType in ['community','user']
         && target.targetId is string
@@ -893,7 +893,6 @@ service cloud.firestore {
       let target = request.resource.data;
       return validModerationTargetCommon(targetKey)
         && target.reportCount == 1
-        && target.firstReportedAt == request.time
         && target.lastReportedAt == request.time;
     }
     function validModerationTargetUpdate(targetKey) {
@@ -903,7 +902,6 @@ service cloud.firestore {
         && target.targetType == previous.targetType
         && target.targetId == previous.targetId
         && target.reportCount == previous.reportCount + 1
-        && target.firstReportedAt == previous.firstReportedAt
         && target.lastReportedAt == request.time;
     }
     function validCommunitySlugRegistryCreate(slug) {
@@ -1610,7 +1608,7 @@ service cloud.firestore {
       allow update, delete: if false;
     }
     match /moderationTargets/{targetKey} {
-      allow get: if signedIn();
+      allow get: if false;
       allow list: if false;
       allow create: if signedIn()
         && !exists(moderationTargetPath(targetKey))
