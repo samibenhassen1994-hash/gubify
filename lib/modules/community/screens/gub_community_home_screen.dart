@@ -220,6 +220,9 @@ class _GubCommunityHomeScreenState extends State<GubCommunityHomeScreen> {
                   final isOwner =
                       community.ownerId ==
                       FirebaseAuth.instance.currentUser?.uid;
+                  final canManageJoinRequests = community.canManageJoinRequests(
+                    isOwner: isOwner,
+                  );
 
                   return Stack(
                     children: [
@@ -234,7 +237,7 @@ class _GubCommunityHomeScreenState extends State<GubCommunityHomeScreen> {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             CommunityPendingRequestsButton(
-                              isVisible: isOwner,
+                              isVisible: canManageJoinRequests,
                               countStream: _pendingRequestCountStream,
                               onPressed: () => Navigator.push(
                                 context,
@@ -245,7 +248,8 @@ class _GubCommunityHomeScreenState extends State<GubCommunityHomeScreen> {
                                 ),
                               ),
                             ),
-                            if (isOwner) const SizedBox(width: 10),
+                            if (canManageJoinRequests)
+                              const SizedBox(width: 10),
                             if (!isOwner)
                               Material(
                                 color: Colors.white.withValues(alpha: 0.84),

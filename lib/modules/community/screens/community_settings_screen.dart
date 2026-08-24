@@ -91,6 +91,9 @@ class _CommunitySettingsScreenState extends State<CommunitySettingsScreen> {
     final isOwner = CommunityService.instance.isCurrentUserOwner(
       widget.community,
     );
+    final canManageJoinRequests = widget.community.canManageJoinRequests(
+      isOwner: isOwner,
+    );
 
     return GubScreenBackground(
       variant: GubBackgroundAssignments.createGub,
@@ -164,7 +167,7 @@ class _CommunitySettingsScreenState extends State<CommunitySettingsScreen> {
                   ),
                 ),
               ),
-              if (isOwner) ...[
+              if (canManageJoinRequests) ...[
                 const SizedBox(height: 16),
                 GubContentCard(
                   padding: EdgeInsets.zero,
@@ -191,6 +194,8 @@ class _CommunitySettingsScreenState extends State<CommunitySettingsScreen> {
                     ),
                   ),
                 ),
+              ],
+              if (isOwner) ...[
                 const SizedBox(height: 16),
                 GubContentCard(
                   padding: EdgeInsets.zero,

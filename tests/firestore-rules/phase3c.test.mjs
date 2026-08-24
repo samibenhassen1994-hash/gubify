@@ -405,7 +405,7 @@ describe('Community transition, cleanup, legacy, and retry', () => {
     await assertSucceeds(deleteDoc(marker));
     await assertSucceeds(deleteDoc(marker));
   });
-  test('owner cleanup permissions cover messages, members, user copies, marker, ownership, and root', async () => {
+  test('owner cleanup permissions cover messages, members, user copies, markers, and atomic finalization', async () => {
     await seed(['communities', 'c1', 'messages', 'message1'], { messageId: 'message1', communityId: 'c1', senderId: uid.memberCommunity, senderName: uid.memberCommunity, text: 'Message', createdAt: ts() });
     await markCommunityDeleting();
     await assertFails(deleteDoc(doc(db(uid.memberCommunity), 'communities', 'c1', 'messages', 'message1')));
@@ -413,8 +413,9 @@ describe('Community transition, cleanup, legacy, and retry', () => {
     await assertSucceeds(deleteDoc(doc(db(uid.ownerCommunity), 'communities', 'c1', 'members', uid.memberCommunity)));
     await assertSucceeds(deleteDoc(doc(db(uid.ownerCommunity), 'users', uid.memberCommunity, 'communities', 'c1')));
     await assertFails(deleteDoc(doc(db(uid.memberCommunity), 'users', uid.ownerCommunity, 'communities', 'c1')));
-    await assertSucceeds(deleteDoc(doc(db(uid.ownerCommunity), 'communityOwnership', uid.ownerCommunity)));
-    await assertSucceeds(deleteDoc(doc(db(uid.ownerCommunity), 'communities', 'c1')));
+    await assertFails(deleteDoc(doc(db(uid.ownerCommunity), 'communityOwnership', uid.ownerCommunity)));
+    await assertFails(deleteDoc(doc(db(uid.ownerCommunity), 'communities', 'c1')));
+    await assertSucceeds(cleanupCommunity(db(uid.ownerCommunity)));
   });
   test('full current Community pipeline deletes all data and preserves unrelated Community', async () => {
     await seed(['communities', 'c1', 'messages', 'message1'], { messageId: 'message1', communityId: 'c1', senderId: uid.memberCommunity, senderName: uid.memberCommunity, text: 'Message', createdAt: ts() });

@@ -42,6 +42,13 @@ const platformRestrictionRef = (uid, userId) =>
   doc(db(uid), 'platformRestrictions', userId);
 const communityRestrictionRef = (uid, communityId) =>
   doc(db(uid), 'communityRestrictions', communityId);
+const ownershipRef = (uid, ownerId) =>
+  doc(db(uid), 'communityOwnership', ownerId);
+const slugRef = (uid, slug) => doc(db(uid), 'communitySlugs', slug);
+const nameRef = (uid, nameKey) => doc(db(uid), 'communityNames', nameKey);
+const publicRef = (uid, slug) => doc(db(uid), 'communityPublic', slug);
+const banRef = (uid, communityId, userId) =>
+  doc(db(uid), 'communities', communityId, 'bans', userId);
 
 const communityData = (communityId, accessMode, memberCount = 1) => ({
   communityId,
@@ -221,6 +228,115 @@ const deleteCommunityWithRestriction = (communityId) => {
   const batch = writeBatch(clientDb);
   batch.delete(restriction);
   batch.delete(root);
+  return batch.commit();
+};
+
+const seedModernCommunityForDeletion = async (communityId = 'modern-delete') => {
+  const slug = `${communityId}-slug`;
+  const name = `${communityId} Community`;
+  const nameKey = name.toLowerCase();
+  await env.withSecurityRulesDisabled(async (context) => {
+    const firestore = context.firestore();
+    const batch = writeBatch(firestore);
+    batch.set(doc(firestore, 'communities', communityId), {
+      communityId,
+      name,
+      ownerId: ids.owner,
+      memberCount: 2,
+      visibility: 'public',
+      deletionStatus: 'active',
+      createdAt: joinedAt,
+      type: 'General',
+      language: 'English',
+      description: '',
+      accessMode: 'open',
+      nameKey,
+      slug,
+      slugAssignedAt: joinedAt,
+    });
+    batch.set(doc(firestore, 'communities', communityId, 'members', ids.owner),
+      memberData(ids.owner, 'Owner', 'owner'));
+    batch.set(doc(firestore, 'communities', communityId, 'members', ids.member),
+      memberData(ids.member, 'Member'));
+    batch.set(doc(firestore, 'communities', communityId, 'messages', 'message'), {
+      ...communityMessage(communityId, 'message', ids.owner, 'Owner'),
+      createdAt: joinedAt,
+    });
+    batch.set(doc(firestore, 'communities', communityId, 'joinRequests', ids.member), {
+      userId: ids.member,
+      displayName: 'Member',
+      status: 'pending',
+      createdAt: joinedAt,
+    });
+    batch.set(doc(firestore, 'communities', communityId, 'bans', ids.outsider), {
+      userId: ids.outsider,
+      displayName: 'Outsider',
+      photoUrl: null,
+      bannedBy: ids.owner,
+      bannedAt: joinedAt,
+    });
+    batch.set(doc(firestore, 'communityOwnership', ids.owner), {
+      ownerId: ids.owner,
+      communityId,
+      createdAt: joinedAt,
+    });
+    batch.set(doc(firestore, 'communitySlugs', slug), {
+      slug,
+      communityId,
+      ownerId: ids.owner,
+      createdAt: joinedAt,
+    });
+    batch.set(doc(firestore, 'communityNames', nameKey), {
+      nameKey,
+      communityId,
+      ownerId: ids.owner,
+      createdAt: joinedAt,
+    });
+    batch.set(doc(firestore, 'communityPublic', slug), {
+      communityId,
+      slug,
+      name,
+      description: '',
+      language: 'English',
+      accessMode: 'open',
+      createdAt: joinedAt,
+      updatedAt: joinedAt,
+    });
+    batch.set(doc(firestore, 'communityRestrictions', communityId), {
+      hiddenFromDiscovery: false,
+      joiningRestricted: false,
+      updatedAt: joinedAt,
+    });
+    await batch.commit();
+  });
+  return { communityId, nameKey, slug };
+};
+
+const markCommunityDeleting = (communityId) =>
+  updateDoc(communityRef(ids.owner, communityId), {
+    deletionStatus: 'deleting',
+    deletionStartedAt: serverTimestamp(),
+    deletionStartedBy: ids.owner,
+    deletionRequestedBy: ids.owner,
+  });
+
+const finalizeModernCommunityDeletion = (
+  { communityId, nameKey, slug },
+  { leave = [] } = {},
+) => {
+  const clientDb = db(ids.owner);
+  const batch = writeBatch(clientDb);
+  const references = {
+    ownership: doc(clientDb, 'communityOwnership', ids.owner),
+    slug: doc(clientDb, 'communitySlugs', slug),
+    name: doc(clientDb, 'communityNames', nameKey),
+    public: doc(clientDb, 'communityPublic', slug),
+    restriction: doc(clientDb, 'communityRestrictions', communityId),
+  };
+  for (const [key, reference] of Object.entries(references)) {
+    if (!leave.includes(key)) batch.delete(reference);
+  }
+  batch.delete(doc(clientDb, 'communities', communityId));
   return batch.commit();
 };
 
@@ -520,5 +636,94 @@ describe('manual Community restrictions', () => {
       );
       assert.equal(snapshot.exists(), false);
     });
+  });
+
+  test('owner can mark a modern Community as deleting through the valid flow', async () => {
+    const community = await seedModernCommunityForDeletion();
+
+    await assertSucceeds(markCommunityDeleting(community.communityId));
+    const root = await getDoc(communityRef(ids.owner, community.communityId));
+    assert.equal(root.data().deletionStatus, 'deleting');
+    assert.equal(root.data().deletionRequestedBy, ids.owner);
+  });
+
+  test('owner cannot delete only the modern Community root', async () => {
+    const community = await seedModernCommunityForDeletion();
+    await assertSucceeds(markCommunityDeleting(community.communityId));
+
+    await assertFails(deleteDoc(communityRef(ids.owner, community.communityId)));
+  });
+
+  for (const linkage of ['ownership', 'slug', 'name', 'public', 'restriction']) {
+    test(`owner cannot finalize a modern Community while leaving ${linkage} linkage`, async () => {
+      const community = await seedModernCommunityForDeletion();
+      await assertSucceeds(markCommunityDeleting(community.communityId));
+
+      await assertFails(finalizeModernCommunityDeletion(community, { leave: [linkage] }));
+    });
+  }
+
+  test('owner can atomically finalize modern Community deletion with all required linkage', async () => {
+    const community = await seedModernCommunityForDeletion();
+    await assertSucceeds(markCommunityDeleting(community.communityId));
+
+    await assertSucceeds(finalizeModernCommunityDeletion(community));
+    await env.withSecurityRulesDisabled(async (context) => {
+      const firestore = context.firestore();
+      const snapshots = await Promise.all([
+        getDoc(doc(firestore, 'communities', community.communityId)),
+        getDoc(doc(firestore, 'communityOwnership', ids.owner)),
+        getDoc(doc(firestore, 'communitySlugs', community.slug)),
+        getDoc(doc(firestore, 'communityNames', community.nameKey)),
+        getDoc(doc(firestore, 'communityPublic', community.slug)),
+        getDoc(doc(firestore, 'communityRestrictions', community.communityId)),
+      ]);
+      for (const snapshot of snapshots) assert.equal(snapshot.exists(), false);
+    });
+  });
+
+  test('legacy Community without modern linkage remains deletable in the compatible final flow', async () => {
+    await env.withSecurityRulesDisabled(async (context) => {
+      await updateDoc(doc(context.firestore(), 'communities', 'open'), {
+        deletionStatus: 'deleting',
+        deletionRequestedBy: ids.owner,
+      });
+    });
+
+    await assertSucceeds(deleteDoc(communityRef(ids.owner, 'open')));
+  });
+
+  test('orphaned Community messages and members are unreadable after root deletion', async () => {
+    const community = await seedModernCommunityForDeletion();
+    await assertSucceeds(markCommunityDeleting(community.communityId));
+    await assertSucceeds(finalizeModernCommunityDeletion(community));
+
+    await assertFails(getDoc(messageRef(ids.member, community.communityId, 'message')));
+    await assertFails(getDoc(memberRef(ids.member, community.communityId, ids.member)));
+  });
+
+  test('orphaned join requests and bans are unreadable after root deletion', async () => {
+    const community = await seedModernCommunityForDeletion();
+    await assertSucceeds(markCommunityDeleting(community.communityId));
+    await assertSucceeds(finalizeModernCommunityDeletion(community));
+
+    await assertFails(getDoc(requestRef(ids.member, community.communityId, ids.member)));
+    await assertFails(getDoc(banRef(ids.outsider, community.communityId, ids.outsider)));
+  });
+
+  test('members and outsiders cannot exploit a Community deletion state', async () => {
+    const community = await seedModernCommunityForDeletion();
+    await assertSucceeds(markCommunityDeleting(community.communityId));
+
+    await assertFails(deleteDoc(communityRef(ids.member, community.communityId)));
+    await assertFails(deleteDoc(communityRef(ids.outsider, community.communityId)));
+  });
+
+  test('owner cannot delete a Community restriction independently while root remains', async () => {
+    const community = await seedModernCommunityForDeletion();
+
+    await assertFails(deleteDoc(communityRestrictionRef(ids.owner, community.communityId)));
+    await assertSucceeds(markCommunityDeleting(community.communityId));
+    await assertFails(deleteDoc(communityRestrictionRef(ids.owner, community.communityId)));
   });
 });

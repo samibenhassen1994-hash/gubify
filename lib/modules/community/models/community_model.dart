@@ -67,6 +67,11 @@ class CommunityModel {
   final String? deletionStatus;
   final String? deletionRequestedBy;
 
+  bool get usesJoinRequests => accessMode == approvalAccessMode;
+
+  bool canManageJoinRequests({required bool isOwner}) =>
+      isOwner && usesJoinRequests;
+
   const CommunityModel({
     required this.communityId,
     required this.name,

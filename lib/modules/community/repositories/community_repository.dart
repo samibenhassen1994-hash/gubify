@@ -28,6 +28,7 @@ class CommunityRepository {
     "messages",
     "members",
     "joinRequests",
+    "bans",
     "membershipMutations",
     _deletionMembersSubcollection,
   ];
