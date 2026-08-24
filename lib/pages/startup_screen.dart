@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import 'auth_entry_screen.dart';
@@ -10,6 +12,7 @@ import '../repositories/user_repository.dart';
 import '../modules/profile/repositories/account_deletion_marker_store.dart';
 import '../modules/profile/screens/account_deletion_recovery_screen.dart';
 import '../modules/profile/services/account_deletion_service.dart';
+import '../modules/community/restrictions/services/community_restriction_service.dart';
 import '../widgets/startup_artwork_background.dart';
 import 'verify_email_screen.dart';
 
@@ -143,6 +146,7 @@ class _StartupScreenState extends State<StartupScreen> {
       if (!mounted) return;
 
       if (exists) {
+        unawaited(_initializePlatformRestriction(uid));
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
@@ -186,6 +190,17 @@ class _StartupScreenState extends State<StartupScreen> {
     } on Object {
       _isRouting = false;
       rethrow;
+    }
+  }
+
+  Future<void> _initializePlatformRestriction(String userId) async {
+    try {
+      await CommunityRestrictionService.instance.initializePlatformRestriction(
+        userId,
+      );
+    } on Object {
+      // Missing defaults are already interpreted as unrestricted. Startup must
+      // remain available if first-time initialization cannot be completed.
     }
   }
 

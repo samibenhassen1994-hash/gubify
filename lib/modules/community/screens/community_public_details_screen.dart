@@ -4,13 +4,26 @@ import '../../../widgets/gub_content_card.dart';
 import '../../../widgets/gub_screen_background.dart';
 import '../models/community_access_request_model.dart';
 import '../models/community_model.dart';
+import '../moderation/widgets/community_report_dialog.dart';
+import '../moderation/widgets/community_report_menu.dart';
+import '../restrictions/models/community_restriction_model.dart';
+import '../restrictions/services/community_restriction_service.dart';
 import '../services/community_service.dart';
 import 'gub_community_home_screen.dart';
 
 class CommunityPublicDetailsScreen extends StatefulWidget {
   final String communityId;
+  final Stream<CommunityPublicAccessState?>? stateStream;
+  final Stream<CommunityRestriction>? restrictionStream;
+  final CommunityReportSubmit? reportSubmit;
 
-  const CommunityPublicDetailsScreen({super.key, required this.communityId});
+  const CommunityPublicDetailsScreen({
+    super.key,
+    required this.communityId,
+    this.stateStream,
+    this.restrictionStream,
+    this.reportSubmit,
+  });
 
   @override
   State<CommunityPublicDetailsScreen> createState() =>
@@ -20,15 +33,21 @@ class CommunityPublicDetailsScreen extends StatefulWidget {
 class _CommunityPublicDetailsScreenState
     extends State<CommunityPublicDetailsScreen> {
   late final Stream<CommunityPublicAccessState?> _stateStream;
+  late final Stream<CommunityRestriction> _restrictionStream;
   bool _operationInProgress = false;
   bool _navigationInProgress = false;
 
   @override
   void initState() {
     super.initState();
-    _stateStream = CommunityService.instance.publicAccessStateStream(
-      widget.communityId,
-    );
+    _stateStream =
+        widget.stateStream ??
+        CommunityService.instance.publicAccessStateStream(widget.communityId);
+    _restrictionStream =
+        widget.restrictionStream ??
+        CommunityRestrictionService.instance.communityRestrictionStream(
+          widget.communityId,
+        );
   }
 
   Future<void> _runOperation(Future<void> Function() operation) async {
@@ -113,7 +132,16 @@ class _CommunityPublicDetailsScreenState
                   message: "This Community is no longer available.",
                 );
               }
-              return _buildCommunity(state);
+              return StreamBuilder<CommunityRestriction>(
+                stream: _restrictionStream,
+                builder: (context, restrictionSnapshot) {
+                  return _buildCommunity(
+                    state,
+                    restrictionSnapshot.data ??
+                        CommunityRestriction.unrestricted,
+                  );
+                },
+              );
             },
           ),
         ),
@@ -121,7 +149,10 @@ class _CommunityPublicDetailsScreenState
     );
   }
 
-  Widget _buildCommunity(CommunityPublicAccessState state) {
+  Widget _buildCommunity(
+    CommunityPublicAccessState state,
+    CommunityRestriction restriction,
+  ) {
     final community = state.community;
     final deleting = community.deletionStatus == "deleting";
     final memberLabel = community.memberCount == 1 ? "member" : "members";
@@ -132,6 +163,15 @@ class _CommunityPublicDetailsScreenState
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              if (!state.isOwner)
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: CommunityReportMenu(
+                    community: community,
+                    isOwner: state.isOwner,
+                    reportSubmit: widget.reportSubmit,
+                  ),
+                ),
               const Icon(
                 Icons.public_rounded,
                 size: 48,
@@ -186,7 +226,7 @@ class _CommunityPublicDetailsScreenState
                   ),
                 )
               else
-                _buildAction(state),
+                _buildAction(state, restriction),
             ],
           ),
         ),
@@ -194,7 +234,10 @@ class _CommunityPublicDetailsScreenState
     );
   }
 
-  Widget _buildAction(CommunityPublicAccessState state) {
+  Widget _buildAction(
+    CommunityPublicAccessState state,
+    CommunityRestriction restriction,
+  ) {
     if (state.isMember || state.isOwner) {
       return SizedBox(
         width: double.infinity,
@@ -203,6 +246,13 @@ class _CommunityPublicDetailsScreenState
           icon: const Icon(Icons.arrow_forward_rounded),
           label: const Text("Open Community"),
         ),
+      );
+    }
+
+    if (restriction.joiningRestricted) {
+      return const Text(
+        'New members are not being accepted right now.',
+        style: TextStyle(color: Color(0xFF64748B), fontWeight: FontWeight.w600),
       );
     }
 

@@ -5,13 +5,26 @@ import 'package:flutter/material.dart';
 
 import '../../chat/widgets/chat_message_composer.dart';
 import '../models/community_chat_message_model.dart';
+import '../restrictions/models/community_restriction_model.dart';
+import '../restrictions/services/community_restriction_service.dart';
 import '../services/community_chat_service.dart';
 import 'community_chat_message_bubble.dart';
 
+typedef CommunityChatSend = Future<void> Function(String text);
+
 class CommunityChatView extends StatefulWidget {
   final String communityId;
+  final Stream<List<CommunityChatMessageModel>>? messagesStream;
+  final Stream<PlatformRestriction>? restrictionStream;
+  final CommunityChatSend? onSend;
 
-  const CommunityChatView({super.key, required this.communityId});
+  const CommunityChatView({
+    super.key,
+    required this.communityId,
+    this.messagesStream,
+    this.restrictionStream,
+    this.onSend,
+  });
 
   @override
   State<CommunityChatView> createState() => _CommunityChatViewState();
@@ -24,6 +37,7 @@ class _CommunityChatViewState extends State<CommunityChatView> {
   final Set<String> _knownMessageIds = <String>{};
 
   late Stream<List<CommunityChatMessageModel>> _messagesStream;
+  late Stream<PlatformRestriction> _restrictionStream;
 
   bool _isSending = false;
   bool _hasPositionedInitialMessages = false;
@@ -35,9 +49,13 @@ class _CommunityChatViewState extends State<CommunityChatView> {
   @override
   void initState() {
     super.initState();
-    _messagesStream = CommunityChatService.instance.messagesStream(
-      widget.communityId,
-    );
+    _messagesStream =
+        widget.messagesStream ??
+        CommunityChatService.instance.messagesStream(widget.communityId);
+    _restrictionStream =
+        widget.restrictionStream ??
+        CommunityRestrictionService.instance
+            .currentUserPlatformRestrictionStream();
     _messageController.addListener(_onMessageChanged);
     _messageFocusNode.addListener(_onFocusChanged);
     _scrollController.addListener(_onScroll);
@@ -213,15 +231,22 @@ class _CommunityChatViewState extends State<CommunityChatView> {
     });
   }
 
-  Future<void> _sendMessage() async {
-    if (_isSending || _messageController.text.trim().isEmpty) return;
+  Future<void> _sendMessage({required bool isRestricted}) async {
+    if (isRestricted || _isSending || _messageController.text.trim().isEmpty) {
+      return;
+    }
 
     setState(() => _isSending = true);
     try {
-      await CommunityChatService.instance.sendMessage(
-        communityId: widget.communityId,
-        text: _messageController.text,
-      );
+      final send = widget.onSend;
+      if (send != null) {
+        await send(_messageController.text);
+      } else {
+        await CommunityChatService.instance.sendMessage(
+          communityId: widget.communityId,
+          text: _messageController.text,
+        );
+      }
       if (!mounted) return;
 
       _messageController.clear();
@@ -248,10 +273,18 @@ class _CommunityChatViewState extends State<CommunityChatView> {
       _isScrollingToPendingMessages = false;
       _pendingScrollGeneration++;
       _lastMessageId = null;
-      _messagesStream = CommunityChatService.instance.messagesStream(
-        widget.communityId,
-      );
+      _messagesStream =
+          widget.messagesStream ??
+          CommunityChatService.instance.messagesStream(widget.communityId);
     });
+  }
+
+  String? _currentUserId() {
+    try {
+      return FirebaseAuth.instance.currentUser?.uid;
+    } on FirebaseException {
+      return null;
+    }
   }
 
   @override
@@ -270,120 +303,152 @@ class _CommunityChatViewState extends State<CommunityChatView> {
 
   @override
   Widget build(BuildContext context) {
-    final currentUserId = FirebaseAuth.instance.currentUser?.uid;
-    final canSend = !_isSending && _messageController.text.trim().isNotEmpty;
+    final currentUserId = _currentUserId();
+    return StreamBuilder<PlatformRestriction>(
+      stream: _restrictionStream,
+      builder: (context, restrictionSnapshot) {
+        final isRestricted =
+            restrictionSnapshot.data?.communityChatRestricted == true;
+        final canSend =
+            !isRestricted &&
+            !_isSending &&
+            _messageController.text.trim().isNotEmpty;
+        return Column(
+          children: [
+            Expanded(
+              child: StreamBuilder<List<CommunityChatMessageModel>>(
+                stream: _messagesStream,
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  if (snapshot.hasError) {
+                    return _CommunityChatErrorState(onRetry: _retryMessages);
+                  }
 
-    return Column(
-      children: [
-        Expanded(
-          child: StreamBuilder<List<CommunityChatMessageModel>>(
-            stream: _messagesStream,
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator());
-              }
-              if (snapshot.hasError) {
-                return _CommunityChatErrorState(onRetry: _retryMessages);
-              }
-
-              final messages = snapshot.data ?? const [];
-              if (messages.isEmpty) {
-                return GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: _dismissKeyboard,
-                  child: const _CommunityChatEmptyState(),
-                );
-              }
-
-              _handleMessages(messages, currentUserId);
-
-              return Stack(
-                children: [
-                  SingleChildScrollView(
-                    controller: _scrollController,
-                    keyboardDismissBehavior:
-                        ScrollViewKeyboardDismissBehavior.onDrag,
-                    padding: EdgeInsets.fromLTRB(
-                      16,
-                      16,
-                      16,
-                      _pendingReceivedMessageCount > 0 ? 72 : 12,
-                    ),
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.translucent,
+                  final messages = snapshot.data ?? const [];
+                  if (messages.isEmpty) {
+                    return GestureDetector(
+                      behavior: HitTestBehavior.opaque,
                       onTap: _dismissKeyboard,
-                      child: Column(
-                        children: [
-                          for (final message in messages)
-                            CommunityChatMessageBubble(
-                              key: ValueKey(message.messageId),
-                              message: message,
-                              isCurrentUser:
-                                  currentUserId != null &&
-                                  message.senderId == currentUserId,
-                            ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  if (_pendingReceivedMessageCount > 0)
-                    Positioned(
-                      left: 0,
-                      right: 0,
-                      bottom: 12,
-                      child: Center(
-                        child: Semantics(
-                          button: true,
-                          excludeSemantics: true,
-                          label:
-                              '$_pendingReceivedMessageCount new '
-                              '${_pendingReceivedMessageCount == 1 ? 'message' : 'messages'}. '
-                              'Scroll to the latest messages.',
-                          child: FilledButton.icon(
-                            onPressed: _isScrollingToPendingMessages
-                                ? null
-                                : _scrollToPendingMessages,
-                            icon: const Icon(
-                              Icons.keyboard_arrow_down_rounded,
-                            ),
-                            label: Text(
-                              '$_pendingReceivedMessageCount new '
-                              '${_pendingReceivedMessageCount == 1 ? 'message' : 'messages'}',
-                            ),
-                            style: FilledButton.styleFrom(
-                              backgroundColor: const Color(0xFF2563EB),
-                              foregroundColor: Colors.white,
-                              disabledBackgroundColor: const Color(0xFF2563EB),
-                              disabledForegroundColor: Colors.white,
-                              elevation: 4,
-                            ),
+                      child: const _CommunityChatEmptyState(),
+                    );
+                  }
+
+                  _handleMessages(messages, currentUserId);
+
+                  return Stack(
+                    children: [
+                      SingleChildScrollView(
+                        controller: _scrollController,
+                        keyboardDismissBehavior:
+                            ScrollViewKeyboardDismissBehavior.onDrag,
+                        padding: EdgeInsets.fromLTRB(
+                          16,
+                          16,
+                          16,
+                          _pendingReceivedMessageCount > 0 ? 72 : 12,
+                        ),
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.translucent,
+                          onTap: _dismissKeyboard,
+                          child: Column(
+                            children: [
+                              for (final message in messages)
+                                CommunityChatMessageBubble(
+                                  key: ValueKey(message.messageId),
+                                  message: message,
+                                  isCurrentUser:
+                                      currentUserId != null &&
+                                      message.senderId == currentUserId,
+                                ),
+                            ],
                           ),
                         ),
                       ),
-                    ),
-                ],
-              );
-            },
-          ),
-        ),
-        Container(
-          color: Colors.white,
-          child: SafeArea(
-            top: false,
-            child: TapRegion(
-              onTapOutside: (_) => _dismissKeyboard(),
-              child: ChatMessageComposer(
-                controller: _messageController,
-                focusNode: _messageFocusNode,
-                isSending: _isSending,
-                canSend: canSend,
-                maxLength: CommunityChatService.maxMessageLength,
-                onSend: _sendMessage,
+                      if (_pendingReceivedMessageCount > 0)
+                        Positioned(
+                          left: 0,
+                          right: 0,
+                          bottom: 12,
+                          child: Center(
+                            child: Semantics(
+                              button: true,
+                              excludeSemantics: true,
+                              label:
+                                  '$_pendingReceivedMessageCount new '
+                                  '${_pendingReceivedMessageCount == 1 ? 'message' : 'messages'}. '
+                                  'Scroll to the latest messages.',
+                              child: FilledButton.icon(
+                                onPressed: _isScrollingToPendingMessages
+                                    ? null
+                                    : _scrollToPendingMessages,
+                                icon: const Icon(
+                                  Icons.keyboard_arrow_down_rounded,
+                                ),
+                                label: Text(
+                                  '$_pendingReceivedMessageCount new '
+                                  '${_pendingReceivedMessageCount == 1 ? 'message' : 'messages'}',
+                                ),
+                                style: FilledButton.styleFrom(
+                                  backgroundColor: const Color(0xFF2563EB),
+                                  foregroundColor: Colors.white,
+                                  disabledBackgroundColor: const Color(
+                                    0xFF2563EB,
+                                  ),
+                                  disabledForegroundColor: Colors.white,
+                                  elevation: 4,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  );
+                },
               ),
             ),
-          ),
-        ),
-      ],
+            Container(
+              color: Colors.white,
+              child: SafeArea(
+                top: false,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (isRestricted)
+                      const Padding(
+                        padding: EdgeInsets.fromLTRB(16, 10, 16, 0),
+                        child: Text(
+                          'Community messaging is unavailable for this account.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: Color(0xFF64748B),
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                    IgnorePointer(
+                      ignoring: isRestricted,
+                      child: TapRegion(
+                        onTapOutside: (_) => _dismissKeyboard(),
+                        child: ChatMessageComposer(
+                          controller: _messageController,
+                          focusNode: _messageFocusNode,
+                          isSending: _isSending,
+                          canSend: canSend,
+                          maxLength: CommunityChatService.maxMessageLength,
+                          onSend: () =>
+                              _sendMessage(isRestricted: isRestricted),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }
@@ -408,10 +473,7 @@ class _CommunityChatEmptyState extends StatelessWidget {
             Text(
               'No messages yet. Start the conversation!',
               textAlign: TextAlign.center,
-              style: TextStyle(
-                color: Color(0xFF64748B),
-                fontSize: 15,
-              ),
+              style: TextStyle(color: Color(0xFF64748B), fontSize: 15),
             ),
           ],
         ),
@@ -439,10 +501,7 @@ class _CommunityChatErrorState extends StatelessWidget {
               color: Color(0xFF64748B),
             ),
             const SizedBox(height: 12),
-            const Text(
-              'Unable to load the chat.',
-              textAlign: TextAlign.center,
-            ),
+            const Text('Unable to load the chat.', textAlign: TextAlign.center),
             const SizedBox(height: 12),
             OutlinedButton.icon(
               onPressed: onRetry,

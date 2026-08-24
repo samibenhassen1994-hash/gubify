@@ -175,6 +175,7 @@ class _CommunityMemberTile extends StatelessWidget {
             MaterialPageRoute(
               builder: (_) => UserProfileScreen.community(
                 communityId: community.communityId,
+                communityName: community.name,
                 userId: member.userId,
                 profileFuture: profileLoader?.call(member.userId),
               ),

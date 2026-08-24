@@ -704,6 +704,10 @@ service cloud.firestore {
     function communityBanPath(id, uid) { return /databases/$(database)/documents/communities/$(id)/bans/$(uid); }
     function userCommunityPath(uid, id) { return /databases/$(database)/documents/users/$(uid)/communities/$(id); }
     function communityJoinRequestPath(id, uid) { return /databases/$(database)/documents/communities/$(id)/joinRequests/$(uid); }
+    function moderationReportPath(reportId) { return /databases/$(database)/documents/moderationReports/$(reportId); }
+    function moderationTargetPath(targetKey) { return /databases/$(database)/documents/moderationTargets/$(targetKey); }
+    function platformRestrictionPath(uid) { return /databases/$(database)/documents/platformRestrictions/$(uid); }
+    function communityRestrictionPath(id) { return /databases/$(database)/documents/communityRestrictions/$(id); }
     function communityMembershipMutationPath(id) { return /databases/$(database)/documents/communities/$(id)/membershipMutations/current; }
     function ownershipPath(uid) { return /databases/$(database)/documents/communityOwnership/$(uid); }
     function communitySlugPath(slug) { return /databases/$(database)/documents/communitySlugs/$(slug); }
@@ -721,6 +725,36 @@ service cloud.firestore {
     function isCommunityMember(id) { return signedIn() && exists(communityMemberPath(id, request.auth.uid)); }
     function isCommunityOwner(id) { return signedIn() && communityDoc(id).data.ownerId == request.auth.uid; }
     function communityActive(id) { return communityDoc(id).data.get('deletionStatus', 'active') != 'deleting'; }
+    function communityChatAllowed(uid) {
+      return !exists(platformRestrictionPath(uid))
+        || get(platformRestrictionPath(uid)).data.get('communityChatRestricted', false) != true;
+    }
+    function communityJoiningAllowed(id) {
+      return !exists(communityRestrictionPath(id))
+        || get(communityRestrictionPath(id)).data.get('joiningRestricted', false) != true;
+    }
+    function validPlatformRestrictionInitialization(uid) {
+      let data = request.resource.data;
+      return own(uid)
+        && !exists(platformRestrictionPath(uid))
+        && data.keys().hasOnly(['communityChatRestricted','updatedAt'])
+        && data.communityChatRestricted == false
+        && data.updatedAt == request.time;
+    }
+    function validCommunityRestrictionInitialization(id) {
+      let data = request.resource.data;
+      let community = communityAfter(id).data;
+      return signedIn()
+        && !exists(communityRestrictionPath(id))
+        && existsAfter(communityPath(id))
+        && community.ownerId == request.auth.uid
+        && community.visibility == 'public'
+        && community.get('deletionStatus', 'active') != 'deleting'
+        && data.keys().hasOnly(['hiddenFromDiscovery','joiningRestricted','updatedAt'])
+        && data.hiddenFromDiscovery == false
+        && data.joiningRestricted == false
+        && data.updatedAt == request.time;
+    }
     function communityDeletingOwner(id) {
       let root = communityDoc(id).data;
       return isCommunityOwner(id) && root.deletionStatus == 'deleting'
@@ -755,6 +789,122 @@ service cloud.firestore {
         && data.nameKey is string && data.nameKey.size() >= 1 && data.nameKey.size() <= 60
         && validCommunitySlug(data.slug)
         && data.slugAssignedAt == request.time;
+    }
+    function validModerationReportCommon(reportId) {
+      let data = request.resource.data;
+      return data.reportId == reportId
+        && data.reporterId == request.auth.uid
+        && data.communityId is string
+        && data.communityId.size() >= 1
+        && data.targetType in ['community','user']
+        && data.targetId is string
+        && data.targetId.size() >= 1
+        && data.reason in [
+          'spam','harassment_or_bullying','hate_or_abusive_content',
+          'inappropriate_content','scam_or_fraud','impersonation','other'
+        ]
+        && data.details is string
+        && data.details.size() <= 500
+        && data.createdAt == request.time
+        && data.status == 'open'
+        && data.communityNameSnapshot == communityDoc(data.communityId).data.name
+        && communityDoc(data.communityId).data.visibility == 'public'
+        && communityActive(data.communityId);
+    }
+    function validCommunityReport(reportId) {
+      let data = request.resource.data;
+      return data.keys().hasOnly([
+          'reportId','reporterId','communityId','targetType','targetId',
+          'reason','details','createdAt','status','communityNameSnapshot'
+        ])
+        && validModerationReportCommon(reportId)
+        && data.targetType == 'community'
+        && data.targetId == data.communityId
+        && reportId == 'community__' + data.communityId + '__' + request.auth.uid
+        && communityDoc(data.communityId).data.ownerId != request.auth.uid;
+    }
+    function validCommunityUserReport(reportId) {
+      let data = request.resource.data;
+      let target = get(communityMemberPath(data.communityId, data.targetUserId)).data;
+      return data.keys().hasOnly([
+          'reportId','reporterId','communityId','targetType','targetId',
+          'targetUserId','reason','details','createdAt','status',
+          'communityNameSnapshot','targetNameSnapshot'
+        ])
+        && validModerationReportCommon(reportId)
+        && data.targetType == 'user'
+        && isCommunityMember(data.communityId)
+        && data.targetUserId is string
+        && data.targetUserId == data.targetId
+        && data.targetUserId != request.auth.uid
+        && exists(communityMemberPath(data.communityId, data.targetUserId))
+        && data.targetNameSnapshot == target.displayName
+        && reportId == 'user__' + data.communityId + '__'
+          + data.targetUserId + '__' + request.auth.uid;
+    }
+    function validModerationReportCreate(reportId) {
+      return validCommunityReport(reportId)
+        || validCommunityUserReport(reportId);
+    }
+    function moderationTargetKeyForReport(data) {
+      return data.targetType + '__' + data.targetId;
+    }
+    function validModerationReportTargetLink(reportId) {
+      let report = request.resource.data;
+      return existsAfter(moderationTargetPath(moderationTargetKeyForReport(report)))
+        && getAfter(moderationTargetPath(moderationTargetKeyForReport(report))).data.targetType == report.targetType
+        && getAfter(moderationTargetPath(moderationTargetKeyForReport(report))).data.targetId == report.targetId
+        && getAfter(moderationTargetPath(moderationTargetKeyForReport(report))).data.lastReportId == reportId;
+    }
+    function validModerationTargetNameSnapshot(target, reportId) {
+      return (target.targetType == 'community'
+          && target.targetNameSnapshot
+            == getAfter(moderationReportPath(reportId)).data.communityNameSnapshot)
+        || (target.targetType == 'user'
+          && target.targetNameSnapshot
+            == getAfter(moderationReportPath(reportId)).data.targetNameSnapshot);
+    }
+    function validModerationTargetCommon(targetKey) {
+      let target = request.resource.data;
+      let reportPath = moderationReportPath(target.lastReportId);
+      return target.keys().hasOnly([
+          'targetType','targetId','targetNameSnapshot','reportCount',
+          'firstReportedAt','lastReportedAt','lastReportId'
+        ])
+        && target.targetType in ['community','user']
+        && target.targetId is string
+        && target.targetId.size() >= 1
+        && targetKey == target.targetType + '__' + target.targetId
+        && target.targetNameSnapshot is string
+        && target.targetNameSnapshot.size() >= 1
+        && target.reportCount is int
+        && target.reportCount >= 1
+        && target.lastReportId is string
+        && !exists(reportPath)
+        && existsAfter(reportPath)
+        && getAfter(reportPath).data.reportId == target.lastReportId
+        && getAfter(reportPath).data.reporterId == request.auth.uid
+        && getAfter(reportPath).data.createdAt == request.time
+        && getAfter(reportPath).data.targetType == target.targetType
+        && getAfter(reportPath).data.targetId == target.targetId
+        && validModerationTargetNameSnapshot(target, target.lastReportId);
+    }
+    function validModerationTargetCreate(targetKey) {
+      let target = request.resource.data;
+      return validModerationTargetCommon(targetKey)
+        && target.reportCount == 1
+        && target.firstReportedAt == request.time
+        && target.lastReportedAt == request.time;
+    }
+    function validModerationTargetUpdate(targetKey) {
+      let target = request.resource.data;
+      let previous = resource.data;
+      return validModerationTargetCommon(targetKey)
+        && target.targetType == previous.targetType
+        && target.targetId == previous.targetId
+        && target.reportCount == previous.reportCount + 1
+        && target.firstReportedAt == previous.firstReportedAt
+        && target.lastReportedAt == request.time;
     }
     function validCommunitySlugRegistryCreate(slug) {
       let root = communityAfter(request.resource.data.communityId).data;
@@ -840,6 +990,7 @@ service cloud.firestore {
       return exists(communityPath(id))
         && !exists(communityMemberPath(id, uid))
         && !exists(communityBanPath(id, uid))
+        && communityJoiningAllowed(id)
         && communityActive(id)
         && communityDoc(id).data.visibility == 'public'
         && communityDoc(id).data.get('accessMode','approval') == 'open'
@@ -1340,6 +1491,7 @@ service cloud.firestore {
         allow read: if isCommunityMember(id)
           && resource.data.createdAt >= get(/databases/$(database)/documents/communities/$(id)/members/$(request.auth.uid)).data.joinedAt;
         allow create: if isCommunityMember(id) && communityActive(id)
+          && communityChatAllowed(request.auth.uid)
           && request.resource.data.keys().hasOnly(['messageId','communityId','senderId','senderName','text','createdAt'])
           && request.resource.data.messageId == messageId
           && request.resource.data.communityId == id
@@ -1366,6 +1518,7 @@ service cloud.firestore {
         allow list: if isCommunityOwner(id);
         allow create: if own(uid)
           && communityActive(id)
+          && communityJoiningAllowed(id)
           && communityDoc(id).data.get('accessMode','approval') == 'approval'
           && !exists(communityMemberPath(id, uid))
           && !exists(communityBanPath(id, uid))
@@ -1389,6 +1542,7 @@ service cloud.firestore {
             && request.resource.data.resolvedBy == request.auth.uid)
           || (own(uid)
             && communityActive(id)
+            && communityJoiningAllowed(id)
             && resource.data.status in ['rejected', 'approved']
             && !exists(communityMemberPath(id, uid))
             && !exists(communityBanPath(id, uid))
@@ -1442,6 +1596,42 @@ service cloud.firestore {
         && communityAfter(request.resource.data.communityId).data.ownerId == uid
         && validCommunityMemberAndCopy(request.resource.data.communityId,uid,'owner');
       allow delete: if own(uid) && communityDeletingOwner(resource.data.communityId);
+    }
+    match /moderationReports/{reportId} {
+      allow get: if signedIn()
+        && reportId.matches('^.*__' + request.auth.uid + '$')
+        && (!exists(moderationReportPath(reportId))
+          || resource.data.reporterId == request.auth.uid);
+      allow list: if false;
+      allow create: if signedIn()
+        && !exists(moderationReportPath(reportId))
+        && validModerationReportCreate(reportId)
+        && validModerationReportTargetLink(reportId);
+      allow update, delete: if false;
+    }
+    match /moderationTargets/{targetKey} {
+      allow get: if signedIn();
+      allow list: if false;
+      allow create: if signedIn()
+        && !exists(moderationTargetPath(targetKey))
+        && validModerationTargetCreate(targetKey);
+      allow update: if signedIn()
+        && validModerationTargetUpdate(targetKey);
+      allow delete: if false;
+    }
+    match /platformRestrictions/{uid} {
+      allow get: if own(uid);
+      allow list: if false;
+      allow create: if validPlatformRestrictionInitialization(uid);
+      allow update, delete: if false;
+    }
+    match /communityRestrictions/{communityId} {
+      allow get: if signedIn();
+      allow list: if false;
+      allow create: if validCommunityRestrictionInitialization(communityId);
+      allow update: if false;
+      allow delete: if communityDeletingOwner(communityId)
+        && !existsAfter(communityPath(communityId));
     }
   }
 }

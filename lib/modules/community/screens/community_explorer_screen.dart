@@ -3,14 +3,29 @@ import 'package:flutter/material.dart';
 import '../../../widgets/gub_screen_background.dart';
 import '../models/community_model.dart';
 import '../repositories/community_repository.dart';
+import '../restrictions/services/community_restriction_service.dart';
 import '../services/community_service.dart';
 import '../widgets/community_explorer_card.dart';
 import '../widgets/community_filters_sheet.dart';
 import 'community_public_details_screen.dart';
 import 'gub_community_home_screen.dart';
 
+typedef CommunityExplorerPageLoader =
+    Future<CommunityExplorerPage> Function(CommunityExplorerCursor? after);
+typedef CommunityDiscoveryFilter =
+    Future<List<CommunityModel>> Function(List<CommunityModel> communities);
+
 class CommunityExplorerScreen extends StatefulWidget {
-  const CommunityExplorerScreen({super.key});
+  final CommunityExplorerPageLoader? pageLoader;
+  final CommunityDiscoveryFilter? discoveryFilter;
+  final Stream<Set<String>>? joinedCommunityIdsStream;
+
+  const CommunityExplorerScreen({
+    super.key,
+    this.pageLoader,
+    this.discoveryFilter,
+    this.joinedCommunityIdsStream,
+  });
 
   @override
   State<CommunityExplorerScreen> createState() =>
@@ -34,8 +49,9 @@ class _CommunityExplorerScreenState extends State<CommunityExplorerScreen> {
   @override
   void initState() {
     super.initState();
-    _joinedCommunityIdsStream = CommunityService.instance
-        .joinedCommunityIdsStream();
+    _joinedCommunityIdsStream =
+        widget.joinedCommunityIdsStream ??
+        CommunityService.instance.joinedCommunityIdsStream();
     _searchController.addListener(_onSearchChanged);
     _scrollController.addListener(_onScroll);
     _loadNextPage();
@@ -60,12 +76,18 @@ class _CommunityExplorerScreenState extends State<CommunityExplorerScreen> {
       _loadError = null;
     });
     try {
-      final page = await CommunityService.instance.loadPublicCommunitiesPage(
-        after: _cursor,
-      );
+      final page =
+          await (widget.pageLoader?.call(_cursor) ??
+              CommunityService.instance.loadPublicCommunitiesPage(
+                after: _cursor,
+              ));
+      final discoverableCommunities =
+          await (widget.discoveryFilter?.call(page.communities) ??
+              CommunityRestrictionService.instance
+                  .filterDiscoverableCommunities(page.communities));
       if (!mounted) return;
       setState(() {
-        for (final community in page.communities) {
+        for (final community in discoverableCommunities) {
           if (_seenCommunityIds.add(community.communityId)) {
             _communities.add(community);
           }
@@ -93,8 +115,9 @@ class _CommunityExplorerScreenState extends State<CommunityExplorerScreen> {
       _hasMore = true;
       _loadError = null;
       _loadingInitial = true;
-      _joinedCommunityIdsStream = CommunityService.instance
-          .joinedCommunityIdsStream();
+      _joinedCommunityIdsStream =
+          widget.joinedCommunityIdsStream ??
+          CommunityService.instance.joinedCommunityIdsStream();
     });
     _loadNextPage();
   }

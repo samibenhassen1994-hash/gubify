@@ -9,6 +9,7 @@ import '../../../services/app_sound_service.dart';
 import '../../../widgets/gub_screen_background.dart';
 import '../models/community_access_request_model.dart';
 import '../models/community_model.dart';
+import '../moderation/widgets/community_report_menu.dart';
 import '../repositories/community_repository.dart';
 import '../services/community_service.dart';
 import '../widgets/community_home_content.dart';
@@ -245,6 +246,16 @@ class _GubCommunityHomeScreenState extends State<GubCommunityHomeScreen> {
                               ),
                             ),
                             if (isOwner) const SizedBox(width: 10),
+                            if (!isOwner)
+                              Material(
+                                color: Colors.white.withValues(alpha: 0.84),
+                                shape: const CircleBorder(),
+                                child: CommunityReportMenu(
+                                  community: community,
+                                  isOwner: false,
+                                ),
+                              ),
+                            if (!isOwner) const SizedBox(width: 10),
                             Semantics(
                               button: true,
                               label: 'Community settings',

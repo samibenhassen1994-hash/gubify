@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../../widgets/gub_screen_background.dart';
 import '../../chat/widgets/chat_user_avatar.dart';
+import '../../community/moderation/services/community_moderation_service.dart';
+import '../../community/moderation/widgets/community_report_dialog.dart';
 import '../models/user_profile_model.dart';
 import '../services/user_profile_service.dart';
 import 'user_activity_screen.dart';
@@ -9,6 +11,7 @@ import 'user_activity_screen.dart';
 class UserProfileScreen extends StatefulWidget {
   final String? gubId;
   final String? communityId;
+  final String? communityName;
   final String userId;
   final Future<UserProfileModel?>? profileFuture;
 
@@ -17,11 +20,13 @@ class UserProfileScreen extends StatefulWidget {
     required this.gubId,
     required this.userId,
     this.profileFuture,
-  }) : communityId = null;
+  }) : communityId = null,
+       communityName = null;
 
   const UserProfileScreen.community({
     super.key,
     required this.communityId,
+    required this.communityName,
     required this.userId,
     this.profileFuture,
   }) : gubId = null;
@@ -91,6 +96,27 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                 padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
                 children: [
                   _ProfileHeader(profile: profile),
+                  if (widget.communityId != null && !profile.isCurrentUser) ...[
+                    const SizedBox(height: 18),
+                    Center(
+                      child: OutlinedButton.icon(
+                        onPressed: () => showCommunityReportDialog(
+                          context: context,
+                          title: 'Report User',
+                          onSubmit: (reason, details) =>
+                              CommunityModerationService.instance.reportUser(
+                                communityId: widget.communityId!,
+                                communityName: widget.communityName!,
+                                user: profile,
+                                reason: reason,
+                                details: details,
+                              ),
+                        ),
+                        icon: const Icon(Icons.flag_outlined),
+                        label: const Text('Report User'),
+                      ),
+                    ),
+                  ],
                   if (widget.communityId == null) ...[
                     const SizedBox(height: 30),
                     Text(

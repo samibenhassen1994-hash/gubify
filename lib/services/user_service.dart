@@ -1,5 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../modules/community/restrictions/services/community_restriction_service.dart';
+
 class UserService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
@@ -14,6 +16,15 @@ class UserService {
       'activeHub': null,
       'avatar': null,
     });
+
+    try {
+      await CommunityRestrictionService.instance.initializePlatformRestriction(
+        userId,
+      );
+    } on Object {
+      // Restriction initialization is best-effort and must not block profile
+      // creation for an otherwise valid authenticated account.
+    }
   }
 
   Future<bool> userExists(String userId) async {

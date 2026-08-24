@@ -129,6 +129,9 @@ class CommunityRepository {
     final slugReference = _communitySlugs.doc(slug);
     final nameReference = _communityNames.doc(nameKey);
     final publicReference = _communityPublic.doc(slug);
+    final restrictionReference = _firestore
+        .collection('communityRestrictions')
+        .doc(communityId);
     final ownerMemberReference = communityReference
         .collection('members')
         .doc(ownerId);
@@ -183,6 +186,11 @@ class CommunityRepository {
         'language': language,
         'accessMode': accessMode,
         'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+      transaction.set(restrictionReference, {
+        'hiddenFromDiscovery': false,
+        'joiningRestricted': false,
         'updatedAt': FieldValue.serverTimestamp(),
       });
       transaction.set(ownerMemberReference, {
@@ -802,6 +810,10 @@ class CommunityRepository {
       if (slugReference != null) await transaction.get(slugReference);
       if (nameReference != null) await transaction.get(nameReference);
       if (publicReference != null) await transaction.get(publicReference);
+      final restrictionReference = _firestore
+          .collection('communityRestrictions')
+          .doc(communityId);
+      final restrictionSnapshot = await transaction.get(restrictionReference);
       if (!communitySnapshot.exists) {
         throw const CommunityDeletionException(
           "This Community no longer exists.",
@@ -824,6 +836,7 @@ class CommunityRepository {
       if (slugReference != null) transaction.delete(slugReference);
       if (nameReference != null) transaction.delete(nameReference);
       if (publicReference != null) transaction.delete(publicReference);
+      if (restrictionSnapshot.exists) transaction.delete(restrictionReference);
       transaction.delete(communityReference);
     });
   }

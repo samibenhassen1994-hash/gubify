@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:firebase_auth/firebase_auth.dart';
 
 import '../../../config/app_limits.dart';
@@ -8,6 +10,7 @@ import '../models/community_model.dart';
 import '../models/community_name_conflict.dart';
 import '../repositories/community_name_registry_repository.dart';
 import '../repositories/community_repository.dart';
+import '../restrictions/services/community_restriction_service.dart';
 import '../utils/community_name_key.dart';
 
 class CommunityService {
@@ -131,10 +134,10 @@ class CommunityService {
     }
 
     try {
-      return await CommunityRepository.instance.getCommunityForMember(
-        communityId: normalizedId,
-        userId: user.uid,
-      );
+      final community = await CommunityRepository.instance
+          .getCommunityForMember(communityId: normalizedId, userId: user.uid);
+      _initializeCommunityRestrictionForOwner(community, user.uid);
+      return community;
     } on FirebaseException catch (error) {
       throw Exception(_firebaseErrorMessage(error));
     }
@@ -149,10 +152,37 @@ class CommunityService {
     }
     final normalizedId = communityId.trim();
     if (normalizedId.isEmpty) return const Stream.empty();
-    return CommunityRepository.instance.communityForMemberStream(
-      communityId: normalizedId,
-      userId: user.uid,
+    return CommunityRepository.instance
+        .communityForMemberStream(communityId: normalizedId, userId: user.uid)
+        .map((community) {
+          _initializeCommunityRestrictionForOwner(community, user.uid);
+          return community;
+        });
+  }
+
+  void _initializeCommunityRestrictionForOwner(
+    CommunityModel? community,
+    String currentUserId,
+  ) {
+    if (community == null || community.ownerId != currentUserId) return;
+    unawaited(
+      _initializeCommunityRestriction(community.communityId, currentUserId),
     );
+  }
+
+  Future<void> _initializeCommunityRestriction(
+    String communityId,
+    String ownerId,
+  ) async {
+    try {
+      await CommunityRestrictionService.instance.initializeCommunityRestriction(
+        communityId: communityId,
+        ownerId: ownerId,
+      );
+    } on Object {
+      // Existing Communities remain available when the one-time default cannot
+      // be initialized, and missing documents are safely unrestricted.
+    }
   }
 
   Future<CommunityExplorerPage> loadPublicCommunitiesPage({

@@ -149,6 +149,7 @@ void main() {
       MaterialApp(
         home: UserProfileScreen.community(
           communityId: _community.communityId,
+          communityName: _community.name,
           userId: _member.userId,
           profileFuture: Future.value(
             const UserProfileModel(
@@ -191,5 +192,32 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Activity'), findsOneWidget);
+    expect(find.text('Report User'), findsNothing);
   });
+
+  testWidgets(
+    'Report User appears only for another user in Community context',
+    (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: UserProfileScreen.community(
+            communityId: _community.communityId,
+            communityName: _community.name,
+            userId: _member.userId,
+            profileFuture: Future.value(
+              const UserProfileModel(
+                userId: 'member',
+                displayName: 'Alex',
+                role: 'member',
+                isCurrentUser: false,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Report User'), findsOneWidget);
+    },
+  );
 }
