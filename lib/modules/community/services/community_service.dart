@@ -40,6 +40,9 @@ class CommunityService {
     if (normalizedName.isEmpty) {
       throw ArgumentError("Community name cannot be empty.");
     }
+    if (RegExp(r'[\r\n]').hasMatch(normalizedName)) {
+      throw ArgumentError("Community name cannot contain line breaks.");
+    }
     if (normalizedName.length < AppLimits.gubNameMinLength) {
       throw ArgumentError(
         "Community name must be at least "
@@ -62,9 +65,8 @@ class CommunityService {
 
     try {
       final nameKey = CommunityNameKey.fromName(normalizedName);
-      final legacyNameKey = CommunityNameKey.legacyFromName(normalizedName);
       final existingCommunityId = await CommunityNameRegistryRepository.instance
-          .findExistingCommunityIdForKeys([nameKey, legacyNameKey]);
+          .findExistingCommunityId(nameKey);
       if (existingCommunityId != null) {
         throw CommunityNameAlreadyExistsException(existingCommunityId);
       }

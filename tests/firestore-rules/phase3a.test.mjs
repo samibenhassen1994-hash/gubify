@@ -90,7 +90,7 @@ const communityRoot = (
   language: 'English',
   description: '',
   accessMode: 'open',
-  nameKey: 'test community',
+  nameKey: 'testcommunity',
   slug: 'test-community',
   slugAssignedAt: new Date('2026-01-01T00:00:00Z'),
   ...overrides,

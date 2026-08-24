@@ -34,7 +34,7 @@ function createCommunity({
   actor = ids.owner,
   communityId = 'c1',
   name = 'Football Italia',
-  nameKey = 'football italia',
+  nameKey = 'footballitalia',
   slug = 'football-italia',
   ownerId = actor,
   registryOverrides = {},
@@ -135,7 +135,7 @@ describe('Community slugs and safe public projections', () => {
         communityId: 'c2',
         slug: 'football-italia-fans',
         name: '  FOOTBALL   ITALIA ',
-        nameKey: 'football italia',
+        nameKey: 'footballitalia',
       }),
     );
   });
@@ -149,7 +149,7 @@ describe('Community slugs and safe public projections', () => {
         communityId: 'c2',
         slug: 'football-italia-fans',
         name: 'Football Italia Fans',
-        nameKey: 'football italia fans',
+        nameKey: 'footballitaliafans',
       }),
     );
   });
@@ -160,6 +160,76 @@ describe('Community slugs and safe public projections', () => {
         nameRegistryOverrides: { communityId: 'other-community' },
       }),
     ));
+
+  test('the Rules accept the Dart V2 canonical key for accents and tab whitespace', () =>
+    assertSucceeds(createCommunity({
+      name: 'Cà\tffè',
+      nameKey: 'caffe',
+      slug: 'caffe',
+    })));
+
+  test('line breaks are rejected rather than allowing unverified normalization', () =>
+    assertFails(createCommunity({
+      name: 'Cà\tff\nè',
+      nameKey: 'caffe',
+      slug: 'caffe',
+    })));
+
+  test('the Rules accept the Dart V2 escaped-slash key', () =>
+    assertSucceeds(createCommunity({
+      name: 'Caffè/Roma',
+      nameKey: 'caffe∕roma',
+      slug: 'caffe-roma',
+    })));
+
+  test('an arbitrary Community name key cannot be selected by a modified client', () =>
+    assertFails(createCommunity({ nameKey: 'attacker-selected-key' })));
+
+  test('case, whitespace, and accent variants use the same canonical key', async () => {
+    await assertSucceeds(createCommunity({ name: 'Caffè Test', nameKey: 'caffetest' }));
+    await assertFails(createCommunity({
+      actor: ids.outsider,
+      ownerId: ids.outsider,
+      communityId: 'c2',
+      name: ' C A F F E\tT E S T ',
+      nameKey: 'caffetest',
+      slug: 'caffe-test-2',
+    }));
+  });
+
+  test('concurrent attempts for the same canonical name allow only one owner', async () => {
+    const attempts = await Promise.allSettled([
+      createCommunity({
+        communityId: 'c1',
+        name: 'Race Name',
+        nameKey: 'racename',
+        slug: 'race-name',
+      }),
+      createCommunity({
+        actor: ids.outsider,
+        ownerId: ids.outsider,
+        communityId: 'c2',
+        name: ' R A C E  N A M E ',
+        nameKey: 'racename',
+        slug: 'race-name-2',
+      }),
+    ]);
+
+    assert.equal(attempts.filter((attempt) => attempt.status === 'fulfilled').length, 1);
+    assert.equal(attempts.filter((attempt) => attempt.status === 'rejected').length, 1);
+  });
+
+  test('punctuation remains distinct in canonical keys', async () => {
+    await assertSucceeds(createCommunity());
+    await assertSucceeds(createCommunity({
+      actor: ids.outsider,
+      ownerId: ids.outsider,
+      communityId: 'c2',
+      name: 'Football-Italia',
+      nameKey: 'football-italia',
+      slug: 'football-italia-2',
+    }));
+  });
 
   test('a non-owner cannot reserve a slug for another Community owner', () =>
     assertFails(createCommunity({ actor: ids.outsider, ownerId: ids.owner })));

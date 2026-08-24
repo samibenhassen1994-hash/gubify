@@ -20,5 +20,15 @@ void main() {
       expect(CommunityNameKey.fromName('Calcio/Italia'), 'calcio∕italia');
       expect(CommunityNameKey.fromName('Calcio-Italia'), 'calcio-italia');
     });
+
+    test(
+      'uses the V2 canonical specification for mixed whitespace and accents',
+      () {
+        expect(CommunityNameKey.fromName(' \tCà ff\nè / Roma  '), 'caffe∕roma');
+        expect(CommunityNameKey.fromName('Ærø ß'), 'aeross');
+        expect(CommunityNameKey.fromName('Caffè Test'), 'caffetest');
+        expect(CommunityNameKey.fromName('C A F F E T E S T'), 'caffetest');
+      },
+    );
   });
 }

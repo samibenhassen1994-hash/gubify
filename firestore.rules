@@ -10,6 +10,10 @@ service cloud.firestore {
         && value.size() <= maxLength
         && value.matches('.*\\S.*');
     }
+    function validCommunityName(value) {
+      return validText(value, 3, 30)
+        && value.matches('^[^\\n\\r]*$');
+    }
 
     function gubPath(id) { return /databases/$(database)/documents/gubs/$(id); }
     function gubDoc(id) { return get(gubPath(id)); }
@@ -720,6 +724,20 @@ service cloud.firestore {
     function validCommunityNameKey(nameKey) {
       return nameKey is string && nameKey.size() >= 1 && nameKey.size() <= 60;
     }
+    // V2 Community name key: trim, lowercase, normalize the same common
+    // accents as CommunityNameKey in Dart, remove all whitespace, then escape
+    // slash for the Firestore document ID. Punctuation otherwise remains part
+    // of the key.
+    function canonicalCommunityNameKey(name) {
+      return name.trim().lower()
+        .replace('à', 'a').replace('á', 'a').replace('â', 'a').replace('ã', 'a').replace('ä', 'a').replace('å', 'a')
+        .replace('æ', 'ae').replace('ç', 'c').replace('è', 'e').replace('é', 'e').replace('ê', 'e').replace('ë', 'e')
+        .replace('ì', 'i').replace('í', 'i').replace('î', 'i').replace('ï', 'i').replace('ñ', 'n')
+        .replace('ò', 'o').replace('ó', 'o').replace('ô', 'o').replace('õ', 'o').replace('ö', 'o').replace('ø', 'o').replace('œ', 'oe')
+        .replace('ß', 'ss').replace('ù', 'u').replace('ú', 'u').replace('û', 'u').replace('ü', 'u').replace('ý', 'y').replace('ÿ', 'y')
+        .replace('\\s+', '').replace('[\\r\\n]', '')
+        .replace('/', '∕');
+    }
     function communityOwnerRemovingMember(id, uid) {
       return isCommunityOwner(id) && uid != request.auth.uid
         && exists(communityMemberPath(id, uid))
@@ -799,7 +817,7 @@ service cloud.firestore {
           'type','language','description','accessMode','nameKey','slug','slugAssignedAt'
         ])
         && data.communityId == id
-        && validText(data.name, 3, 30)
+        && validCommunityName(data.name)
         && data.ownerId == request.auth.uid
         && data.memberCount == 1
         && data.visibility == 'public'
@@ -817,7 +835,8 @@ service cloud.firestore {
         && data.description is string
         && data.description.size() <= 280
         && data.accessMode in ['open','approval']
-        && data.nameKey is string && data.nameKey.size() >= 1 && data.nameKey.size() <= 60
+        && validCommunityNameKey(data.nameKey)
+        && data.nameKey == canonicalCommunityNameKey(data.name)
         && validCommunitySlug(data.slug)
         && data.slugAssignedAt == request.time;
     }
@@ -961,6 +980,7 @@ service cloud.firestore {
         && request.resource.data.createdAt == request.time
         && root.communityId == request.resource.data.communityId
         && root.nameKey == nameKey
+        && nameKey == canonicalCommunityNameKey(root.name)
         && root.ownerId == request.auth.uid;
     }
     function validCommunityPublicCreate(slug) {

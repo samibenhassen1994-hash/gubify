@@ -9,30 +9,22 @@ class CommunityNameRegistryRepository {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   Future<String?> findExistingCommunityId(String nameKey) async {
-    return findExistingCommunityIdForKeys([nameKey]);
-  }
+    final normalizedKey = nameKey.trim();
+    if (normalizedKey.isEmpty) return null;
 
-  Future<String?> findExistingCommunityIdForKeys(Iterable<String> nameKeys) async {
-    final seen = <String>{};
-    for (final key in nameKeys) {
-      final normalizedKey = key.trim();
-      if (normalizedKey.isEmpty || !seen.add(normalizedKey)) continue;
+    final snapshot = await _firestore
+        .collection('communityNames')
+        .doc(normalizedKey)
+        .get();
+    if (!snapshot.exists) return null;
 
-      final snapshot = await _firestore
-          .collection('communityNames')
-          .doc(normalizedKey)
-          .get();
-      if (!snapshot.exists) continue;
-
-      final communityId = snapshot.data()?['communityId'];
-      if (communityId is String && communityId.trim().isNotEmpty) {
-        return communityId.trim();
-      }
-
-      // A malformed existing registry still reserves the name. Returning an
-      // empty id blocks duplicate creation while disabling "View Community".
-      return '';
+    final communityId = snapshot.data()?['communityId'];
+    if (communityId is String && communityId.trim().isNotEmpty) {
+      return communityId.trim();
     }
-    return null;
+
+    // A malformed existing registry still reserves the name. Returning an
+    // empty id blocks duplicate creation while disabling "View Community".
+    return '';
   }
 }

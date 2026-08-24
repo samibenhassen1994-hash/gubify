@@ -17,13 +17,4 @@ class CommunityNameKey {
         // from punctuation such as a hyphen so this remains a name key.
         .replaceAll('/', '∕');
   }
-
-  /// Previous Step 4A.1 key format. Used only to detect Communities created
-  /// before whitespace-insensitive duplicate detection was introduced.
-  static String legacyFromName(String name) {
-    final normalized = CommunitySlug.removeAccents(name.trim().toLowerCase());
-    return normalized
-        .replaceAll(RegExp(r'\s+'), ' ')
-        .replaceAll('/', '∕');
-  }
 }

@@ -169,12 +169,12 @@ const createCommunityWithRestriction = () => {
     language: 'English',
     description: '',
     accessMode: 'open',
-    nameKey: name.toLowerCase(),
+    nameKey: name.toLowerCase().replace(/\s+/g, ''),
     slug,
     slugAssignedAt: serverTimestamp(),
   });
-  batch.set(doc(clientDb, 'communityNames', name.toLowerCase()), {
-    nameKey: name.toLowerCase(),
+  batch.set(doc(clientDb, 'communityNames', name.toLowerCase().replace(/\s+/g, '')), {
+    nameKey: name.toLowerCase().replace(/\s+/g, ''),
     communityId,
     ownerId: ids.owner,
     createdAt: serverTimestamp(),

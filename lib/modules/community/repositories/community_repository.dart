@@ -70,29 +70,37 @@ class CommunityRepository {
 
     for (var sequence = 1; sequence <= 100; sequence++) {
       final slug = CommunitySlug.withSuffix(baseSlug, sequence);
-      try {
-        return await _createCommunityWithSlug(
-          name: name,
-          ownerId: ownerId,
-          displayName: displayName,
-          photoUrl: photoUrl,
-          type: type,
-          language: language,
-          description: description,
-          accessMode: accessMode,
-          slug: slug,
-          nameKey: nameKey,
-          ownershipReference: ownershipReference,
-          legacyOwnedCommunity: legacyOwnedCommunity,
-        );
-      } on _CommunitySlugCollision {
-        continue;
+      final result = await _createCommunityWithSlug(
+        name: name,
+        ownerId: ownerId,
+        displayName: displayName,
+        photoUrl: photoUrl,
+        type: type,
+        language: language,
+        description: description,
+        accessMode: accessMode,
+        slug: slug,
+        nameKey: nameKey,
+        ownershipReference: ownershipReference,
+        legacyOwnedCommunity: legacyOwnedCommunity,
+      );
+      switch (result.outcome) {
+        case _CommunityCreationOutcome.created:
+          return result.community;
+        case _CommunityCreationOutcome.slugCollision:
+          continue;
+        case _CommunityCreationOutcome.duplicateName:
+          throw CommunityNameAlreadyExistsException(
+            result.existingCommunityId ?? '',
+          );
+        case _CommunityCreationOutcome.ownershipExists:
+          return null;
       }
     }
     throw StateError('Unable to reserve a unique Community URL.');
   }
 
-  Future<CommunityModel?> _createCommunityWithSlug({
+  Future<_CommunityCreationTransactionResult> _createCommunityWithSlug({
     required String name,
     required String ownerId,
     required String displayName,
@@ -142,9 +150,13 @@ class CommunityRepository {
         .collection('communities')
         .doc(communityId);
 
-    return _firestore.runTransaction<CommunityModel?>((transaction) async {
+    return _firestore.runTransaction<_CommunityCreationTransactionResult>((
+      transaction,
+    ) async {
       final ownershipSnapshot = await transaction.get(ownershipReference);
-      if (ownershipSnapshot.exists) return null;
+      if (ownershipSnapshot.exists) {
+        return const _CommunityCreationTransactionResult.ownershipExists();
+      }
 
       if (legacyOwnedCommunity != null) {
         transaction.set(ownershipReference, {
@@ -152,18 +164,21 @@ class CommunityRepository {
           "communityId": legacyOwnedCommunity.id,
           "createdAt": FieldValue.serverTimestamp(),
         });
-        return null;
+        return const _CommunityCreationTransactionResult.ownershipExists();
       }
 
       final slugSnapshot = await transaction.get(slugReference);
-      if (slugSnapshot.exists) throw const _CommunitySlugCollision();
+      if (slugSnapshot.exists) {
+        return const _CommunityCreationTransactionResult.slugCollision();
+      }
       final nameSnapshot = await transaction.get(nameReference);
       if (nameSnapshot.exists) {
         final existingCommunityId = nameSnapshot.data()?['communityId'];
-        if (existingCommunityId is String && existingCommunityId.isNotEmpty) {
-          throw CommunityNameAlreadyExistsException(existingCommunityId);
-        }
-        throw const CommunityNameAlreadyExistsException('');
+        return _CommunityCreationTransactionResult.duplicateName(
+          existingCommunityId is String && existingCommunityId.isNotEmpty
+              ? existingCommunityId
+              : null,
+        );
       }
 
       transaction.set(communityReference, communityData);
@@ -216,7 +231,7 @@ class CommunityRepository {
         "createdAt": FieldValue.serverTimestamp(),
       });
 
-      return community;
+      return _CommunityCreationTransactionResult.created(community);
     });
   }
 
@@ -515,24 +530,24 @@ class CommunityRepository {
         .doc(userId)
         .collection('communities')
         .doc(communityId);
-    await _firestore.runTransaction((transaction) async {
+    final failure = await _firestore.runTransaction<String?>((
+      transaction,
+    ) async {
       final community = await transaction.get(communityReference);
       final member = await transaction.get(memberReference);
       if (!community.exists ||
           community.data()?['deletionStatus'] == 'deleting') {
-        throw StateError('This Community is no longer available.');
+        return 'This Community is no longer available.';
       }
       if (!member.exists || member.data()?['uid'] != userId) {
-        throw StateError('You are no longer a member of this Community.');
+        return 'You are no longer a member of this Community.';
       }
       final ownerId = community.data()?['ownerId'] as String?;
       if (ownerId == userId) {
-        throw StateError(
-          'The Community owner cannot leave their own Community.',
-        );
+        return 'The Community owner cannot leave their own Community.';
       }
       if (actorId != userId && actorId != ownerId) {
-        throw StateError('Only the Community owner can remove members.');
+        return 'Only the Community owner can remove members.';
       }
       final memberCount =
           (community.data()?['memberCount'] as num?)?.toInt() ?? 1;
@@ -541,7 +556,9 @@ class CommunityRepository {
       transaction.update(communityReference, {
         'memberCount': (memberCount - 1).clamp(1, memberCount),
       });
+      return null;
     });
+    if (failure != null) throw StateError(failure);
   }
 
   Future<void> banCommunityMember({
@@ -559,14 +576,16 @@ class CommunityRepository {
         .collection('communities')
         .doc(communityId);
     final banReference = communityReference.collection('bans').doc(userId);
-    await _firestore.runTransaction((transaction) async {
+    final failure = await _firestore.runTransaction<String?>((
+      transaction,
+    ) async {
       final community = await transaction.get(communityReference);
       final member = await transaction.get(memberReference);
       if (!community.exists ||
           community.data()?['ownerId'] != ownerId ||
           !member.exists ||
           userId == ownerId) {
-        throw StateError('This member cannot be banned.');
+        return 'This member cannot be banned.';
       }
       final count = (community.data()?['memberCount'] as num?)?.toInt() ?? 1;
       transaction.set(banReference, {
@@ -581,7 +600,9 @@ class CommunityRepository {
       transaction.update(communityReference, {
         'memberCount': (count - 1).clamp(1, count),
       });
+      return null;
     });
+    if (failure != null) throw StateError(failure);
   }
 
   Future<void> unbanMember({
@@ -614,11 +635,12 @@ class CommunityRepository {
 
     final communityReference = _communities.doc(normalizedCommunityId);
     try {
-      final ownerId = await _markCommunityForDeletion(
+      await _markCommunityForDeletion(
         communityReference: communityReference,
         confirmationName: confirmationName,
         currentUserId: user.uid,
       );
+      final ownerId = user.uid;
 
       await _captureDeletionMembers(
         communityReference: communityReference,
@@ -645,42 +667,30 @@ class CommunityRepository {
       );
     } on CommunityDeletionException {
       rethrow;
-    } on FirebaseException {
-      throw const CommunityDeletionException(
-        "The deletion was not completed. Keep the app open and try again.",
-      );
-    } catch (_) {
-      throw const CommunityDeletionException(
-        "The deletion was not completed. Keep the app open and try again.",
-      );
     }
   }
 
-  Future<String> _markCommunityForDeletion({
+  Future<void> _markCommunityForDeletion({
     required DocumentReference<Map<String, dynamic>> communityReference,
     required String? confirmationName,
     required String currentUserId,
-  }) {
-    return _firestore.runTransaction<String>((transaction) async {
+  }) async {
+    final failure = await _firestore.runTransaction<String?>((
+      transaction,
+    ) async {
       final snapshot = await transaction.get(communityReference);
       if (!snapshot.exists) {
-        throw const CommunityDeletionException(
-          "This Community no longer exists.",
-        );
+        return "This Community no longer exists.";
       }
 
       final data = snapshot.data()!;
       final ownerId = data["ownerId"];
       if (ownerId != currentUserId) {
-        throw const CommunityDeletionException(
-          "Only the Community owner can delete it.",
-        );
+        return "Only the Community owner can delete it.";
       }
       final deleting = data['deletionStatus'] == 'deleting';
       if (!deleting && data["name"] != confirmationName) {
-        throw const CommunityDeletionException(
-          "The Community name does not match.",
-        );
+        return "The Community name does not match.";
       }
 
       if (!deleting) {
@@ -692,12 +702,11 @@ class CommunityRepository {
         });
       } else if (data['deletionRequestedBy'] != null &&
           data['deletionRequestedBy'] != currentUserId) {
-        throw const CommunityDeletionException(
-          'Only the owner who started this deletion can resume it.',
-        );
+        return 'Only the owner who started this deletion can resume it.';
       }
-      return currentUserId;
+      return null;
     });
+    if (failure != null) throw CommunityDeletionException(failure);
   }
 
   Future<void> _captureDeletionMembers({
@@ -794,11 +803,13 @@ class CommunityRepository {
     required String communityId,
     required DocumentReference<Map<String, dynamic>> communityReference,
     required String currentUserId,
-  }) {
+  }) async {
     final ownershipReference = _firestore
         .collection("communityOwnership")
         .doc(ownerId);
-    return _firestore.runTransaction((transaction) async {
+    final failure = await _firestore.runTransaction<String?>((
+      transaction,
+    ) async {
       final communitySnapshot = await transaction.get(communityReference);
       final ownershipSnapshot = await transaction.get(ownershipReference);
       final slug = _nonEmptyString(communitySnapshot.data()?['slug']);
@@ -816,20 +827,14 @@ class CommunityRepository {
           .doc(communityId);
       final restrictionSnapshot = await transaction.get(restrictionReference);
       if (!communitySnapshot.exists) {
-        throw const CommunityDeletionException(
-          "This Community no longer exists.",
-        );
+        return "This Community no longer exists.";
       }
       final data = communitySnapshot.data()!;
       if (data["ownerId"] != currentUserId) {
-        throw const CommunityDeletionException(
-          "Only the Community owner can delete it.",
-        );
+        return "Only the Community owner can delete it.";
       }
       if (data["deletionStatus"] != "deleting") {
-        throw const CommunityDeletionException(
-          "The deletion was not completed. Keep the app open and try again.",
-        );
+        return "The deletion was not completed. Keep the app open and try again.";
       }
       if (ownershipSnapshot.data()?["communityId"] == communityId) {
         transaction.delete(ownershipReference);
@@ -839,7 +844,9 @@ class CommunityRepository {
       if (publicReference != null) transaction.delete(publicReference);
       if (restrictionSnapshot.exists) transaction.delete(restrictionReference);
       transaction.delete(communityReference);
+      return null;
     });
+    if (failure != null) throw CommunityDeletionException(failure);
   }
 
   Future<CommunityExplorerPage> loadPublicCommunitiesPage({
@@ -1088,7 +1095,7 @@ class CommunityRepository {
     required String userId,
     required String displayName,
     required String? photoUrl,
-  }) {
+  }) async {
     final communityReference = _communities.doc(communityId);
     final memberReference = communityReference
         .collection("members")
@@ -1098,21 +1105,29 @@ class CommunityRepository {
         .doc(userId)
         .collection("communities")
         .doc(communityId);
-    return _firestore.runTransaction((transaction) async {
+    final result = await _firestore.runTransaction<_CommunityJoinResult>((
+      transaction,
+    ) async {
       final communitySnapshot = await transaction.get(communityReference);
       if (!communitySnapshot.exists) {
-        throw StateError("Community not found.");
+        return const _CommunityJoinResult.failure("Community not found.");
       }
       if (communitySnapshot.data()?["deletionStatus"] == "deleting") {
-        throw StateError("This Community is being deleted.");
+        return const _CommunityJoinResult.failure(
+          "This Community is being deleted.",
+        );
       }
 
       final community = CommunityModel.fromFirestore(communitySnapshot);
       if (community.visibility != CommunityModel.publicVisibility) {
-        throw StateError("This community is not public.");
+        return const _CommunityJoinResult.failure(
+          "This community is not public.",
+        );
       }
       if (community.accessMode != CommunityModel.openAccessMode) {
-        throw StateError("This Community requires owner approval.");
+        return const _CommunityJoinResult.failure(
+          "This Community requires owner approval.",
+        );
       }
       final userCommunitySnapshot = await transaction.get(
         userCommunityReference,
@@ -1134,7 +1149,7 @@ class CommunityRepository {
             });
           }
         }
-        return community;
+        return _CommunityJoinResult.success(community);
       }
 
       final updatedMemberCount = community.memberCount + 1;
@@ -1158,8 +1173,12 @@ class CommunityRepository {
         "joinedAt": FieldValue.serverTimestamp(),
       });
 
-      return community.copyWith(memberCount: updatedMemberCount);
+      return _CommunityJoinResult.success(
+        community.copyWith(memberCount: updatedMemberCount),
+      );
     });
+    if (result.errorMessage != null) throw StateError(result.errorMessage!);
+    return result.community!;
   }
 
   Future<CommunityPublicAccessState?> getPublicAccessState({
@@ -1195,7 +1214,7 @@ class CommunityRepository {
     required String communityId,
     required String userId,
     required String displayName,
-  }) {
+  }) async {
     final communityReference = _communities.doc(communityId);
     final memberReference = communityReference
         .collection("members")
@@ -1203,25 +1222,27 @@ class CommunityRepository {
     final requestReference = communityReference
         .collection("joinRequests")
         .doc(userId);
-    return _firestore.runTransaction((transaction) async {
+    final failure = await _firestore.runTransaction<String?>((
+      transaction,
+    ) async {
       final community = await transaction.get(communityReference);
       final member = await transaction.get(memberReference);
       final request = await transaction.get(requestReference);
-      if (!community.exists) throw StateError("Community not found.");
+      if (!community.exists) return "Community not found.";
       final model = CommunityModel.fromFirestore(community);
       if (model.deletionStatus == "deleting") {
-        throw StateError("This Community is being deleted.");
+        return "This Community is being deleted.";
       }
       if (model.accessMode != CommunityModel.approvalAccessMode) {
-        throw StateError("This Community does not require approval.");
+        return "This Community does not require approval.";
       }
-      if (member.exists) throw StateError("You are already a member.");
+      if (member.exists) return "You are already a member.";
       final existingRequestStatus = request.data()?['status'];
       final canResetExistingRequest =
           existingRequestStatus == CommunityAccessRequestModel.rejectedStatus ||
           existingRequestStatus == CommunityAccessRequestModel.approvedStatus;
       if (request.exists && !canResetExistingRequest) {
-        throw StateError("A request for this Community already exists.");
+        return "A request for this Community already exists.";
       }
       if (request.exists) {
         transaction.update(requestReference, {
@@ -1237,26 +1258,32 @@ class CommunityRepository {
           "createdAt": FieldValue.serverTimestamp(),
         });
       }
+      return null;
     });
+    if (failure != null) throw StateError(failure);
   }
 
   Future<void> cancelJoinRequest({
     required String communityId,
     required String userId,
-  }) {
+  }) async {
     final requestReference = _communities
         .doc(communityId)
         .collection("joinRequests")
         .doc(userId);
-    return _firestore.runTransaction((transaction) async {
+    final failure = await _firestore.runTransaction<String?>((
+      transaction,
+    ) async {
       final request = await transaction.get(requestReference);
       if (!request.exists ||
           request.data()?["status"] !=
               CommunityAccessRequestModel.pendingStatus) {
-        throw StateError("This request is no longer pending.");
+        return "This request is no longer pending.";
       }
       transaction.delete(requestReference);
+      return null;
     });
+    if (failure != null) throw StateError(failure);
   }
 
   Future<List<CommunityAccessRequestModel>> pendingJoinRequests({
@@ -1303,7 +1330,7 @@ class CommunityRepository {
     required String communityId,
     required String ownerId,
     required String userId,
-  }) {
+  }) async {
     final communityReference = _communities.doc(communityId);
     final requestReference = communityReference
         .collection("joinRequests")
@@ -1319,25 +1346,27 @@ class CommunityRepository {
     final mutationReference = communityReference
         .collection("membershipMutations")
         .doc("current");
-    return _firestore.runTransaction((transaction) async {
+    final failure = await _firestore.runTransaction<String?>((
+      transaction,
+    ) async {
       final communitySnapshot = await transaction.get(communityReference);
       final requestSnapshot = await transaction.get(requestReference);
       final memberSnapshot = await transaction.get(memberReference);
-      if (!communitySnapshot.exists) throw StateError("Community not found.");
+      if (!communitySnapshot.exists) return "Community not found.";
       final community = CommunityModel.fromFirestore(communitySnapshot);
       if (community.ownerId != ownerId) {
-        throw StateError("Only the Community owner can approve requests.");
+        return "Only the Community owner can approve requests.";
       }
       if (community.deletionStatus == "deleting") {
-        throw StateError("This Community is being deleted.");
+        return "This Community is being deleted.";
       }
       if (!requestSnapshot.exists ||
           requestSnapshot.data()?["status"] !=
               CommunityAccessRequestModel.pendingStatus) {
-        throw StateError("This request is no longer pending.");
+        return "This request is no longer pending.";
       }
       if (memberSnapshot.exists) {
-        throw StateError("This user is already a member.");
+        return "This user is already a member.";
       }
       final requestData = requestSnapshot.data()!;
       final displayName = requestData["displayName"] as String? ?? "User";
@@ -1372,35 +1401,41 @@ class CommunityRepository {
         "ownerId": ownerId,
         "createdAt": FieldValue.serverTimestamp(),
       });
+      return null;
     });
+    if (failure != null) throw StateError(failure);
   }
 
   Future<void> rejectJoinRequest({
     required String communityId,
     required String ownerId,
     required String userId,
-  }) {
+  }) async {
     final communityReference = _communities.doc(communityId);
     final requestReference = communityReference
         .collection("joinRequests")
         .doc(userId);
-    return _firestore.runTransaction((transaction) async {
+    final failure = await _firestore.runTransaction<String?>((
+      transaction,
+    ) async {
       final community = await transaction.get(communityReference);
       final request = await transaction.get(requestReference);
       if (!community.exists || community.data()?["ownerId"] != ownerId) {
-        throw StateError("Only the Community owner can reject requests.");
+        return "Only the Community owner can reject requests.";
       }
       if (!request.exists ||
           request.data()?["status"] !=
               CommunityAccessRequestModel.pendingStatus) {
-        throw StateError("This request is no longer pending.");
+        return "This request is no longer pending.";
       }
       transaction.update(requestReference, {
         "status": CommunityAccessRequestModel.rejectedStatus,
         "resolvedAt": FieldValue.serverTimestamp(),
         "resolvedBy": ownerId,
       });
+      return null;
     });
+    if (failure != null) throw StateError(failure);
   }
 
   String? _nonEmptyString(Object? value) {
@@ -1441,6 +1476,45 @@ class CommunityDeletionException implements Exception {
   String toString() => message;
 }
 
-class _CommunitySlugCollision implements Exception {
-  const _CommunitySlugCollision();
+enum _CommunityCreationOutcome {
+  created,
+  slugCollision,
+  duplicateName,
+  ownershipExists,
+}
+
+class _CommunityCreationTransactionResult {
+  final _CommunityCreationOutcome outcome;
+  final CommunityModel? community;
+  final String? existingCommunityId;
+
+  const _CommunityCreationTransactionResult._(
+    this.outcome, {
+    this.community,
+    this.existingCommunityId,
+  });
+
+  const _CommunityCreationTransactionResult.created(CommunityModel community)
+    : this._(_CommunityCreationOutcome.created, community: community);
+
+  const _CommunityCreationTransactionResult.slugCollision()
+    : this._(_CommunityCreationOutcome.slugCollision);
+
+  const _CommunityCreationTransactionResult.duplicateName(String? communityId)
+    : this._(
+        _CommunityCreationOutcome.duplicateName,
+        existingCommunityId: communityId,
+      );
+
+  const _CommunityCreationTransactionResult.ownershipExists()
+    : this._(_CommunityCreationOutcome.ownershipExists);
+}
+
+class _CommunityJoinResult {
+  final CommunityModel? community;
+  final String? errorMessage;
+
+  const _CommunityJoinResult.success(this.community) : errorMessage = null;
+
+  const _CommunityJoinResult.failure(this.errorMessage) : community = null;
 }

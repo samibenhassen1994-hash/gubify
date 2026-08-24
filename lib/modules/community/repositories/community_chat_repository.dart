@@ -41,14 +41,16 @@ class CommunityChatRepository {
     final data = message.toFirestore()
       ..["createdAt"] = FieldValue.serverTimestamp();
 
-    await _firestore.runTransaction((transaction) async {
+    final canSend = await _firestore.runTransaction<bool>((transaction) async {
       final community = await transaction.get(communityReference);
       if (!community.exists ||
           community.data()?["deletionStatus"] == "deleting") {
-        throw StateError("This Community is being deleted.");
+        return false;
       }
       transaction.set(messageReference, data);
+      return true;
     });
+    if (!canSend) throw StateError("This Community is being deleted.");
   }
 
   Stream<List<CommunityChatMessageModel>> messagesStream({
