@@ -6,6 +6,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../models/community_access_request_model.dart';
 import '../models/community_model.dart';
 import '../models/community_name_conflict.dart';
+import '../images/community_image_models.dart';
 import '../utils/community_name_key.dart';
 import '../utils/community_slug.dart';
 
@@ -240,6 +241,62 @@ class CommunityRepository {
     if (!document.exists) return null;
 
     return CommunityModel.fromFirestore(document);
+  }
+
+  Future<void> updateCommunityImage({
+    required String communityId,
+    required CommunityImageUploadMetadata metadata,
+  }) async {
+    final user = _auth.currentUser;
+    if (user == null) {
+      throw StateError('You must be signed in to update a Community image.');
+    }
+    final communityReference = _communities.doc(communityId);
+    final outcome = await _firestore
+        .runTransaction<_CommunityImageWriteOutcome>((transaction) async {
+          final communitySnapshot = await transaction.get(communityReference);
+          if (!communitySnapshot.exists) {
+            return _CommunityImageWriteOutcome.missingCommunity;
+          }
+          final data = communitySnapshot.data()!;
+          if (data['ownerId'] != user.uid) {
+            return _CommunityImageWriteOutcome.notOwner;
+          }
+          if (data['deletionStatus'] == 'deleting') {
+            return _CommunityImageWriteOutcome.unavailable;
+          }
+          final slug = data['slug'];
+          if (slug is! String || slug.trim().isEmpty) {
+            return _CommunityImageWriteOutcome.unavailable;
+          }
+          final publicReference = _communityPublic.doc(slug.trim());
+          final publicSnapshot = await transaction.get(publicReference);
+          if (!publicSnapshot.exists ||
+              publicSnapshot.data()?['communityId'] != communityId) {
+            return _CommunityImageWriteOutcome.unavailable;
+          }
+          transaction.update(communityReference, {
+            'imageUrl': metadata.imageUrl,
+            'imagePublicId': metadata.publicId,
+            'imageVersion': metadata.version,
+            'imageUpdatedAt': FieldValue.serverTimestamp(),
+          });
+          transaction.update(publicReference, {
+            'imageUrl': metadata.imageUrl,
+            'imageVersion': metadata.version,
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+          return _CommunityImageWriteOutcome.updated;
+        });
+    switch (outcome) {
+      case _CommunityImageWriteOutcome.updated:
+        return;
+      case _CommunityImageWriteOutcome.notOwner:
+        throw StateError('Only the Community owner can change its image.');
+      case _CommunityImageWriteOutcome.missingCommunity:
+      case _CommunityImageWriteOutcome.unavailable:
+        throw StateError('This Community image cannot be updated right now.');
+    }
   }
 
   Stream<CommunityModel?> communityForMemberStream({
@@ -1447,6 +1504,13 @@ class CommunityRepository {
   Timestamp? _timestampValue(Object? value) {
     return value is Timestamp ? value : null;
   }
+}
+
+enum _CommunityImageWriteOutcome {
+  updated,
+  missingCommunity,
+  notOwner,
+  unavailable,
 }
 
 class CommunityExplorerCursor {

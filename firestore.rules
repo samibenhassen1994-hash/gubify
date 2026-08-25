@@ -840,6 +840,60 @@ service cloud.firestore {
         && validCommunitySlug(data.slug)
         && data.slugAssignedAt == request.time;
     }
+    function validCommunityImageUrl(id, imageUrl) {
+      // Rules cannot parse the decimal /v.../ segment into an integer. The
+      // client persists URL/version from one Cloudinary response; Rules still
+      // require a positive URL version and exact root/public integer equality.
+      return id.matches('^[A-Za-z0-9]+$')
+        && imageUrl is string
+        && imageUrl.matches('^https://res[.]cloudinary[.]com/s3yauoza/image/upload/v[1-9][0-9]*/community_' + id + '[.][A-Za-z0-9]+$');
+    }
+    function validCommunityImageRootUpdate(id) {
+      let data = request.resource.data;
+      let publicAfter = getAfter(communityPublicPath(resource.data.slug)).data;
+      return signedIn()
+        && resource.data.ownerId == request.auth.uid
+        && resource.data.get('deletionStatus', 'active') != 'deleting'
+        && data.diff(resource.data).affectedKeys().hasOnly([
+          'imageUrl','imagePublicId','imageVersion','imageUpdatedAt'
+        ])
+        && data.keys().hasAll([
+          'imageUrl','imagePublicId','imageVersion','imageUpdatedAt'
+        ])
+        && data.imagePublicId == 'community_' + id
+        && validCommunityImageUrl(id, data.imageUrl)
+        && data.imageVersion is int
+        && data.imageVersion > 0
+        && data.imageUpdatedAt == request.time
+        && publicAfter.keys().hasAll(['imageUrl','imageVersion','updatedAt'])
+        && publicAfter.communityId == id
+        && publicAfter.slug == resource.data.slug
+        && publicAfter.imageUrl == data.imageUrl
+        && publicAfter.imageVersion == data.imageVersion
+        && publicAfter.updatedAt == request.time;
+    }
+    function validCommunityImagePublicUpdate(slug) {
+      let data = request.resource.data;
+      let rootBefore = communityDoc(resource.data.communityId).data;
+      let rootAfter = communityAfter(resource.data.communityId).data;
+      return signedIn()
+        && rootBefore.ownerId == request.auth.uid
+        && rootBefore.get('deletionStatus', 'active') != 'deleting'
+        && data.diff(resource.data).affectedKeys().hasOnly([
+          'imageUrl','imageVersion','updatedAt'
+        ])
+        && data.keys().hasAll(['imageUrl','imageVersion','updatedAt'])
+        && data.slug == slug
+        && rootAfter.slug == slug
+        && rootAfter.keys().hasAll([
+          'imageUrl','imagePublicId','imageVersion','imageUpdatedAt'
+        ])
+        && data.imageUrl == rootAfter.imageUrl
+        && data.imageVersion == rootAfter.imageVersion
+        && rootAfter.imagePublicId == 'community_' + resource.data.communityId
+        && rootAfter.imageUpdatedAt == request.time
+        && data.updatedAt == request.time;
+    }
     function validModerationReportCommon(reportId) {
       let data = request.resource.data;
       return data.reportId == reportId
@@ -1473,8 +1527,12 @@ service cloud.firestore {
         && validCommunityMemberAndCopy(id, request.auth.uid, 'owner')
         && getAfter(ownershipPath(request.auth.uid)).data.communityId == id
         && validCommunityRootSlugProjection(id);
-      allow update: if (
-        communityActive(id)
+      allow update: if request.resource.data.diff(resource.data).affectedKeys().hasAny([
+          'imageUrl','imagePublicId','imageVersion','imageUpdatedAt'
+        ])
+        ? validCommunityImageRootUpdate(id)
+        : (
+          communityActive(id)
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memberCount'])
           && request.resource.data.memberCount == resource.data.memberCount + 1
           && (validCommunityMemberAndCopy(id, request.auth.uid, 'member')
@@ -1498,7 +1556,7 @@ service cloud.firestore {
           && request.resource.data.get('deletionStartedBy','') == resource.data.get('deletionStartedBy','')
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['deletionMembersCapturedAt'])
           && request.resource.data.deletionMembersCapturedAt == request.time)
-      );
+        );
       allow delete: if communityFinalizingDeletion(id);
       match /members/{uid} {
         allow get: if communityExists(id)
@@ -1635,7 +1693,7 @@ service cloud.firestore {
       allow get: if true;
       allow list: if false;
       allow create: if signedIn() && validCommunityPublicCreate(slug);
-      allow update: if false;
+      allow update: if validCommunityImagePublicUpdate(slug);
       allow delete: if communityFinalizingDeletion(resource.data.communityId)
         && resource.data.slug == slug;
     }

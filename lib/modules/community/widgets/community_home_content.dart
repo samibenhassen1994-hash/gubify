@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../widgets/gub_content_card.dart';
 import '../models/community_model.dart';
+import '../images/community_image_view.dart';
 import '../services/community_service.dart';
 import 'community_chat_view.dart';
 
@@ -25,17 +26,9 @@ class CommunityHomeContent extends StatelessWidget {
       children: [
         if (isKeyboardOpen)
           Padding(
-            padding: EdgeInsets.fromLTRB(
-              80,
-              12,
-              isOwner ? 148 : 80,
-              8,
-            ),
+            padding: EdgeInsets.fromLTRB(80, 12, isOwner ? 148 : 80, 8),
             child: Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 14,
-                vertical: 10,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               decoration: BoxDecoration(
                 color: Colors.white.withValues(alpha: 0.88),
                 borderRadius: BorderRadius.circular(18),
@@ -53,9 +46,7 @@ class CommunityHomeContent extends StatelessWidget {
                       community.name,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w700,
-                      ),
+                      style: const TextStyle(fontWeight: FontWeight.w700),
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -79,20 +70,13 @@ class CommunityHomeContent extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(
-                    Icons.groups_rounded,
-                    size: 48,
-                    color: Color(0xFF2563EB),
-                  ),
+                  CommunityImageView(imageUrl: community.imageUrl, size: 84),
                   const SizedBox(height: 16),
                   Text(
                     community.name,
-                    style: Theme.of(context)
-                        .textTheme
-                        .headlineMedium
-                        ?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
+                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                   const SizedBox(height: 8),
                   const Text(
@@ -121,11 +105,7 @@ class CommunityHomeContent extends StatelessWidget {
               ),
             ),
           ),
-        Expanded(
-          child: CommunityChatView(
-            communityId: community.communityId,
-          ),
-        ),
+        Expanded(child: CommunityChatView(communityId: community.communityId)),
       ],
     );
   }
@@ -152,16 +132,9 @@ class CommunityStateMessage extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(
-                icon,
-                size: 44,
-                color: const Color(0xFF2563EB),
-              ),
+              Icon(icon, size: 44, color: const Color(0xFF2563EB)),
               const SizedBox(height: 12),
-              Text(
-                message,
-                textAlign: TextAlign.center,
-              ),
+              Text(message, textAlign: TextAlign.center),
               if (details != null) ...[
                 const SizedBox(height: 8),
                 Text(
@@ -182,18 +155,12 @@ class _CommunityChip extends StatelessWidget {
   final IconData icon;
   final String label;
 
-  const _CommunityChip({
-    required this.icon,
-    required this.label,
-  });
+  const _CommunityChip({required this.icon, required this.label});
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 12,
-        vertical: 8,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
         color: const Color(0xFFEFF6FF),
         borderRadius: BorderRadius.circular(999),
@@ -201,18 +168,9 @@ class _CommunityChip extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            icon,
-            size: 18,
-            color: const Color(0xFF2563EB),
-          ),
+          Icon(icon, size: 18, color: const Color(0xFF2563EB)),
           const SizedBox(width: 6),
-          Text(
-            label,
-            style: const TextStyle(
-              fontWeight: FontWeight.w600,
-            ),
-          ),
+          Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
         ],
       ),
     );

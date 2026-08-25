@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../widgets/gub_content_card.dart';
 import '../models/community_model.dart';
+import '../images/community_image_view.dart';
 
 class CommunityExplorerCard extends StatelessWidget {
   final CommunityModel community;
@@ -28,28 +29,39 @@ class CommunityExplorerCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: Text(
-                      community.name,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 19,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
+                  CommunityImageView(imageUrl: community.imageUrl, size: 68),
                   const SizedBox(width: 12),
-                  _StatusBadge(
-                    label: isJoined
-                        ? "Member"
-                        : community.accessMode == CommunityModel.openAccessMode
-                        ? "Open"
-                        : "Approval",
-                    color: isJoined
-                        ? const Color(0xFF059669)
-                        : const Color(0xFF2563EB),
+                  Expanded(
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            community.name,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 19,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        _StatusBadge(
+                          label: isJoined
+                              ? "Member"
+                              : community.accessMode ==
+                                    CommunityModel.openAccessMode
+                              ? "Open"
+                              : "Approval",
+                          color: isJoined
+                              ? const Color(0xFF059669)
+                              : const Color(0xFF2563EB),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),

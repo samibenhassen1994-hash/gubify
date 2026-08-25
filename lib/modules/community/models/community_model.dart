@@ -66,6 +66,10 @@ class CommunityModel {
   final Timestamp? slugAssignedAt;
   final String? deletionStatus;
   final String? deletionRequestedBy;
+  final String? imageUrl;
+  final String? imagePublicId;
+  final int? imageVersion;
+  final Timestamp? imageUpdatedAt;
 
   bool get usesJoinRequests => accessMode == approvalAccessMode;
 
@@ -88,19 +92,30 @@ class CommunityModel {
     this.slugAssignedAt,
     this.deletionStatus,
     this.deletionRequestedBy,
+    this.imageUrl,
+    this.imagePublicId,
+    this.imageVersion,
+    this.imageUpdatedAt,
   });
 
   factory CommunityModel.fromFirestore(
     DocumentSnapshot<Map<String, dynamic>> document,
-  ) {
-    final data = document.data() ?? const <String, dynamic>{};
+  ) => CommunityModel.fromData(
+    documentId: document.id,
+    data: document.data() ?? const <String, dynamic>{},
+  );
+
+  factory CommunityModel.fromData({
+    required String documentId,
+    required Map<String, dynamic> data,
+  }) {
     final storedCommunityId = data["communityId"];
 
     return CommunityModel(
       communityId:
           storedCommunityId is String && storedCommunityId.trim().isNotEmpty
           ? storedCommunityId.trim()
-          : document.id,
+          : documentId,
       name: data["name"] as String? ?? "",
       ownerId: data["ownerId"] as String? ?? "",
       memberCount: (data["memberCount"] as num?)?.toInt() ?? 0,
@@ -120,6 +135,10 @@ class CommunityModel {
       slugAssignedAt: data['slugAssignedAt'] as Timestamp?,
       deletionStatus: data['deletionStatus'] as String?,
       deletionRequestedBy: data['deletionRequestedBy'] as String?,
+      imageUrl: _optionalString(data['imageUrl']),
+      imagePublicId: _optionalString(data['imagePublicId']),
+      imageVersion: (data['imageVersion'] as num?)?.toInt(),
+      imageUpdatedAt: data['imageUpdatedAt'] as Timestamp?,
     );
   }
 
@@ -138,10 +157,20 @@ class CommunityModel {
       if (nameKey != null) "nameKey": nameKey,
       if (slug != null) "slug": slug,
       if (slugAssignedAt != null) "slugAssignedAt": slugAssignedAt,
+      if (imageUrl != null) "imageUrl": imageUrl,
+      if (imagePublicId != null) "imagePublicId": imagePublicId,
+      if (imageVersion != null) "imageVersion": imageVersion,
+      if (imageUpdatedAt != null) "imageUpdatedAt": imageUpdatedAt,
     };
   }
 
-  CommunityModel copyWith({int? memberCount}) {
+  CommunityModel copyWith({
+    int? memberCount,
+    String? imageUrl,
+    String? imagePublicId,
+    int? imageVersion,
+    Timestamp? imageUpdatedAt,
+  }) {
     return CommunityModel(
       communityId: communityId,
       name: name,
@@ -158,6 +187,10 @@ class CommunityModel {
       slugAssignedAt: slugAssignedAt,
       deletionStatus: deletionStatus,
       deletionRequestedBy: deletionRequestedBy,
+      imageUrl: imageUrl ?? this.imageUrl,
+      imagePublicId: imagePublicId ?? this.imagePublicId,
+      imageVersion: imageVersion ?? this.imageVersion,
+      imageUpdatedAt: imageUpdatedAt ?? this.imageUpdatedAt,
     );
   }
 

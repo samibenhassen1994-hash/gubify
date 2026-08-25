@@ -6,6 +6,7 @@ import '../../../widgets/gub_screen_background.dart';
 import '../../../screens/welcome_screen.dart';
 import '../../../screens/gub/my_gubs_screen.dart';
 import '../models/community_model.dart';
+import '../images/community_image_settings_card.dart';
 import '../services/community_service.dart';
 import 'community_join_requests_screen.dart';
 import 'community_members_screen.dart';
@@ -22,10 +23,12 @@ class CommunitySettingsScreen extends StatefulWidget {
 
 class _CommunitySettingsScreenState extends State<CommunitySettingsScreen> {
   late final Future<String> _roleFuture;
+  late CommunityModel _community;
 
   @override
   void initState() {
     super.initState();
+    _community = widget.community;
     _roleFuture = CommunityService.instance.currentUserRole(
       widget.community.communityId,
     );
@@ -195,6 +198,12 @@ class _CommunitySettingsScreenState extends State<CommunitySettingsScreen> {
                   ),
                 ),
               ],
+              CommunityImageManagementSection(
+                isOwner: isOwner,
+                community: _community,
+                onUpdated: (community) =>
+                    setState(() => _community = community),
+              ),
               if (isOwner) ...[
                 const SizedBox(height: 16),
                 GubContentCard(

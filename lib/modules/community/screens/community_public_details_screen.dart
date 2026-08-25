@@ -4,6 +4,7 @@ import '../../../widgets/gub_content_card.dart';
 import '../../../widgets/gub_screen_background.dart';
 import '../models/community_access_request_model.dart';
 import '../models/community_model.dart';
+import '../images/community_image_view.dart';
 import '../moderation/widgets/community_report_dialog.dart';
 import '../moderation/widgets/community_report_menu.dart';
 import '../restrictions/models/community_restriction_model.dart';
@@ -172,11 +173,7 @@ class _CommunityPublicDetailsScreenState
                     reportSubmit: widget.reportSubmit,
                   ),
                 ),
-              const Icon(
-                Icons.public_rounded,
-                size: 48,
-                color: Color(0xFF2563EB),
-              ),
+              CommunityImageView(imageUrl: community.imageUrl, size: 96),
               const SizedBox(height: 16),
               Text(
                 community.name,
