@@ -123,6 +123,46 @@ class CommunityImageRepository {
     );
   }
 
+  Future<void> delete({
+    required String communityId,
+    required String idToken,
+  }) async {
+    late final http.Response response;
+    try {
+      response = await _client.post(
+        Uri.parse('$workerBaseUrl/delete-image'),
+        headers: {
+          'Authorization': 'Bearer $idToken',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({'communityId': communityId}),
+      );
+    } on http.ClientException {
+      throw const CommunityImageDeleteException(
+        'Unable to remove the Community image. Please try again.',
+      );
+    }
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw const CommunityImageDeleteException(
+        'Unable to remove the Community image. Please try again.',
+      );
+    }
+    late final Map<String, dynamic> result;
+    try {
+      result = _jsonObject(response.body);
+    } on CommunityImageUploadException {
+      throw const CommunityImageDeleteException(
+        'Unable to remove the Community image. Please try again.',
+      );
+    }
+    if (result['ok'] != true ||
+        (result['result'] != 'ok' && result['result'] != 'not found')) {
+      throw const CommunityImageDeleteException(
+        'Unable to remove the Community image. Please try again.',
+      );
+    }
+  }
+
   static bool _isExpectedSecureUrl(String value, String communityId) {
     final escapedId = RegExp.escape(communityId);
     return RegExp(

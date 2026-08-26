@@ -73,4 +73,24 @@ void main() {
     expect(community.imageVersion, isNull);
     expect(community.imageUpdatedAt, isNull);
   });
+
+  test('withoutImage clears every Community image field', () {
+    final community = CommunityModel.fromData(
+      documentId: 'abc123',
+      data: {
+        'imageUrl':
+            'https://res.cloudinary.com/s3yauoza/image/upload/v9/community_abc123.jpg',
+        'imagePublicId': 'community_abc123',
+        'imageVersion': 9,
+        'imageUpdatedAt': Timestamp.fromMillisecondsSinceEpoch(5000),
+      },
+    );
+
+    final withoutImage = community.withoutImage();
+
+    expect(withoutImage.imageUrl, isNull);
+    expect(withoutImage.imagePublicId, isNull);
+    expect(withoutImage.imageVersion, isNull);
+    expect(withoutImage.imageUpdatedAt, isNull);
+  });
 }

@@ -194,6 +194,26 @@ class CommunityModel {
     );
   }
 
+  CommunityModel withoutImage() {
+    return CommunityModel(
+      communityId: communityId,
+      name: name,
+      ownerId: ownerId,
+      memberCount: memberCount,
+      visibility: visibility,
+      createdAt: createdAt,
+      type: type,
+      language: language,
+      description: description,
+      accessMode: accessMode,
+      nameKey: nameKey,
+      slug: slug,
+      slugAssignedAt: slugAssignedAt,
+      deletionStatus: deletionStatus,
+      deletionRequestedBy: deletionRequestedBy,
+    );
+  }
+
   static String normalizeType(String? value) =>
       _normalizedOption(value, availableTypes, defaultType);
 

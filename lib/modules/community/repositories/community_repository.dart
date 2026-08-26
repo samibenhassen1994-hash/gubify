@@ -7,6 +7,7 @@ import '../models/community_access_request_model.dart';
 import '../models/community_model.dart';
 import '../models/community_name_conflict.dart';
 import '../images/community_image_models.dart';
+import '../images/community_deletion_media_gate.dart';
 import '../utils/community_name_key.dart';
 import '../utils/community_slug.dart';
 
@@ -296,6 +297,62 @@ class CommunityRepository {
       case _CommunityImageWriteOutcome.missingCommunity:
       case _CommunityImageWriteOutcome.unavailable:
         throw StateError('This Community image cannot be updated right now.');
+    }
+  }
+
+  Future<void> removeCommunityImage({required String communityId}) async {
+    final user = _auth.currentUser;
+    if (user == null) {
+      throw StateError('You must be signed in to remove a Community image.');
+    }
+    final communityReference = _communities.doc(communityId);
+    final outcome = await _firestore
+        .runTransaction<_CommunityImageWriteOutcome>((transaction) async {
+          final communitySnapshot = await transaction.get(communityReference);
+          if (!communitySnapshot.exists) {
+            return _CommunityImageWriteOutcome.missingCommunity;
+          }
+          final data = communitySnapshot.data()!;
+          if (data['ownerId'] != user.uid) {
+            return _CommunityImageWriteOutcome.notOwner;
+          }
+          if (data['deletionStatus'] == 'deleting') {
+            return _CommunityImageWriteOutcome.unavailable;
+          }
+          final slug = data['slug'];
+          if (slug is! String || slug.trim().isEmpty) {
+            return _CommunityImageWriteOutcome.unavailable;
+          }
+          final publicReference = _communityPublic.doc(slug.trim());
+          final publicSnapshot = await transaction.get(publicReference);
+          if (!publicSnapshot.exists ||
+              publicSnapshot.data()?['communityId'] != communityId) {
+            return _CommunityImageWriteOutcome.unavailable;
+          }
+          if (data['imageUrl'] == null) {
+            return _CommunityImageWriteOutcome.updated;
+          }
+          transaction.update(communityReference, {
+            'imageUrl': FieldValue.delete(),
+            'imagePublicId': FieldValue.delete(),
+            'imageVersion': FieldValue.delete(),
+            'imageUpdatedAt': FieldValue.delete(),
+          });
+          transaction.update(publicReference, {
+            'imageUrl': FieldValue.delete(),
+            'imageVersion': FieldValue.delete(),
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+          return _CommunityImageWriteOutcome.updated;
+        });
+    switch (outcome) {
+      case _CommunityImageWriteOutcome.updated:
+        return;
+      case _CommunityImageWriteOutcome.notOwner:
+        throw StateError('Only the Community owner can remove its image.');
+      case _CommunityImageWriteOutcome.missingCommunity:
+      case _CommunityImageWriteOutcome.unavailable:
+        throw StateError('This Community image cannot be removed right now.');
     }
   }
 
@@ -677,6 +734,7 @@ class CommunityRepository {
   Future<void> deleteCommunityClientSide({
     required String communityId,
     required String? confirmationName,
+    required Future<void> Function(String communityId) deleteImageAsset,
   }) async {
     final user = _auth.currentUser;
     if (user == null) {
@@ -699,28 +757,34 @@ class CommunityRepository {
       );
       final ownerId = user.uid;
 
-      await _captureDeletionMembers(
+      final hasImage = await _captureDeletionMembers(
         communityReference: communityReference,
         ownerId: ownerId,
       );
-
-      await _deleteUserMembershipCopies(
+      await runCommunityDeletionAfterMediaCleanup(
         communityId: normalizedCommunityId,
-        communityReference: communityReference,
-      );
+        hasImage: hasImage,
+        deleteImageAsset: deleteImageAsset,
+        continueDeletion: () async {
+          await _deleteUserMembershipCopies(
+            communityId: normalizedCommunityId,
+            communityReference: communityReference,
+          );
 
-      for (final subcollection in _knownCommunitySubcollections) {
-        if (subcollection == _deletionMembersSubcollection) continue;
-        await _deleteCollectionInBatches(
-          communityReference.collection(subcollection),
-        );
-      }
+          for (final subcollection in _knownCommunitySubcollections) {
+            if (subcollection == _deletionMembersSubcollection) continue;
+            await _deleteCollectionInBatches(
+              communityReference.collection(subcollection),
+            );
+          }
 
-      await _deleteOwnershipAndCommunity(
-        ownerId: ownerId,
-        communityId: normalizedCommunityId,
-        communityReference: communityReference,
-        currentUserId: user.uid,
+          await _deleteOwnershipAndCommunity(
+            ownerId: ownerId,
+            communityId: normalizedCommunityId,
+            communityReference: communityReference,
+            currentUserId: user.uid,
+          );
+        },
       );
     } on CommunityDeletionException {
       rethrow;
@@ -766,7 +830,7 @@ class CommunityRepository {
     if (failure != null) throw CommunityDeletionException(failure);
   }
 
-  Future<void> _captureDeletionMembers({
+  Future<bool> _captureDeletionMembers({
     required DocumentReference<Map<String, dynamic>> communityReference,
     required String ownerId,
   }) async {
@@ -776,8 +840,10 @@ class CommunityRepository {
         "This Community no longer exists.",
       );
     }
+    final hasImage =
+        _nonEmptyString(currentSnapshot.data()?['imageUrl']) != null;
     if (currentSnapshot.data()?["deletionMembersCapturedAt"] is Timestamp) {
-      return;
+      return hasImage;
     }
 
     final members = communityReference.collection("members");
@@ -809,6 +875,7 @@ class CommunityRepository {
     await communityReference.update({
       "deletionMembersCapturedAt": FieldValue.serverTimestamp(),
     });
+    return hasImage;
   }
 
   Future<void> _deleteCollectionInBatches(

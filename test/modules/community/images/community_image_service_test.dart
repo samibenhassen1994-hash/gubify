@@ -90,4 +90,52 @@ void main() {
     expect(await service.pickAndUpload(_community), isNull);
     expect(tokenCalls, 0);
   });
+
+  test('removes Cloudinary asset before clearing Firestore metadata', () async {
+    final calls = <String>[];
+    final service = CommunityImageService(
+      getIdToken: () async => 'token',
+      deleteImage: ({required communityId, required idToken}) async {
+        calls.add('worker:$communityId:$idToken');
+      },
+      removePersistedImage: ({required communityId}) async {
+        calls.add('firestore:$communityId');
+      },
+    );
+    final withImage = _community.copyWith(
+      imageUrl:
+          'https://res.cloudinary.com/s3yauoza/image/upload/v7/community_abc123.jpg',
+      imagePublicId: 'community_abc123',
+      imageVersion: 7,
+    );
+
+    final updated = await service.removeImage(withImage);
+
+    expect(calls, ['worker:abc123:token', 'firestore:abc123']);
+    expect(updated.imageUrl, isNull);
+    expect(updated.imagePublicId, isNull);
+    expect(updated.imageVersion, isNull);
+  });
+
+  test(
+    'does not clear Firestore metadata when Worker deletion fails',
+    () async {
+      var firestoreCalls = 0;
+      final service = CommunityImageService(
+        getIdToken: () async => 'token',
+        deleteImage: ({required communityId, required idToken}) async {
+          throw const CommunityImageDeleteException('retry');
+        },
+        removePersistedImage: ({required communityId}) async {
+          firestoreCalls++;
+        },
+      );
+
+      await expectLater(
+        service.removeImage(_community),
+        throwsA(isA<CommunityImageDeleteException>()),
+      );
+      expect(firestoreCalls, 0);
+    },
+  );
 }

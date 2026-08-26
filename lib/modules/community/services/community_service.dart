@@ -8,6 +8,8 @@ import '../../../services/app_sound_service.dart';
 import '../models/community_access_request_model.dart';
 import '../models/community_model.dart';
 import '../models/community_name_conflict.dart';
+import '../images/community_image_models.dart';
+import '../images/community_image_service.dart';
 import '../repositories/community_name_registry_repository.dart';
 import '../repositories/community_repository.dart';
 import '../restrictions/services/community_restriction_service.dart';
@@ -387,7 +389,10 @@ class CommunityService {
       await CommunityRepository.instance.deleteCommunityClientSide(
         communityId: normalizedCommunityId,
         confirmationName: confirmationName,
+        deleteImageAsset: CommunityImageService.instance.deleteCloudinaryAsset,
       );
+    } on CommunityImageDeleteException catch (error) {
+      throw CommunityDeletionException(error.message);
     } finally {
       _deletionsInProgress.remove(normalizedCommunityId);
     }

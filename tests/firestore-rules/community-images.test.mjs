@@ -1,7 +1,7 @@
 import { after, before, beforeEach, describe, test } from 'node:test';
 import { readFileSync } from 'node:fs';
 import { assertFails, assertSucceeds, initializeTestEnvironment } from '@firebase/rules-unit-testing';
-import { doc, serverTimestamp, setDoc, writeBatch } from 'firebase/firestore';
+import { deleteField, doc, serverTimestamp, setDoc, writeBatch } from 'firebase/firestore';
 
 const projectId = 'demo-gubify';
 const communityId = 'abc123';
@@ -58,6 +58,33 @@ function pairedUpdate(actor, {
   return batch.commit();
 }
 
+async function seedImage() {
+  await env.withSecurityRulesDisabled(async (context) => {
+    const firestore = context.firestore();
+    await setDoc(doc(firestore, 'communities', communityId), {
+      imageUrl: validUrl, imagePublicId: 'community_abc123', imageVersion: 42,
+      imageUpdatedAt: new Date(2),
+    }, { merge: true });
+    await setDoc(doc(firestore, 'communityPublic', slug), {
+      imageUrl: validUrl, imageVersion: 42, updatedAt: new Date(2),
+    }, { merge: true });
+  });
+}
+
+function pairedRemoval(actor, { rootExtra = {}, publicExtra = {} } = {}) {
+  const firestore = db(actor);
+  const batch = writeBatch(firestore);
+  batch.update(doc(firestore, 'communities', communityId), {
+    imageUrl: deleteField(), imagePublicId: deleteField(),
+    imageVersion: deleteField(), imageUpdatedAt: deleteField(), ...rootExtra,
+  });
+  batch.update(doc(firestore, 'communityPublic', slug), {
+    imageUrl: deleteField(), imageVersion: deleteField(),
+    updatedAt: serverTimestamp(), ...publicExtra,
+  });
+  return batch.commit();
+}
+
 describe('Community image metadata', () => {
   test('owner can atomically publish the deterministic Community asset', () =>
     assertSucceeds(pairedUpdate('owner')));
@@ -95,5 +122,35 @@ describe('Community image metadata', () => {
     await assertFails(setDoc(doc(db('owner'), 'communityPublic', slug), {
       imageUrl: validUrl, imageVersion: 42, updatedAt: serverTimestamp(),
     }, { merge: true }));
+  });
+
+  test('owner can atomically remove root and public image metadata', async () => {
+    await seedImage();
+    await assertSucceeds(pairedRemoval('owner'));
+  });
+
+  test('member and outsider cannot remove image metadata', async () => {
+    await seedImage();
+    await assertFails(pairedRemoval('member'));
+    await assertFails(pairedRemoval('outsider'));
+  });
+
+  test('root-only and public-only image removals are denied', async () => {
+    await seedImage();
+    const firestore = db('owner');
+    await assertFails(setDoc(doc(firestore, 'communities', communityId), {
+      imageUrl: deleteField(), imagePublicId: deleteField(),
+      imageVersion: deleteField(), imageUpdatedAt: deleteField(),
+    }, { merge: true }));
+    await assertFails(setDoc(doc(firestore, 'communityPublic', slug), {
+      imageUrl: deleteField(), imageVersion: deleteField(),
+      updatedAt: serverTimestamp(),
+    }, { merge: true }));
+  });
+
+  test('image removal cannot mutate unrelated Community fields', async () => {
+    await seedImage();
+    await assertFails(pairedRemoval('owner', { rootExtra: { name: 'Other' } }));
+    await assertFails(pairedRemoval('owner', { publicExtra: { name: 'Other' } }));
   });
 });

@@ -35,15 +35,22 @@ void main() {
 
     expect(find.text('Community image'), findsOneWidget);
     expect(find.text('Add image'), findsOneWidget);
+    expect(find.text('Remove image'), findsNothing);
   });
 
   testWidgets('non-owner image management renders no controls', (tester) async {
+    final withImage = _community.copyWith(
+      imageUrl:
+          'https://res.cloudinary.com/s3yauoza/image/upload/v2/community_abc123.jpg',
+      imagePublicId: 'community_abc123',
+      imageVersion: 2,
+    );
     await tester.pumpWidget(
-      const MaterialApp(
+      MaterialApp(
         home: Scaffold(
           body: CommunityImageManagementSection(
             isOwner: false,
-            community: _community,
+            community: withImage,
           ),
         ),
       ),
@@ -51,6 +58,7 @@ void main() {
 
     expect(find.text('Community image'), findsNothing);
     expect(find.text('Add image'), findsNothing);
+    expect(find.text('Remove image'), findsNothing);
   });
 
   testWidgets('owner image card shows Change image for existing metadata', (
@@ -74,7 +82,93 @@ void main() {
     );
 
     expect(find.text('Change image'), findsOneWidget);
+    expect(find.text('Remove image'), findsOneWidget);
     expect(find.text('Add image'), findsNothing);
+  });
+
+  testWidgets('Remove image asks for confirmation and publishes cleared state', (
+    tester,
+  ) async {
+    final withImage = _community.copyWith(
+      imageUrl:
+          'https://res.cloudinary.com/s3yauoza/image/upload/v2/community_abc123.jpg',
+      imagePublicId: 'community_abc123',
+      imageVersion: 2,
+    );
+    CommunityModel? published;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: CommunityImageSettingsCard(
+            community: withImage,
+            onUpload: (_) async => null,
+            onRemove: (_) async => withImage.withoutImage(),
+            onUpdated: (value) => published = value,
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Remove image'));
+    await tester.pump();
+    expect(find.text('Remove Community image?'), findsOneWidget);
+    expect(
+      find.text('The current Community image will be removed.'),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.widgetWithText(TextButton, 'Remove'));
+    await tester.pumpAndSettle();
+
+    expect(published?.imageUrl, isNull);
+    expect(find.text('Community image removed.'), findsOneWidget);
+  });
+
+  testWidgets('one pending image operation disables Change and Remove', (
+    tester,
+  ) async {
+    final completer = Completer<CommunityModel>();
+    var removeCalls = 0;
+    final withImage = _community.copyWith(
+      imageUrl:
+          'https://res.cloudinary.com/s3yauoza/image/upload/v2/community_abc123.jpg',
+      imagePublicId: 'community_abc123',
+      imageVersion: 2,
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: CommunityImageSettingsCard(
+            community: withImage,
+            onUpload: (_) async => null,
+            onRemove: (_) {
+              removeCalls++;
+              return completer.future;
+            },
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Remove image'));
+    await tester.pump();
+    await tester.tap(find.widgetWithText(TextButton, 'Remove'));
+    await tester.pump();
+
+    expect(
+      tester.widget<FilledButton>(find.byType(FilledButton)).onPressed,
+      isNull,
+    );
+    expect(
+      tester.widget<OutlinedButton>(find.byType(OutlinedButton)).onPressed,
+      isNull,
+    );
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    await tester.tap(find.text('Remove image'));
+    await tester.pump();
+    expect(removeCalls, 1);
+    completer.complete(withImage.withoutImage());
+    await tester.pump();
   });
 
   testWidgets('upload action is disabled while an upload is pending', (

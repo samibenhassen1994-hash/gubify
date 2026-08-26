@@ -18,3 +18,12 @@ class CommunityImageUploadException implements Exception {
   @override
   String toString() => message;
 }
+
+class CommunityImageDeleteException implements Exception {
+  final String message;
+
+  const CommunityImageDeleteException(this.message);
+
+  @override
+  String toString() => message;
+}

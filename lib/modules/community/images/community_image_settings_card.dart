@@ -7,11 +7,14 @@ import 'community_image_view.dart';
 
 typedef CommunityImageUploadAction =
     Future<CommunityModel?> Function(CommunityModel community);
+typedef CommunityImageRemoveAction =
+    Future<CommunityModel> Function(CommunityModel community);
 
 class CommunityImageManagementSection extends StatelessWidget {
   final bool isOwner;
   final CommunityModel community;
   final CommunityImageUploadAction? onUpload;
+  final CommunityImageRemoveAction? onRemove;
   final ValueChanged<CommunityModel>? onUpdated;
 
   const CommunityImageManagementSection({
@@ -19,6 +22,7 @@ class CommunityImageManagementSection extends StatelessWidget {
     required this.isOwner,
     required this.community,
     this.onUpload,
+    this.onRemove,
     this.onUpdated,
   });
 
@@ -30,6 +34,7 @@ class CommunityImageManagementSection extends StatelessWidget {
       child: CommunityImageSettingsCard(
         community: community,
         onUpload: onUpload,
+        onRemove: onRemove,
         onUpdated: onUpdated,
       ),
     );
@@ -39,12 +44,14 @@ class CommunityImageManagementSection extends StatelessWidget {
 class CommunityImageSettingsCard extends StatefulWidget {
   final CommunityModel community;
   final CommunityImageUploadAction? onUpload;
+  final CommunityImageRemoveAction? onRemove;
   final ValueChanged<CommunityModel>? onUpdated;
 
   const CommunityImageSettingsCard({
     super.key,
     required this.community,
     this.onUpload,
+    this.onRemove,
     this.onUpdated,
   });
 
@@ -56,9 +63,12 @@ class CommunityImageSettingsCard extends StatefulWidget {
 class _CommunityImageSettingsCardState
     extends State<CommunityImageSettingsCard> {
   bool _uploading = false;
+  bool _removing = false;
+
+  bool get _operationInProgress => _uploading || _removing;
 
   Future<void> _upload() async {
-    if (_uploading) return;
+    if (_operationInProgress) return;
     setState(() => _uploading = true);
     try {
       final updated =
@@ -76,6 +86,47 @@ class _CommunityImageSettingsCardState
       ).showSnackBar(SnackBar(content: Text(error.toString())));
     } finally {
       if (mounted) setState(() => _uploading = false);
+    }
+  }
+
+  Future<void> _remove() async {
+    if (_operationInProgress) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Remove Community image?'),
+        content: const Text('The current Community image will be removed.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() => _removing = true);
+    try {
+      final updated =
+          await (widget.onRemove ?? CommunityImageService.instance.removeImage)(
+            widget.community,
+          );
+      if (!mounted) return;
+      widget.onUpdated?.call(updated);
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Community image removed.')));
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.toString())));
+    } finally {
+      if (mounted) setState(() => _removing = false);
     }
   }
 
@@ -97,7 +148,7 @@ class _CommunityImageSettingsCardState
               const SizedBox(width: 16),
               Expanded(
                 child: FilledButton.icon(
-                  onPressed: _uploading ? null : _upload,
+                  onPressed: _operationInProgress ? null : _upload,
                   icon: _uploading
                       ? const SizedBox(
                           width: 18,
@@ -113,6 +164,23 @@ class _CommunityImageSettingsCardState
               ),
             ],
           ),
+          if (hasImage) ...[
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: _operationInProgress ? null : _remove,
+                icon: _removing
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.delete_outline_rounded),
+                label: const Text('Remove image'),
+              ),
+            ),
+          ],
         ],
       ),
     );

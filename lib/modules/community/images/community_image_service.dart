@@ -34,6 +34,13 @@ typedef CommunityImagePublisher =
       required String communityId,
       required CommunityImageUploadMetadata metadata,
     });
+typedef CommunityImageDeleteAction =
+    Future<void> Function({
+      required String communityId,
+      required String idToken,
+    });
+typedef CommunityImageMetadataRemover =
+    Future<void> Function({required String communityId});
 
 class CommunityImageService {
   static final CommunityImageService instance = CommunityImageService();
@@ -43,6 +50,8 @@ class CommunityImageService {
   final CommunityImageProcessor _processImage;
   final CommunityImageUploader _uploadImage;
   final CommunityImagePublisher _persistImage;
+  final CommunityImageDeleteAction _deleteImage;
+  final CommunityImageMetadataRemover _removePersistedImage;
 
   CommunityImageService({
     CommunityImagePicker? pickImage,
@@ -50,11 +59,16 @@ class CommunityImageService {
     CommunityImageProcessor? processImage,
     CommunityImageUploader? uploadImage,
     CommunityImagePublisher? persistImage,
+    CommunityImageDeleteAction? deleteImage,
+    CommunityImageMetadataRemover? removePersistedImage,
   }) : _pickImage = pickImage ?? _defaultPickImage,
        _getIdToken = getIdToken ?? _defaultGetIdToken,
        _processImage = processImage ?? _defaultProcessImage,
        _uploadImage = uploadImage ?? CommunityImageRepository.instance.upload,
-       _persistImage = persistImage ?? _defaultPersistImage;
+       _persistImage = persistImage ?? _defaultPersistImage,
+       _deleteImage = deleteImage ?? CommunityImageRepository.instance.delete,
+       _removePersistedImage =
+           removePersistedImage ?? _defaultRemovePersistedImage;
 
   Future<CommunityModel?> pickAndUpload(CommunityModel community) async {
     final selection = await _pickImage();
@@ -95,6 +109,38 @@ class CommunityImageService {
     );
   }
 
+  Future<CommunityModel> removeImage(CommunityModel community) async {
+    final idToken = await _getIdToken();
+    if (idToken == null || idToken.isEmpty) {
+      throw const CommunityImageDeleteException(
+        'Sign in again before removing the Community image.',
+      );
+    }
+    await _deleteImage(communityId: community.communityId, idToken: idToken);
+    try {
+      await _removePersistedImage(communityId: community.communityId);
+    } on FirebaseException {
+      throw const CommunityImageDeleteException(
+        'The image was removed but the Community could not be updated. Please try again.',
+      );
+    } on StateError {
+      throw const CommunityImageDeleteException(
+        'The image was removed but the Community could not be updated. Please try again.',
+      );
+    }
+    return community.withoutImage();
+  }
+
+  Future<void> deleteCloudinaryAsset(String communityId) async {
+    final idToken = await _getIdToken();
+    if (idToken == null || idToken.isEmpty) {
+      throw const CommunityImageDeleteException(
+        'Sign in again before removing the Community image.',
+      );
+    }
+    await _deleteImage(communityId: communityId, idToken: idToken);
+  }
+
   static Future<CommunityImageSelection?> _defaultPickImage() async {
     final file = await ImagePicker().pickImage(source: ImageSource.gallery);
     if (file == null) return null;
@@ -116,5 +162,11 @@ class CommunityImageService {
   }) => CommunityRepository.instance.updateCommunityImage(
     communityId: communityId,
     metadata: metadata,
+  );
+
+  static Future<void> _defaultRemovePersistedImage({
+    required String communityId,
+  }) => CommunityRepository.instance.removeCommunityImage(
+    communityId: communityId,
   );
 }

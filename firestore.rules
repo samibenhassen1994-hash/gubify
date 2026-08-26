@@ -872,6 +872,30 @@ service cloud.firestore {
         && publicAfter.imageVersion == data.imageVersion
         && publicAfter.updatedAt == request.time;
     }
+    function validCommunityImageRootRemoval(id) {
+      let data = request.resource.data;
+      let publicAfter = getAfter(communityPublicPath(resource.data.slug)).data;
+      return signedIn()
+        && resource.data.ownerId == request.auth.uid
+        && resource.data.get('deletionStatus', 'active') != 'deleting'
+        && resource.data.keys().hasAll([
+          'imageUrl','imagePublicId','imageVersion','imageUpdatedAt'
+        ])
+        && data.diff(resource.data).affectedKeys().hasOnly([
+          'imageUrl','imagePublicId','imageVersion','imageUpdatedAt'
+        ])
+        && !data.keys().hasAny([
+          'imageUrl','imagePublicId','imageVersion','imageUpdatedAt'
+        ])
+        && publicAfter.communityId == id
+        && publicAfter.slug == resource.data.slug
+        && !publicAfter.keys().hasAny(['imageUrl','imageVersion'])
+        && publicAfter.updatedAt == request.time;
+    }
+    function validCommunityImageRootMutation(id) {
+      return validCommunityImageRootUpdate(id)
+        || validCommunityImageRootRemoval(id);
+    }
     function validCommunityImagePublicUpdate(slug) {
       let data = request.resource.data;
       let rootBefore = communityDoc(resource.data.communityId).data;
@@ -893,6 +917,29 @@ service cloud.firestore {
         && rootAfter.imagePublicId == 'community_' + resource.data.communityId
         && rootAfter.imageUpdatedAt == request.time
         && data.updatedAt == request.time;
+    }
+    function validCommunityImagePublicRemoval(slug) {
+      let data = request.resource.data;
+      let rootBefore = communityDoc(resource.data.communityId).data;
+      let rootAfter = communityAfter(resource.data.communityId).data;
+      return signedIn()
+        && rootBefore.ownerId == request.auth.uid
+        && rootBefore.get('deletionStatus', 'active') != 'deleting'
+        && resource.data.keys().hasAll(['imageUrl','imageVersion'])
+        && data.diff(resource.data).affectedKeys().hasOnly([
+          'imageUrl','imageVersion','updatedAt'
+        ])
+        && !data.keys().hasAny(['imageUrl','imageVersion'])
+        && data.slug == slug
+        && rootAfter.slug == slug
+        && !rootAfter.keys().hasAny([
+          'imageUrl','imagePublicId','imageVersion','imageUpdatedAt'
+        ])
+        && data.updatedAt == request.time;
+    }
+    function validCommunityImagePublicMutation(slug) {
+      return validCommunityImagePublicUpdate(slug)
+        || validCommunityImagePublicRemoval(slug);
     }
     function validModerationReportCommon(reportId) {
       let data = request.resource.data;
@@ -1530,7 +1577,7 @@ service cloud.firestore {
       allow update: if request.resource.data.diff(resource.data).affectedKeys().hasAny([
           'imageUrl','imagePublicId','imageVersion','imageUpdatedAt'
         ])
-        ? validCommunityImageRootUpdate(id)
+        ? validCommunityImageRootMutation(id)
         : (
           communityActive(id)
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memberCount'])
@@ -1693,7 +1740,7 @@ service cloud.firestore {
       allow get: if true;
       allow list: if false;
       allow create: if signedIn() && validCommunityPublicCreate(slug);
-      allow update: if validCommunityImagePublicUpdate(slug);
+      allow update: if validCommunityImagePublicMutation(slug);
       allow delete: if communityFinalizingDeletion(resource.data.communityId)
         && resource.data.slug == slug;
     }

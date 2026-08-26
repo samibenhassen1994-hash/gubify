@@ -93,6 +93,53 @@ void main() {
       ),
     );
   });
+
+  test(
+    'deletes the deterministic asset through the authenticated Worker',
+    () async {
+      final client = MockClient((request) async {
+        expect(request.method, 'POST');
+        expect(request.url.path, '/delete-image');
+        expect(request.headers['authorization'], 'Bearer firebase-token');
+        expect(jsonDecode(request.body), {'communityId': communityId});
+        return http.Response(jsonEncode({'ok': true, 'result': 'ok'}), 200);
+      });
+
+      await CommunityImageRepository(
+        client: client,
+      ).delete(communityId: communityId, idToken: 'firebase-token');
+    },
+  );
+
+  test('treats an already missing Cloudinary asset as successful', () async {
+    final client = MockClient(
+      (_) async =>
+          http.Response(jsonEncode({'ok': true, 'result': 'not found'}), 200),
+    );
+
+    await CommunityImageRepository(
+      client: client,
+    ).delete(communityId: communityId, idToken: 'firebase-token');
+  });
+
+  test('maps Worker delete failures to a controlled retryable error', () async {
+    final client = MockClient(
+      (_) async => http.Response(jsonEncode({'error': 'Unavailable'}), 503),
+    );
+
+    await expectLater(
+      CommunityImageRepository(
+        client: client,
+      ).delete(communityId: communityId, idToken: 'firebase-token'),
+      throwsA(
+        isA<CommunityImageDeleteException>().having(
+          (error) => error.message,
+          'message',
+          'Unable to remove the Community image. Please try again.',
+        ),
+      ),
+    );
+  });
 }
 
 const _signingJson = {
