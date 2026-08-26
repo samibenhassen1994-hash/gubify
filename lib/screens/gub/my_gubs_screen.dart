@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../modules/community/models/community_model.dart';
 import '../../modules/community/screens/community_explorer_screen.dart';
 import '../../modules/community/screens/gub_community_home_screen.dart';
+import '../../modules/community/widgets/community_membership_card.dart';
 import '../../services/my_gubs_service.dart';
 import '../../widgets/gub_access_guard.dart';
 import '../../widgets/gub_content_card.dart';
@@ -223,7 +224,7 @@ class _CommunitiesWindow extends StatelessWidget {
       separatorBuilder: (_, _) => const SizedBox(height: 12),
       itemBuilder: (context, index) {
         final membership = communities[index];
-        return _CommunityCard(
+        return CommunityMembershipCard(
           membership: membership,
           onTap: () => onOpen(membership),
         );
@@ -328,41 +329,6 @@ class _PrivateGubCard extends StatelessWidget {
               ? 'Founder'
               : formatRoleLabel(gub['role'] as String?, fallback: 'Member'),
           joinedAt: gub['joinedAtDate'] as DateTime?,
-        ),
-      ),
-      trailing: const Icon(Icons.chevron_right_rounded, size: 22),
-      onTap: onTap,
-    ),
-  );
-}
-
-class _CommunityCard extends StatelessWidget {
-  final CommunityMembershipModel membership;
-  final VoidCallback onTap;
-
-  const _CommunityCard({required this.membership, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) => GubContentCard(
-    padding: EdgeInsets.zero,
-    child: ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-      leading: CircleAvatar(
-        radius: 26,
-        backgroundColor: const Color(0xFF0EA5E9).withValues(alpha: .12),
-        child: const Icon(Icons.public_rounded, color: Color(0xFF0284C7)),
-      ),
-      title: Text(
-        membership.community.name,
-        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
-      ),
-      subtitle: Padding(
-        padding: const EdgeInsets.only(top: 6),
-        child: MembershipDetails(
-          role: membership.role == 'owner'
-              ? 'Owner'
-              : formatRoleLabel(membership.role, fallback: 'Member'),
-          joinedAt: membership.joinedAtDate,
         ),
       ),
       trailing: const Icon(Icons.chevron_right_rounded, size: 22),

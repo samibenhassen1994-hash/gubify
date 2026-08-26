@@ -3,20 +3,17 @@ import 'package:flutter/material.dart';
 class CommunityImageView extends StatelessWidget {
   final String? imageUrl;
   final double size;
-  final BorderRadius borderRadius;
 
   const CommunityImageView({
     super.key,
     required this.imageUrl,
     required this.size,
-    this.borderRadius = const BorderRadius.all(Radius.circular(18)),
   });
 
   @override
   Widget build(BuildContext context) {
     final normalizedUrl = imageUrl?.trim();
-    return ClipRRect(
-      borderRadius: borderRadius,
+    return ClipOval(
       child: SizedBox(
         width: size,
         height: size,

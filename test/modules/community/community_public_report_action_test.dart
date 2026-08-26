@@ -42,6 +42,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    expect(find.byIcon(Icons.public_rounded), findsOneWidget);
+    expect(find.byType(ClipOval), findsOneWidget);
+
     await tester.tap(find.byTooltip('Community actions'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Report Community'));
@@ -57,6 +60,45 @@ void main() {
 
     expect(submitted, isTrue);
     expect(find.text('Report submitted'), findsOneWidget);
+  });
+
+  testWidgets('Public Details renders the Community image avatar', (
+    tester,
+  ) async {
+    const imageUrl =
+        'https://res.cloudinary.com/s3yauoza/image/upload/v8/community_community.jpg';
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CommunityPublicDetailsScreen(
+          communityId: community.communityId,
+          stateStream: Stream.value(
+            CommunityPublicAccessState(
+              community: community.copyWith(
+                imageUrl: imageUrl,
+                imagePublicId: 'community_community',
+                imageVersion: 8,
+              ),
+              isMember: false,
+              isOwner: false,
+              request: null,
+            ),
+          ),
+          restrictionStream: Stream.value(CommunityRestriction.unrestricted),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final image = tester.widget<Image>(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is Image &&
+            widget.image is NetworkImage &&
+            (widget.image as NetworkImage).url == imageUrl,
+      ),
+    );
+    expect((image.image as NetworkImage).url, imageUrl);
+    expect(find.byType(ClipOval), findsOneWidget);
   });
 
   testWidgets('Community owner has no Report Community action', (tester) async {

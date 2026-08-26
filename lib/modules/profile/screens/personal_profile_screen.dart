@@ -7,6 +7,7 @@ import '../../../widgets/membership_window_selector.dart';
 import '../../chat/widgets/chat_user_avatar.dart';
 import '../../community/models/community_model.dart';
 import '../../community/screens/gub_community_home_screen.dart';
+import '../../community/widgets/community_membership_card.dart';
 import '../models/user_profile_model.dart';
 import '../services/user_profile_service.dart';
 import '../widgets/google_account_connection_section.dart';
@@ -16,11 +17,19 @@ import '../../../services/auth_service.dart';
 class PersonalProfileScreen extends StatefulWidget {
   final String userId;
   final AuthService? authService;
+  final Future<UserProfileModel>? profileFuture;
+  final Stream<List<PersonalGubModel>>? gubsStream;
+  final Stream<List<CommunityMembershipModel>>? communitiesStream;
+  final Widget? accountConnectionSection;
 
   const PersonalProfileScreen({
     super.key,
     required this.userId,
     this.authService,
+    this.profileFuture,
+    this.gubsStream,
+    this.communitiesStream,
+    this.accountConnectionSection,
   });
 
   @override
@@ -31,14 +40,16 @@ class _PersonalProfileScreenState extends State<PersonalProfileScreen> {
   late Future<UserProfileModel> _profileFuture;
   late Stream<List<PersonalGubModel>> _gubsStream;
   late Stream<List<CommunityMembershipModel>> _communitiesStream;
-  late AuthService _authService;
+  AuthService? _authService;
   Object? _lastLoggedGubsError;
   MembershipWindow _selectedWindow = MembershipWindow.privateGubs;
 
   @override
   void initState() {
     super.initState();
-    _authService = widget.authService ?? AuthService();
+    _authService =
+        widget.authService ??
+        (widget.accountConnectionSection == null ? AuthService() : null);
     _initializeLoads();
   }
 
@@ -51,15 +62,17 @@ class _PersonalProfileScreenState extends State<PersonalProfileScreen> {
   }
 
   void _initializeLoads() {
-    _profileFuture = UserProfileService.instance.loadPersonalProfile(
-      userId: widget.userId,
-    );
-    _gubsStream = UserProfileService.instance.personalGubsStream(
-      userId: widget.userId,
-    );
-    _communitiesStream = UserProfileService.instance.personalCommunitiesStream(
-      userId: widget.userId,
-    );
+    _profileFuture =
+        widget.profileFuture ??
+        UserProfileService.instance.loadPersonalProfile(userId: widget.userId);
+    _gubsStream =
+        widget.gubsStream ??
+        UserProfileService.instance.personalGubsStream(userId: widget.userId);
+    _communitiesStream =
+        widget.communitiesStream ??
+        UserProfileService.instance.personalCommunitiesStream(
+          userId: widget.userId,
+        );
   }
 
   @override
@@ -107,9 +120,10 @@ class _PersonalProfileScreenState extends State<PersonalProfileScreen> {
                             profile: profileSnapshot.data!,
                           ),
                           const SizedBox(height: 20),
-                          GoogleAccountConnectionSection(
-                            authService: _authService,
-                          ),
+                          widget.accountConnectionSection ??
+                              GoogleAccountConnectionSection(
+                                authService: _authService!,
+                              ),
                           const SizedBox(height: 26),
                           MembershipWindowSelector(
                             selectedWindow: _selectedWindow,
@@ -208,14 +222,19 @@ class _PersonalProfileScreenState extends State<PersonalProfileScreen> {
       ];
     }
     return [
-      for (final membership in memberships)
-        _PersonalCommunityCard(
-          membership: membership,
-          onTap: () => Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => GubCommunityHomeScreen(
-                communityId: membership.community.communityId,
-                initialCommunity: membership.community,
+      for (var index = 0; index < memberships.length; index++)
+        Padding(
+          padding: EdgeInsets.only(
+            bottom: index == memberships.length - 1 ? 0 : 4,
+          ),
+          child: CommunityMembershipCard(
+            membership: memberships[index],
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => GubCommunityHomeScreen(
+                  communityId: memberships[index].community.communityId,
+                  initialCommunity: memberships[index].community,
+                ),
               ),
             ),
           ),
@@ -346,67 +365,6 @@ class _PersonalGubCard extends StatelessWidget {
     return normalized.isEmpty
         ? "?"
         : String.fromCharCode(normalized.runes.first).toUpperCase();
-  }
-}
-
-class _PersonalCommunityCard extends StatelessWidget {
-  final CommunityMembershipModel membership;
-  final VoidCallback onTap;
-
-  const _PersonalCommunityCard({required this.membership, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 10),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Row(
-            children: [
-              CircleAvatar(
-                radius: 22,
-                backgroundColor: const Color(
-                  0xFF0EA5E9,
-                ).withValues(alpha: 0.12),
-                child: const Icon(
-                  Icons.public_rounded,
-                  color: Color(0xFF0284C7),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      membership.community.name,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontWeight: FontWeight.w700),
-                    ),
-                    const SizedBox(height: 6),
-                    MembershipDetails(
-                      role: membership.role == 'owner'
-                          ? 'Owner'
-                          : formatRoleLabel(
-                              membership.role,
-                              fallback: 'Member',
-                            ),
-                      joinedAt: membership.joinedAtDate,
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              const Icon(Icons.chevron_right_rounded, color: Color(0xFF94A3B8)),
-            ],
-          ),
-        ),
-      ),
-    );
   }
 }
 

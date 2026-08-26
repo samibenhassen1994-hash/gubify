@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../../widgets/gub_content_card.dart';
-import '../models/community_model.dart';
 import '../images/community_image_view.dart';
+import '../models/community_model.dart';
 
 class CommunityExplorerCard extends StatelessWidget {
   final CommunityModel community;
@@ -31,20 +31,27 @@ class CommunityExplorerCard extends StatelessWidget {
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  CommunityImageView(imageUrl: community.imageUrl, size: 68),
+                  CommunityImageView(
+                    imageUrl: community.imageUrl,
+                    size: 68,
+                  ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Expanded(
-                          child: Text(
-                            community.name,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontSize: 19,
-                              fontWeight: FontWeight.bold,
+                          child: SizedBox(
+                            height: 48,
+                            width: double.infinity,
+                            child: Text(
+                              community.name,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 19,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ),
                         ),
@@ -53,9 +60,9 @@ class CommunityExplorerCard extends StatelessWidget {
                           label: isJoined
                               ? "Member"
                               : community.accessMode ==
-                                    CommunityModel.openAccessMode
-                              ? "Open"
-                              : "Approval",
+                                      CommunityModel.openAccessMode
+                                  ? "Open"
+                                  : "Approval",
                           color: isJoined
                               ? const Color(0xFF059669)
                               : const Color(0xFF2563EB),
@@ -123,19 +130,28 @@ class _StatusBadge extends StatelessWidget {
   final String label;
   final Color color;
 
-  const _StatusBadge({required this.label, required this.color});
+  const _StatusBadge({
+    required this.label,
+    required this.color,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      padding: const EdgeInsets.symmetric(
+        horizontal: 10,
+        vertical: 5,
+      ),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.11),
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(
         label,
-        style: TextStyle(color: color, fontWeight: FontWeight.w700),
+        style: TextStyle(
+          color: color,
+          fontWeight: FontWeight.w700,
+        ),
       ),
     );
   }
@@ -145,12 +161,18 @@ class _InfoChip extends StatelessWidget {
   final IconData icon;
   final String label;
 
-  const _InfoChip({required this.icon, required this.label});
+  const _InfoChip({
+    required this.icon,
+    required this.label,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(
+        horizontal: 10,
+        vertical: 6,
+      ),
       decoration: BoxDecoration(
         color: const Color(0xFFF1F5F9),
         borderRadius: BorderRadius.circular(999),
@@ -158,9 +180,18 @@ class _InfoChip extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 16, color: const Color(0xFF475569)),
+          Icon(
+            icon,
+            size: 16,
+            color: const Color(0xFF475569),
+          ),
           const SizedBox(width: 5),
-          Text(label, style: const TextStyle(color: Color(0xFF475569))),
+          Text(
+            label,
+            style: const TextStyle(
+              color: Color(0xFF475569),
+            ),
+          ),
         ],
       ),
     );

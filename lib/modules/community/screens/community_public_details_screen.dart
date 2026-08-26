@@ -41,9 +41,11 @@ class _CommunityPublicDetailsScreenState
   @override
   void initState() {
     super.initState();
+
     _stateStream =
         widget.stateStream ??
         CommunityService.instance.publicAccessStateStream(widget.communityId);
+
     _restrictionStream =
         widget.restrictionStream ??
         CommunityRestrictionService.instance.communityRestrictionStream(
@@ -53,52 +55,78 @@ class _CommunityPublicDetailsScreenState
 
   Future<void> _runOperation(Future<void> Function() operation) async {
     if (_operationInProgress) return;
+
     setState(() => _operationInProgress = true);
+
     try {
       await operation();
     } catch (error) {
       if (!mounted) return;
+
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(error.toString())));
+      ).showSnackBar(
+        SnackBar(
+          content: Text(error.toString()),
+        ),
+      );
     } finally {
-      if (mounted) setState(() => _operationInProgress = false);
+      if (mounted) {
+        setState(() => _operationInProgress = false);
+      }
     }
   }
 
   Future<void> _joinOpenCommunity() async {
     if (_operationInProgress || _navigationInProgress) return;
+
     setState(() => _operationInProgress = true);
+
     try {
       final community = await CommunityService.instance.joinCommunity(
         communityId: widget.communityId,
       );
+
       if (!mounted || _navigationInProgress) return;
+
       _navigationInProgress = true;
+
       await Navigator.pushReplacement(
         context,
         MaterialPageRoute(
-          builder: (_) =>
-              GubCommunityHomeScreen(communityId: community.communityId),
+          builder: (_) => GubCommunityHomeScreen(
+            communityId: community.communityId,
+          ),
         ),
       );
     } catch (error) {
       if (!mounted) return;
+
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(error.toString())));
+      ).showSnackBar(
+        SnackBar(
+          content: Text(error.toString()),
+        ),
+      );
     } finally {
-      if (mounted) setState(() => _operationInProgress = false);
+      if (mounted) {
+        setState(() => _operationInProgress = false);
+      }
     }
   }
 
   void _openCommunity() {
     if (_navigationInProgress) return;
+
     _navigationInProgress = true;
+
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
-        builder: (_) => GubCommunityHomeScreen(communityId: widget.communityId),
+        builder: (_) => GubCommunityHomeScreen(
+          communityId: widget.communityId,
+        ),
       ),
     );
   }
@@ -122,17 +150,25 @@ class _CommunityPublicDetailsScreenState
             stream: _stateStream,
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator());
+                return const Center(
+                  child: CircularProgressIndicator(),
+                );
               }
+
               if (snapshot.hasError) {
-                return _DetailsState(message: "Unable to load this Community.");
+                return const _DetailsState(
+                  message: "Unable to load this Community.",
+                );
               }
+
               final state = snapshot.data;
+
               if (state == null) {
                 return const _DetailsState(
                   message: "This Community is no longer available.",
                 );
               }
+
               return StreamBuilder<CommunityRestriction>(
                 stream: _restrictionStream,
                 builder: (context, restrictionSnapshot) {
@@ -157,12 +193,13 @@ class _CommunityPublicDetailsScreenState
     final community = state.community;
     final deleting = community.deletionStatus == "deleting";
     final memberLabel = community.memberCount == 1 ? "member" : "members";
+
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
       children: [
         GubContentCard(
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               if (!state.isOwner)
                 Align(
@@ -173,23 +210,45 @@ class _CommunityPublicDetailsScreenState
                     reportSubmit: widget.reportSubmit,
                   ),
                 ),
-              CommunityImageView(imageUrl: community.imageUrl, size: 96),
+
+              CommunityImageView(
+                imageUrl: community.imageUrl,
+                size: 96,
+              ),
+
               const SizedBox(height: 16),
-              Text(
-                community.name,
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.bold,
+
+              SizedBox(
+                width: double.infinity,
+                child: Text(
+                  community.name,
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
+
               if (community.description.isNotEmpty) ...[
                 const SizedBox(height: 10),
-                Text(
-                  community.description,
-                  style: const TextStyle(color: Color(0xFF475569), height: 1.4),
+                SizedBox(
+                  width: double.infinity,
+                  child: Text(
+                    community.description,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Color(0xFF475569),
+                      height: 1.4,
+                    ),
+                  ),
                 ),
               ],
+
               const SizedBox(height: 18),
+
               Wrap(
+                alignment: WrapAlignment.center,
+                runAlignment: WrapAlignment.center,
                 spacing: 8,
                 runSpacing: 8,
                 children: [
@@ -199,9 +258,10 @@ class _CommunityPublicDetailsScreenState
                   ),
                   _DetailChip(
                     icon: Icons.lock_open_rounded,
-                    label: community.accessMode == CommunityModel.openAccessMode
-                        ? "Open"
-                        : "Approval required",
+                    label:
+                        community.accessMode == CommunityModel.openAccessMode
+                            ? "Open"
+                            : "Approval required",
                   ),
                   _DetailChip(
                     icon: Icons.category_outlined,
@@ -213,13 +273,19 @@ class _CommunityPublicDetailsScreenState
                   ),
                 ],
               ),
+
               const SizedBox(height: 24),
+
               if (deleting)
-                const Text(
-                  "This Community is no longer accepting members.",
-                  style: TextStyle(
-                    color: Color(0xFFB91C1C),
-                    fontWeight: FontWeight.w600,
+                const SizedBox(
+                  width: double.infinity,
+                  child: Text(
+                    "This Community is no longer accepting members.",
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Color(0xFFB91C1C),
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 )
               else
@@ -247,13 +313,21 @@ class _CommunityPublicDetailsScreenState
     }
 
     if (restriction.joiningRestricted) {
-      return const Text(
-        'New members are not being accepted right now.',
-        style: TextStyle(color: Color(0xFF64748B), fontWeight: FontWeight.w600),
+      return const SizedBox(
+        width: double.infinity,
+        child: Text(
+          'New members are not being accepted right now.',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: Color(0xFF64748B),
+            fontWeight: FontWeight.w600,
+          ),
+        ),
       );
     }
 
     final community = state.community;
+
     if (community.accessMode == CommunityModel.openAccessMode) {
       return SizedBox(
         width: double.infinity,
@@ -274,11 +348,15 @@ class _CommunityPublicDetailsScreenState
     }
 
     final request = state.request;
+
     if (request?.status == CommunityAccessRequestModel.pendingStatus) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const FilledButton(onPressed: null, child: Text("Request Pending")),
+          const FilledButton(
+            onPressed: null,
+            child: Text("Request Pending"),
+          ),
           const SizedBox(height: 8),
           TextButton(
             onPressed: _operationInProgress
@@ -293,6 +371,7 @@ class _CommunityPublicDetailsScreenState
         ],
       );
     }
+
     return SizedBox(
       width: double.infinity,
       child: FilledButton.icon(
@@ -314,39 +393,60 @@ class _DetailChip extends StatelessWidget {
   final IconData icon;
   final String label;
 
-  const _DetailChip({required this.icon, required this.label});
+  const _DetailChip({
+    required this.icon,
+    required this.label,
+  });
 
   @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-    decoration: BoxDecoration(
-      color: const Color(0xFFEFF6FF),
-      borderRadius: BorderRadius.circular(999),
-    ),
-    child: Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 17, color: const Color(0xFF2563EB)),
-        const SizedBox(width: 5),
-        Text(label),
-      ],
-    ),
-  );
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: 10,
+        vertical: 7,
+      ),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEFF6FF),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            icon,
+            size: 17,
+            color: const Color(0xFF2563EB),
+          ),
+          const SizedBox(width: 5),
+          Text(label),
+        ],
+      ),
+    );
+  }
 }
 
 class _DetailsState extends StatelessWidget {
   final String message;
 
-  const _DetailsState({required this.message});
+  const _DetailsState({
+    required this.message,
+  });
 
   @override
-  Widget build(BuildContext context) => Center(
-    child: Padding(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [Text(message, textAlign: TextAlign.center)],
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              message,
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
       ),
-    ),
-  );
+    );
+  }
 }

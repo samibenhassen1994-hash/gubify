@@ -36,6 +36,8 @@ void main() {
     expect(find.text('Community image'), findsOneWidget);
     expect(find.text('Add image'), findsOneWidget);
     expect(find.text('Remove image'), findsNothing);
+    expect(find.byIcon(Icons.public_rounded), findsOneWidget);
+    expect(find.byType(ClipOval), findsOneWidget);
   });
 
   testWidgets('non-owner image management renders no controls', (tester) async {
@@ -84,6 +86,7 @@ void main() {
     expect(find.text('Change image'), findsOneWidget);
     expect(find.text('Remove image'), findsOneWidget);
     expect(find.text('Add image'), findsNothing);
+    expect(find.byType(ClipOval), findsOneWidget);
   });
 
   testWidgets('Remove image asks for confirmation and publishes cleared state', (
