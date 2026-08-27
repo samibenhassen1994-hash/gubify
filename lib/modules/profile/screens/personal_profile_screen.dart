@@ -8,6 +8,7 @@ import '../../chat/widgets/chat_user_avatar.dart';
 import '../../community/models/community_model.dart';
 import '../../community/screens/gub_community_home_screen.dart';
 import '../../community/widgets/community_membership_card.dart';
+import '../../community/widgets/community_linked_account_gate.dart';
 import '../models/user_profile_model.dart';
 import '../services/user_profile_service.dart';
 import '../widgets/google_account_connection_section.dart';
@@ -229,17 +230,22 @@ class _PersonalProfileScreenState extends State<PersonalProfileScreen> {
           ),
           child: CommunityMembershipCard(
             membership: memberships[index],
-            onTap: () => Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => GubCommunityHomeScreen(
-                  communityId: memberships[index].community.communityId,
-                  initialCommunity: memberships[index].community,
-                ),
-              ),
-            ),
+            onTap: () => _openCommunity(memberships[index]),
           ),
         ),
     ];
+  }
+
+  Future<void> _openCommunity(CommunityMembershipModel membership) async {
+    if (!await showCommunityLinkedAccountGate(context) || !mounted) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => GubCommunityHomeScreen(
+          communityId: membership.community.communityId,
+          initialCommunity: membership.community,
+        ),
+      ),
+    );
   }
 
   void _logGubsError(Object? error) {

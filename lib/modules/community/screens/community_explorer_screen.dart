@@ -7,6 +7,7 @@ import '../restrictions/services/community_restriction_service.dart';
 import '../services/community_service.dart';
 import '../widgets/community_explorer_card.dart';
 import '../widgets/community_filters_sheet.dart';
+import '../widgets/community_linked_account_gate.dart';
 import 'community_public_details_screen.dart';
 import 'gub_community_home_screen.dart';
 
@@ -14,17 +15,25 @@ typedef CommunityExplorerPageLoader =
     Future<CommunityExplorerPage> Function(CommunityExplorerCursor? after);
 typedef CommunityDiscoveryFilter =
     Future<List<CommunityModel>> Function(List<CommunityModel> communities);
+typedef CommunityOpenHandler =
+    Future<void> Function(CommunityModel community, bool isJoined);
 
 class CommunityExplorerScreen extends StatefulWidget {
   final CommunityExplorerPageLoader? pageLoader;
   final CommunityDiscoveryFilter? discoveryFilter;
   final Stream<Set<String>>? joinedCommunityIdsStream;
+  final bool Function()? isAnonymous;
+  final CommunityLinkedAccountGate? linkedAccountGate;
+  final CommunityOpenHandler? onCommunityOpen;
 
   const CommunityExplorerScreen({
     super.key,
     this.pageLoader,
     this.discoveryFilter,
     this.joinedCommunityIdsStream,
+    this.isAnonymous,
+    this.linkedAccountGate,
+    this.onCommunityOpen,
   });
 
   @override
@@ -39,6 +48,7 @@ class _CommunityExplorerScreenState extends State<CommunityExplorerScreen> {
   final Set<String> _seenCommunityIds = {};
 
   late Stream<Set<String>> _joinedCommunityIdsStream;
+  late final bool Function() _isAnonymous;
   CommunityExplorerFilters _filters = const CommunityExplorerFilters();
   CommunityExplorerCursor? _cursor;
   Object? _loadError;
@@ -49,12 +59,21 @@ class _CommunityExplorerScreenState extends State<CommunityExplorerScreen> {
   @override
   void initState() {
     super.initState();
-    _joinedCommunityIdsStream =
-        widget.joinedCommunityIdsStream ??
-        CommunityService.instance.joinedCommunityIdsStream();
+    _isAnonymous =
+        widget.isAnonymous ??
+        () =>
+            widget.joinedCommunityIdsStream == null &&
+            CommunityService.instance.isCurrentUserAnonymous;
+    _joinedCommunityIdsStream = _createJoinedCommunityIdsStream();
     _searchController.addListener(_onSearchChanged);
     _scrollController.addListener(_onScroll);
     _loadNextPage();
+  }
+
+  Stream<Set<String>> _createJoinedCommunityIdsStream() {
+    if (_isAnonymous()) return Stream.value(const <String>{});
+    return widget.joinedCommunityIdsStream ??
+        CommunityService.instance.joinedCommunityIdsStream();
   }
 
   void _onSearchChanged() {
@@ -115,9 +134,7 @@ class _CommunityExplorerScreenState extends State<CommunityExplorerScreen> {
       _hasMore = true;
       _loadError = null;
       _loadingInitial = true;
-      _joinedCommunityIdsStream =
-          widget.joinedCommunityIdsStream ??
-          CommunityService.instance.joinedCommunityIdsStream();
+      _joinedCommunityIdsStream = _createJoinedCommunityIdsStream();
     });
     _loadNextPage();
   }
@@ -149,6 +166,18 @@ class _CommunityExplorerScreenState extends State<CommunityExplorerScreen> {
   }
 
   Future<void> _openCommunity(CommunityModel community, bool isJoined) async {
+    final canContinue =
+        await (widget.linkedAccountGate?.call(context) ??
+            showCommunityLinkedAccountGate(context));
+    if (!mounted || !canContinue) return;
+    setState(() {
+      _joinedCommunityIdsStream = _createJoinedCommunityIdsStream();
+    });
+    if (widget.onCommunityOpen != null) {
+      await widget.onCommunityOpen!(community, isJoined);
+      if (mounted) _retryInitialLoad();
+      return;
+    }
     await Navigator.push(
       context,
       MaterialPageRoute(

@@ -32,6 +32,9 @@ const ids = {
 
 let env;
 const db = (uid) => env.authenticatedContext(uid).firestore();
+const providerDb = (uid, provider) => env.authenticatedContext(uid, {
+  firebase: { sign_in_provider: provider },
+}).firestore();
 const anonymousDb = () => env.unauthenticatedContext().firestore();
 const inviteTokenId = 'TES3A2Q7';
 
@@ -346,8 +349,9 @@ function createCommunityBatch({
   includeMarker = true,
   includeSlugRegistry = true,
   includePublicProjection = true,
+  clientDb: suppliedDb,
 } = {}) {
-  const clientDb = db(actor);
+  const clientDb = suppliedDb ?? db(actor);
   const batch = writeBatch(clientDb);
   const rootData = communityRoot(id, ownerId, {
     createdAt: serverTimestamp(),
@@ -423,8 +427,9 @@ function joinCommunityBatch({
   includeRoot = true,
   includeMember = true,
   includeCopy = true,
+  clientDb: suppliedDb,
 } = {}) {
-  const clientDb = db(actor);
+  const clientDb = suppliedDb ?? db(actor);
   const batch = writeBatch(clientDb);
   if (includeRoot) {
     batch.update(doc(clientDb, 'communities', id), { memberCount: 2 + increment });
@@ -609,6 +614,16 @@ describe('join Gub batch and membership', () => {
 });
 
 describe('Community creation, join, reads, and membership', () => {
+  test('Firebase Anonymous cannot create a Community', () => assertFails(
+    createCommunityBatch({
+      clientDb: providerDb(ids.ownerCommunity, 'anonymous'),
+    }),
+  ));
+  test('linked account can still create a Community', () => assertSucceeds(
+    createCommunityBatch({
+      clientDb: providerDb(ids.ownerCommunity, 'google.com'),
+    }),
+  ));
   test('accepts the complete Flutter creation transaction', () => assertSucceeds(createCommunityBatch()));
   test('accepts Approval Community creation', () => assertSucceeds(createCommunityBatch({ rootOverrides: { accessMode: 'approval' } })));
   test('rejects false Community ownerId', () => assertFails(createCommunityBatch({ ownerId: ids.communityOutsider })));
@@ -654,6 +669,32 @@ describe('Community creation, join, reads, and membership', () => {
     test('public discovery query works for authenticated users', async () => {
       const q = query(collection(db(ids.communityOutsider), 'communities'), where('visibility', '==', 'public'));
       await assertSucceeds(getDocs(q));
+    });
+    test('Firebase Anonymous can query public Communities for Explorer', async () => {
+      const anonymous = providerDb(ids.communityOutsider, 'anonymous');
+      const q = query(collection(anonymous, 'communities'), where('visibility', '==', 'public'));
+      await assertSucceeds(getDocs(q));
+    });
+    test('Firebase Anonymous cannot join an open Community', () => assertFails(
+      joinCommunityBatch({
+        clientDb: providerDb(ids.communityOutsider, 'anonymous'),
+      }),
+    ));
+    test('Firebase Anonymous cannot create an approval join request', async () => {
+      await env.withSecurityRulesDisabled((context) => updateDoc(
+        doc(context.firestore(), 'communities', 'c1'),
+        { accessMode: 'approval' },
+      ));
+      const anonymous = providerDb(ids.communityOutsider, 'anonymous');
+      await assertFails(setDoc(
+        doc(anonymous, 'communities', 'c1', 'joinRequests', ids.communityOutsider),
+        {
+          userId: ids.communityOutsider,
+          displayName: ids.communityOutsider,
+          status: 'pending',
+          createdAt: serverTimestamp(),
+        },
+      ));
     });
     test('outsider cannot read or write Community memberships', async () => {
       await assertFails(getDocs(collection(db(ids.communityOutsider), 'communities', 'c1', 'members')));
@@ -866,6 +907,20 @@ describe('Community chat', () => {
     await assertFails(getDocs(collection(anonymousDb(), 'communities', 'c1', 'messages')));
   });
   test('public outsider cannot write Community chat', () => assertFails(setDoc(doc(db(ids.communityOutsider), 'communities', 'c1', 'messages', 'outsider'), communityMessage('outsider', ids.communityOutsider))));
+  test('Firebase Anonymous member cannot read or write Community chat', async () => {
+    const anonymousMember = providerDb(ids.memberCommunity, 'anonymous');
+    await assertFails(getDoc(
+      doc(anonymousMember, 'communities', 'c1', 'members', ids.memberCommunity),
+    ));
+    await assertFails(getDocs(query(
+      collection(anonymousMember, 'communities', 'c1', 'messages'),
+      where('createdAt', '>=', new Date('2026-01-01T00:00:00Z')),
+    )));
+    await assertFails(setDoc(
+      doc(anonymousMember, 'communities', 'c1', 'messages', 'anonymous-message'),
+      communityMessage('anonymous-message', ids.memberCommunity),
+    ));
+  });
   for (const [name, overrides] of [
     ['senderId spoofing', { senderId: ids.ownerCommunity }],
     ['senderName spoofing', { senderName: 'Forged' }],
@@ -893,5 +948,18 @@ describe('Community chat', () => {
     await seedProfiles();
     await seedCommunity({ status: 'deleting' });
     await assertFails(setDoc(doc(db(ids.memberCommunity), 'communities', 'c1', 'messages', 'blocked'), communityMessage('blocked', ids.memberCommunity)));
+  });
+});
+
+describe('Community linked-account helper does not affect Private Gubs', () => {
+  beforeEach(async () => {
+    await seedProfiles();
+    await seedGub();
+  });
+
+  test('Firebase Anonymous Private Gub member keeps existing read access', async () => {
+    await assertSucceeds(getDoc(
+      doc(providerDb(ids.memberGub, 'anonymous'), 'gubs', 'g1'),
+    ));
   });
 });

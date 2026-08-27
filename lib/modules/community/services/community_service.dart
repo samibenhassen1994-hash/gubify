@@ -22,6 +22,8 @@ class CommunityService {
 
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
+  bool get isCurrentUserAnonymous => _auth.currentUser?.isAnonymous ?? false;
+
   Future<CommunityModel> createCommunity({
     required String name,
     String? type,
@@ -33,6 +35,11 @@ class CommunityService {
     if (user == null) {
       throw StateError("You must be signed in to create a community.");
     }
+    requireLinkedCommunityAccount(
+      isSignedIn: true,
+      isAnonymous: user.isAnonymous,
+      action: 'create a community',
+    );
 
     final normalizedName = name.trim();
     final normalizedType = CommunityModel.normalizeType(type);
@@ -403,6 +410,11 @@ class CommunityService {
     if (user == null) {
       throw StateError("You must be signed in to join a community.");
     }
+    requireLinkedCommunityAccount(
+      isSignedIn: true,
+      isAnonymous: user.isAnonymous,
+      action: 'join a community',
+    );
 
     final normalizedCommunityId = communityId.trim();
     if (normalizedCommunityId.isEmpty) {
@@ -437,6 +449,11 @@ class CommunityService {
 
   Future<void> requestToJoin(String communityId) async {
     final user = _requireUser("request access to a community");
+    requireLinkedCommunityAccount(
+      isSignedIn: true,
+      isAnonymous: user.isAnonymous,
+      action: 'request access to a community',
+    );
     final normalizedId = communityId.trim();
     await _guardAccessOperation("request/$normalizedId/${user.uid}", () async {
       if (await CommunityRepository.instance.isUserBanned(
@@ -583,6 +600,30 @@ class CommunityService {
       "deadline-exceeded" => "The connection timed out. Please try again.",
       _ => error.message ?? "Unable to complete the community request.",
     };
+  }
+}
+
+class CommunityLinkedAccountRequiredException implements Exception {
+  const CommunityLinkedAccountRequiredException(this.message);
+
+  final String message;
+
+  @override
+  String toString() => message;
+}
+
+void requireLinkedCommunityAccount({
+  required bool isSignedIn,
+  required bool isAnonymous,
+  required String action,
+}) {
+  if (!isSignedIn) {
+    throw StateError('You must be signed in to $action.');
+  }
+  if (isAnonymous) {
+    throw CommunityLinkedAccountRequiredException(
+      'Secure your account before you $action.',
+    );
   }
 }
 

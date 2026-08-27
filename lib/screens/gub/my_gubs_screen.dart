@@ -4,6 +4,7 @@ import '../../modules/community/models/community_model.dart';
 import '../../modules/community/screens/community_explorer_screen.dart';
 import '../../modules/community/screens/gub_community_home_screen.dart';
 import '../../modules/community/widgets/community_membership_card.dart';
+import '../../modules/community/widgets/community_linked_account_gate.dart';
 import '../../services/my_gubs_service.dart';
 import '../../widgets/gub_access_guard.dart';
 import '../../widgets/gub_content_card.dart';
@@ -64,6 +65,19 @@ class _MyGubsScreenState extends State<MyGubsScreen> {
     );
   }
 
+  Future<void> _openCommunity(CommunityMembershipModel membership) async {
+    if (!await showCommunityLinkedAccountGate(context) || !mounted) return;
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => GubCommunityHomeScreen(
+          communityId: membership.community.communityId,
+          initialCommunity: membership.community,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return GubScreenBackground(
@@ -115,17 +129,7 @@ class _MyGubsScreenState extends State<MyGubsScreen> {
                                             const CommunityExplorerScreen(),
                                       ),
                                     ),
-                                    onOpen: (membership) => Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (_) => GubCommunityHomeScreen(
-                                          communityId:
-                                              membership.community.communityId,
-                                          initialCommunity:
-                                              membership.community,
-                                        ),
-                                      ),
-                                    ),
+                                    onOpen: _openCommunity,
                                   ),
                           ),
                         ],

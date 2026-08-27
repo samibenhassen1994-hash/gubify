@@ -5,6 +5,7 @@ import '../../config/app_limits.dart';
 import '../../modules/community/models/community_model.dart';
 import '../../modules/community/models/community_name_conflict.dart';
 import '../../modules/community/screens/gub_community_home_screen.dart';
+import '../../modules/community/widgets/community_linked_account_gate.dart';
 import '../../modules/community/screens/community_public_details_screen.dart';
 import '../../modules/community/services/community_service.dart';
 import '../../modules/community/widgets/community_search_picker.dart';
@@ -16,7 +17,14 @@ import 'gub_screen.dart';
 import 'widgets/gub_type_selector.dart';
 
 class CreateGubScreen extends StatefulWidget {
-  const CreateGubScreen({super.key});
+  const CreateGubScreen({
+    super.key,
+    this.communityLinkedAccountGate,
+    this.userHeader,
+  });
+
+  final CommunityLinkedAccountGate? communityLinkedAccountGate;
+  final Widget? userHeader;
 
   @override
   State<CreateGubScreen> createState() => _CreateGubScreenState();
@@ -111,6 +119,15 @@ class _CreateGubScreenState extends State<CreateGubScreen> {
     }
 
     setState(() => _checkingCommunityOwnership = true);
+    final canUseCommunities =
+        await (widget.communityLinkedAccountGate?.call(context) ??
+            showCommunityLinkedAccountGate(context));
+    if (!mounted || request != _typeSelectionRequest || !canUseCommunities) {
+      if (mounted && request == _typeSelectionRequest) {
+        setState(() => _checkingCommunityOwnership = false);
+      }
+      return;
+    }
     try {
       final ownsCommunity = await CommunityService.instance
           .currentUserOwnsCommunity();
@@ -282,6 +299,10 @@ class _CreateGubScreenState extends State<CreateGubScreen> {
 
     try {
       if (_selectedType == GubType.community) {
+        final canUseCommunities =
+            await (widget.communityLinkedAccountGate?.call(context) ??
+                showCommunityLinkedAccountGate(context));
+        if (!mounted || !canUseCommunities) return;
         final community = await CommunityService.instance.createCommunity(
           name: gubName,
           description: _descriptionController.text,
@@ -429,7 +450,7 @@ class _CreateGubScreenState extends State<CreateGubScreen> {
                           ),
                         ),
 
-                        const UserHeader(showCard: true),
+                        widget.userHeader ?? const UserHeader(showCard: true),
 
                         const SizedBox(height: 18),
 
