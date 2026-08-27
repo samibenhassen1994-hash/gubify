@@ -83,7 +83,7 @@ void main() {
     expect(find.byType(ClipOval), findsOneWidget);
   });
 
-  testWidgets('Explorer keeps a long Community name on one scaled line', (
+  testWidgets('Explorer keeps a long Community name readable on up to two lines', (
     tester,
   ) async {
     const longName =
@@ -116,8 +116,10 @@ void main() {
     );
 
     final name = tester.widget<Text>(find.text(longName));
-    expect(name.maxLines, 1);
-    expect(find.byType(FittedBox), findsOneWidget);
+    expect(name.maxLines, 2);
+    expect(name.overflow, TextOverflow.ellipsis);
+    expect(name.style?.fontSize, 19);
+    expect(find.byType(FittedBox), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
