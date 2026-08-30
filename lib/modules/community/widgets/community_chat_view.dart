@@ -1,29 +1,45 @@
 import 'dart:async';
 
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../chat/widgets/chat_message_composer.dart';
 import '../models/community_chat_message_model.dart';
+import '../models/community_ask_model.dart';
 import '../restrictions/models/community_restriction_model.dart';
 import '../restrictions/services/community_restriction_service.dart';
 import '../services/community_chat_service.dart';
+import '../services/community_ask_service.dart';
+import '../../profile/screens/user_profile_screen.dart';
 import 'community_chat_message_bubble.dart';
+import 'community_ask_type_sheet.dart';
 
 typedef CommunityChatSend = Future<void> Function(String text);
+typedef CommunityAskCreate =
+    Future<void> Function(
+      CommunityChatMessageModel message,
+      CommunityAskType type,
+    );
 
 class CommunityChatView extends StatefulWidget {
   final String communityId;
+  final String communityName;
   final Stream<List<CommunityChatMessageModel>>? messagesStream;
   final Stream<PlatformRestriction>? restrictionStream;
   final CommunityChatSend? onSend;
+  final CommunityAskCreate? onCreateAsk;
+  final ValueChanged<CommunityChatMessageModel>? onOpenProfile;
 
   const CommunityChatView({
     super.key,
     required this.communityId,
+    this.communityName = '',
     this.messagesStream,
     this.restrictionStream,
     this.onSend,
+    this.onCreateAsk,
+    this.onOpenProfile,
   });
 
   @override
@@ -35,6 +51,7 @@ class _CommunityChatViewState extends State<CommunityChatView> {
   final FocusNode _messageFocusNode = FocusNode();
   final ScrollController _scrollController = ScrollController();
   final Set<String> _knownMessageIds = <String>{};
+  final Set<String> _askCreationMessageIds = <String>{};
 
   late Stream<List<CommunityChatMessageModel>> _messagesStream;
   late Stream<PlatformRestriction> _restrictionStream;
@@ -77,6 +94,73 @@ class _CommunityChatViewState extends State<CommunityChatView> {
     } else {
       FocusManager.instance.primaryFocus?.unfocus();
     }
+  }
+
+  Future<void> _startAsk(CommunityChatMessageModel message) async {
+    if (_askCreationMessageIds.contains(message.messageId)) return;
+    final type = await showCommunityAskTypeSheet(context);
+    if (type == null || !mounted) return;
+
+    setState(() => _askCreationMessageIds.add(message.messageId));
+    try {
+      final create = widget.onCreateAsk;
+      if (create == null) {
+        await CommunityAskService.instance.createAskFromMessage(
+          communityId: widget.communityId,
+          sourceMessageId: message.messageId,
+          type: type,
+        );
+      } else {
+        await create(message, type);
+      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Ask created.')));
+    } on CommunityAskAlreadyExistsException {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('An ask already exists for this message.'),
+        ),
+      );
+    } catch (error, stackTrace) {
+      if (kDebugMode) {
+        final firebaseError = error is FirebaseException ? error : null;
+        debugPrint(
+          'Community ask creation failed: '
+          'runtimeType=${error.runtimeType}, '
+          'code=${firebaseError?.code}, '
+          'message=${firebaseError?.message}',
+        );
+        debugPrintStack(stackTrace: stackTrace);
+      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Unable to create this ask.')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _askCreationMessageIds.remove(message.messageId));
+      }
+    }
+  }
+
+  void _openProfile(CommunityChatMessageModel message) {
+    final callback = widget.onOpenProfile;
+    if (callback != null) {
+      callback(message);
+      return;
+    }
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => UserProfileScreen.community(
+          communityId: widget.communityId,
+          communityName: widget.communityName,
+          userId: message.senderId,
+        ),
+      ),
+    );
   }
 
   void _onScroll() {
@@ -361,6 +445,15 @@ class _CommunityChatViewState extends State<CommunityChatView> {
                                   isCurrentUser:
                                       currentUserId != null &&
                                       message.senderId == currentUserId,
+                                  onProfileTap: () => _openProfile(message),
+                                  onCreateAsk:
+                                      currentUserId != null &&
+                                          message.senderId == currentUserId &&
+                                          !_askCreationMessageIds.contains(
+                                            message.messageId,
+                                          )
+                                      ? () => _startAsk(message)
+                                      : null,
                                 ),
                             ],
                           ),

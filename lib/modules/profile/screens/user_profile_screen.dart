@@ -4,6 +4,8 @@ import '../../../widgets/gub_screen_background.dart';
 import '../../chat/widgets/chat_user_avatar.dart';
 import '../../community/moderation/services/community_moderation_service.dart';
 import '../../community/moderation/widgets/community_report_dialog.dart';
+import '../../community/models/community_ask_model.dart';
+import '../../community/widgets/community_active_asks_section.dart';
 import '../models/user_profile_model.dart';
 import '../services/user_profile_service.dart';
 import 'user_activity_screen.dart';
@@ -14,12 +16,14 @@ class UserProfileScreen extends StatefulWidget {
   final String? communityName;
   final String userId;
   final Future<UserProfileModel?>? profileFuture;
+  final Stream<List<CommunityAskModel>>? activeAsksStream;
 
   const UserProfileScreen({
     super.key,
     required this.gubId,
     required this.userId,
     this.profileFuture,
+    this.activeAsksStream,
   }) : communityId = null,
        communityName = null;
 
@@ -29,6 +33,7 @@ class UserProfileScreen extends StatefulWidget {
     required this.communityName,
     required this.userId,
     this.profileFuture,
+    this.activeAsksStream,
   }) : gubId = null;
 
   @override
@@ -115,6 +120,14 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                         icon: const Icon(Icons.flag_outlined),
                         label: const Text('Report User'),
                       ),
+                    ),
+                  ],
+                  if (widget.communityId != null) ...[
+                    const SizedBox(height: 30),
+                    CommunityActiveAsksSection(
+                      communityId: widget.communityId!,
+                      authorId: widget.userId,
+                      asksStream: widget.activeAsksStream,
                     ),
                   ],
                   if (widget.communityId == null) ...[

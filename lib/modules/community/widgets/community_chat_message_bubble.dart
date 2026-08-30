@@ -10,6 +10,8 @@ class CommunityChatMessageBubble extends StatelessWidget {
   final bool isCurrentUser;
   final Stream<bool>? profileExists;
   final Stream<UserIdentity>? identity;
+  final VoidCallback? onProfileTap;
+  final VoidCallback? onCreateAsk;
 
   const CommunityChatMessageBubble({
     super.key,
@@ -17,6 +19,8 @@ class CommunityChatMessageBubble extends StatelessWidget {
     required this.isCurrentUser,
     this.profileExists,
     this.identity,
+    this.onProfileTap,
+    this.onCreateAsk,
   });
 
   @override
@@ -27,12 +31,19 @@ class CommunityChatMessageBubble extends StatelessWidget {
       profileExists: profileExists,
       identity: identity,
       resolveCurrentDisplayName: true,
-      builder: (context, displayName, deleted) =>
-          _buildBubble(context, displayName: displayName),
+      builder: (context, displayName, deleted) => _buildBubble(
+        context,
+        displayName: displayName,
+        profileAvailable: !deleted,
+      ),
     );
   }
 
-  Widget _buildBubble(BuildContext context, {required String displayName}) {
+  Widget _buildBubble(
+    BuildContext context, {
+    required String displayName,
+    required bool profileAvailable,
+  }) {
     return LayoutBuilder(
       builder: (context, constraints) {
         final bubble = Container(
@@ -66,14 +77,17 @@ class CommunityChatMessageBubble extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               if (!isCurrentUser) ...[
-                Text(
-                  displayName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Color(0xFF2563EB),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
+                GestureDetector(
+                  onTap: profileAvailable ? onProfileTap : null,
+                  child: Text(
+                    displayName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Color(0xFF2563EB),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 3),
@@ -106,8 +120,16 @@ class CommunityChatMessageBubble extends StatelessWidget {
           child: ChatUserAvatar(
             displayName: displayName,
             userId: message.senderId,
+            onTap: profileAvailable ? onProfileTap : null,
           ),
         );
+
+        final interactiveBubble = onCreateAsk == null
+            ? bubble
+            : GestureDetector(
+                onLongPress: () => _showMessageActions(context),
+                child: bubble,
+              );
 
         if (isCurrentUser) {
           return Padding(
@@ -117,7 +139,10 @@ class CommunityChatMessageBubble extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Flexible(
-                  child: Align(alignment: Alignment.centerRight, child: bubble),
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: interactiveBubble,
+                  ),
                 ),
                 const SizedBox(width: 7),
                 avatar,
@@ -134,13 +159,32 @@ class CommunityChatMessageBubble extends StatelessWidget {
               avatar,
               const SizedBox(width: 7),
               Flexible(
-                child: Align(alignment: Alignment.centerLeft, child: bubble),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: interactiveBubble,
+                ),
               ),
             ],
           ),
         );
       },
     );
+  }
+
+  Future<void> _showMessageActions(BuildContext context) async {
+    final create = await showModalBottomSheet<bool>(
+      context: context,
+      showDragHandle: true,
+      useSafeArea: true,
+      builder: (context) => SafeArea(
+        child: ListTile(
+          leading: const Icon(Icons.help_outline_rounded),
+          title: const Text('Create ask'),
+          onTap: () => Navigator.pop(context, true),
+        ),
+      ),
+    );
+    if (create == true) onCreateAsk?.call();
   }
 
   String _formatTime(DateTime date) {

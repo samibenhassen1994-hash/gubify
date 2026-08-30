@@ -550,6 +550,11 @@ class CommunityService {
     });
   }
 
+  Future<String> currentDisplayName() async {
+    final user = _requireUser('resolve your display name');
+    return (await _currentIdentity(user)).displayName;
+  }
+
   User _requireUser(String action) {
     final user = _auth.currentUser;
     if (user == null) throw StateError("You must be signed in to $action.");

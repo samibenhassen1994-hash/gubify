@@ -1668,6 +1668,44 @@ service cloud.firestore {
             request.resource.data.senderId, request.resource.data.senderName);
         allow delete: if communityDeletingOwner(id);
       }
+      match /asks/{askId} {
+        allow get: if isCommunityMember(id) && communityActive(id)
+          && (!exists(/databases/$(database)/documents/communities/$(id)/asks/$(askId))
+            || resource.data.status == 'active');
+        allow list: if isCommunityMember(id) && communityActive(id)
+          && resource.data.status == 'active';
+        allow create: if isCommunityMember(id) && communityActive(id)
+          && request.resource.data.keys().hasOnly([
+            'askId','communityId','authorId','authorDisplayName','type',
+            'sourceMessageId','text','createdAt','status'
+          ])
+          && askId == request.resource.data.askId
+          && request.resource.data.communityId == id
+          && request.resource.data.authorId == request.auth.uid
+          && request.resource.data.type in ['help','information','advice']
+          && request.resource.data.status == 'active'
+          && request.resource.data.createdAt == request.time
+          && validText(request.resource.data.authorDisplayName, 1, 25)
+          && validText(request.resource.data.text, 1, 2000)
+          && (
+            (request.resource.data.keys().hasAny(['sourceMessageId'])
+              && request.resource.data.sourceMessageId is string
+              && askId == request.resource.data.sourceMessageId
+              && exists(/databases/$(database)/documents/communities/$(id)/messages/$(askId))
+              && get(/databases/$(database)/documents/communities/$(id)/messages/$(askId)).data.senderId == request.auth.uid
+              && get(/databases/$(database)/documents/communities/$(id)/messages/$(askId)).data.createdAt
+                >= get(communityMemberPath(id, request.auth.uid)).data.joinedAt
+              && request.resource.data.authorDisplayName
+                == get(/databases/$(database)/documents/communities/$(id)/messages/$(askId)).data.senderName
+              && request.resource.data.text
+                == get(/databases/$(database)/documents/communities/$(id)/messages/$(askId)).data.text)
+            || (!request.resource.data.keys().hasAny(['sourceMessageId'])
+              && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+              && request.resource.data.authorDisplayName
+                == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.displayName)
+          );
+        allow delete: if communityDeletingOwner(id);
+      }
       match /deletionMembers/{uid} {
         allow read: if communityDeletingOwner(id);
         allow create, update: if communityDeletingOwner(id)

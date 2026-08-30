@@ -28,6 +28,7 @@ class CommunityRepository {
   // Every future Community subcollection must be added to this cleanup list.
   static const List<String> _knownCommunitySubcollections = [
     "messages",
+    "asks",
     "members",
     "joinRequests",
     "bans",

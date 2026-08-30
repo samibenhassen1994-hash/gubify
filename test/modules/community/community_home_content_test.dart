@@ -34,8 +34,11 @@ void main() {
       ),
     );
 
-    expect(find.byType(ClipOval), findsOneWidget);
-    expect(find.byIcon(Icons.public_rounded), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('community-header-action')));
+    await tester.pump();
+
+    expect(find.byType(ClipOval), findsNWidgets(2));
+    expect(find.byIcon(Icons.public_rounded), findsNWidgets(2));
     expect(find.text('2 members'), findsOneWidget);
     expect(find.text('Member'), findsOneWidget);
     expect(find.text('Public community'), findsNothing);
@@ -74,6 +77,9 @@ void main() {
       ),
     );
 
+    await tester.tap(find.byKey(const ValueKey('community-header-action')));
+    await tester.pump();
+
     expect(tester.getSize(find.byType(GubContentCard)).height, 84);
     expect(find.byType(Wrap), findsNothing);
     expect(tester.takeException(), isNull);
@@ -110,6 +116,9 @@ void main() {
         ),
       ),
     );
+
+    await tester.tap(find.byKey(const ValueKey('community-header-action')));
+    await tester.pump();
 
     final name = tester.widget<Text>(find.text(longName));
     expect(name.maxLines, 1);
