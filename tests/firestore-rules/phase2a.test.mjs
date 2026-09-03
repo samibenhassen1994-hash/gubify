@@ -165,6 +165,13 @@ function openJoinBatch({
       joinedAt: serverTimestamp(),
     });
   }
+  batch.set(doc(clientDb, 'communityUserProgress', actor), {
+    xp: 0,
+    communityIds: ['c1'],
+    membershipProjectionCommunityId: 'c1',
+    membershipProjectionAction: 'join',
+    membershipProjectionUpdatedAt: serverTimestamp(),
+  }, { merge: true });
   return batch.commit();
 }
 
@@ -212,6 +219,13 @@ function approvalBatch({
       },
     );
   }
+  batch.set(doc(clientDb, 'communityUserProgress', target), {
+    xp: 0,
+    communityIds: ['c1'],
+    membershipProjectionCommunityId: 'c1',
+    membershipProjectionAction: 'join',
+    membershipProjectionUpdatedAt: serverTimestamp(),
+  }, { merge: true });
   return batch.commit();
 }
 

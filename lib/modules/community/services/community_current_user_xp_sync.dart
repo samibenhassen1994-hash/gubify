@@ -21,6 +21,7 @@ typedef CommunityCurrentUserAccountChanges =
 typedef CommunityCurrentUserAccountProvider =
     CommunityCurrentUserAccount? Function();
 typedef CommunityCurrentUserXpWatcher = Stream<int> Function(String userId);
+typedef CommunityProjectionBackfill = Future<void> Function(String userId);
 
 /// Owns the sole live Community XP document listener for the current account.
 ///
@@ -31,6 +32,7 @@ class CommunityCurrentUserXpSync {
     required this.currentAccount,
     required this.accountChanges,
     required this.watchUserXp,
+    this.backfillProjection,
     CommunityUserXpCache? cache,
   }) : _cache = cache ?? CommunityUserXpCache.instance;
 
@@ -40,6 +42,8 @@ class CommunityCurrentUserXpSync {
       currentAccount: () => _toAccount(auth.currentUser),
       accountChanges: () => auth.userChanges().map(_toAccount),
       watchUserXp: CommunityUserProgressRepository.instance.watchUserXp,
+      backfillProjection:
+          CommunityUserProgressRepository.instance.backfillCommunityIds,
     );
   }
 
@@ -48,6 +52,7 @@ class CommunityCurrentUserXpSync {
   final CommunityCurrentUserAccountProvider currentAccount;
   final CommunityCurrentUserAccountChanges accountChanges;
   final CommunityCurrentUserXpWatcher watchUserXp;
+  final CommunityProjectionBackfill? backfillProjection;
   final CommunityUserXpCache _cache;
 
   StreamSubscription<CommunityCurrentUserAccount?>? _accountSubscription;
@@ -125,6 +130,17 @@ class CommunityCurrentUserXpSync {
     if (!_started || generation != _generation || nextUserId == null) return;
     _activeUserId = nextUserId;
     _cache.retainCurrentUser(nextUserId);
+    final backfill = backfillProjection;
+    if (backfill != null) {
+      unawaited(
+        backfill(nextUserId).catchError((Object error, StackTrace stackTrace) {
+          assert(() {
+            debugPrint('Community membership projection backfill failed: $error');
+            return true;
+          }());
+        }),
+      );
+    }
     _xpSubscription = watchUserXp(nextUserId).listen(
       (xp) {
         if (_started &&

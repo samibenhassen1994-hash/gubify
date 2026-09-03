@@ -9,6 +9,77 @@ const _imageUrl =
     'https://res.cloudinary.com/s3yauoza/image/upload/v8/community_abc123.jpg';
 
 void main() {
+  const roleCommunity = CommunityModel(
+    communityId: 'role-community',
+    name: 'Roles',
+    ownerId: 'owner',
+    memberCount: 2,
+    visibility: CommunityModel.publicVisibility,
+    createdAt: null,
+    type: CommunityModel.defaultType,
+    language: CommunityModel.defaultLanguage,
+    description: '',
+    accessMode: CommunityModel.openAccessMode,
+  );
+
+  testWidgets('Explorer card gives Owner precedence over Member', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: CommunityExplorerCard(
+            community: roleCommunity,
+            isJoined: true,
+            isOwner: true,
+            onOpen: () {},
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Owner'), findsOneWidget);
+    expect(find.text('Member'), findsNothing);
+  });
+
+  testWidgets('Explorer card shows Member for a non-owner member', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: CommunityExplorerCard(
+            community: roleCommunity,
+            isJoined: true,
+            isOwner: false,
+            onOpen: () {},
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Member'), findsOneWidget);
+    expect(find.text('Owner'), findsNothing);
+  });
+
+  testWidgets('Explorer card shows no owner or member badge to non-members', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: CommunityExplorerCard(
+            community: roleCommunity,
+            isJoined: false,
+            isOwner: false,
+            onOpen: () {},
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Owner'), findsNothing);
+    expect(find.text('Member'), findsNothing);
+  });
+
   testWidgets('missing Community image uses the public icon fallback', (
     tester,
   ) async {

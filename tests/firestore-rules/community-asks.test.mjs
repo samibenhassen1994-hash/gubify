@@ -1,4 +1,5 @@
 import { after, before, beforeEach, describe, test } from 'node:test';
+import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
   assertFails,
@@ -144,6 +145,27 @@ beforeEach(async () => {
 });
 
 describe('Community active asks', () => {
+  test('a linked member can query bounded global XP for projected members', async () => {
+    await env.withSecurityRulesDisabled(async (context) => {
+      const database = context.firestore();
+      await setDoc(doc(database, 'communityUserProgress', ids.owner), {
+        xp: 120,
+        communityIds: ['c1'],
+      });
+      await setDoc(doc(database, 'communityUserProgress', ids.member), {
+        xp: 40,
+        communityIds: ['c1'],
+      });
+    });
+    const snapshot = await assertSucceeds(getDocs(query(
+      collection(db(ids.member), 'communityUserProgress'),
+      where('communityIds', 'array-contains', 'c1'),
+      orderBy('xp', 'desc'),
+      limit(5),
+    )));
+    assert.deepEqual(snapshot.docs.map((document) => document.id), [ids.owner, ids.member]);
+  });
+
   test('global XP is linked-readable but cannot be written arbitrarily', async () => {
     await env.withSecurityRulesDisabled((context) => setDoc(
       doc(context.firestore(), 'communityUserProgress', ids.member),
@@ -651,11 +673,11 @@ describe('Community active asks', () => {
       bestAnswerCount: 1,
     });
     batch.set(doc(ownerDb, 'communityUserProgress', ids.member), {
-      xp: 20, updatedAt: serverTimestamp(), lastRewardCommunityId: 'c1',
+      xp: 20, communityIds: ['c1'], updatedAt: serverTimestamp(), lastRewardCommunityId: 'c1',
       lastRewardAskId: 'message-1', lastRewardRole: 'bestAnswer',
     });
     batch.set(doc(ownerDb, 'communityUserProgress', ids.owner), {
-      xp: 2, updatedAt: serverTimestamp(), lastRewardCommunityId: 'c1',
+      xp: 2, communityIds: ['c1'], updatedAt: serverTimestamp(), lastRewardCommunityId: 'c1',
       lastRewardAskId: 'message-1', lastRewardRole: 'askAuthor',
     });
     await assertSucceeds(batch.commit());

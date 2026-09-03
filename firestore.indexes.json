@@ -1,6 +1,14 @@
 {
   "indexes": [
     {
+      "collectionGroup": "communityUserProgress",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "communityIds", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "xp", "order": "DESCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "communities",
       "queryScope": "COLLECTION",
       "fields": [

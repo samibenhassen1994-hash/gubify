@@ -18,6 +18,30 @@ const _community = CommunityModel(
 );
 
 void main() {
+  testWidgets('Community Home opens Leaderboard from its circular action', (
+    tester,
+  ) async {
+    var opened = false;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: CommunityHomeContent(
+            community: _community,
+            isKeyboardOpen: false,
+            isOwner: false,
+            chatView: const SizedBox(),
+            onOpenLeaderboard: () => opened = true,
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Leaderboard'), findsOneWidget);
+    expect(find.byIcon(Icons.emoji_events_rounded), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('leaderboard-header-action')));
+    expect(opened, isTrue);
+  });
+
   testWidgets('compact Home header has avatar, member count and role only', (
     tester,
   ) async {

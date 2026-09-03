@@ -225,18 +225,20 @@ class CommunityAskAnswerRepository {
       });
       transaction.set(winnerProgress, {
         'xp': winnerXp,
+        'communityIds': FieldValue.arrayUnion([communityId]),
         'updatedAt': FieldValue.serverTimestamp(),
         'lastRewardCommunityId': communityId,
         'lastRewardAskId': askId,
         'lastRewardRole': 'bestAnswer',
-      });
+      }, SetOptions(merge: true));
       transaction.set(askerProgress, {
         'xp': askerXp,
+        'communityIds': FieldValue.arrayUnion([communityId]),
         'updatedAt': FieldValue.serverTimestamp(),
         'lastRewardCommunityId': communityId,
         'lastRewardAskId': askId,
         'lastRewardRole': 'askAuthor',
-      });
+      }, SetOptions(merge: true));
       return CommunityAskResolution(
         result: CommunityAskResolveResult.resolved,
         xpByUserId: {winnerId: winnerXp, askerId: askerXp},

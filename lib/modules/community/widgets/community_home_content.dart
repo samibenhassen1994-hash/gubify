@@ -9,6 +9,7 @@ import '../services/community_service.dart';
 import '../screens/community_asks_screen.dart';
 import '../screens/community_resolved_asks_screen.dart';
 import '../screens/community_my_asks_screen.dart';
+import '../screens/community_leaderboard_screen.dart';
 import 'community_chat_view.dart';
 import 'community_create_ask_card.dart';
 
@@ -22,6 +23,7 @@ class CommunityHomeContent extends StatefulWidget {
   final VoidCallback? onOpenAsks;
   final VoidCallback? onOpenResolvedAsks;
   final VoidCallback? onOpenMyAsks;
+  final VoidCallback? onOpenLeaderboard;
   final CommunityDirectAskSubmit? onCreateDirectAsk;
 
   const CommunityHomeContent({
@@ -33,6 +35,7 @@ class CommunityHomeContent extends StatefulWidget {
     this.onOpenAsks,
     this.onOpenResolvedAsks,
     this.onOpenMyAsks,
+    this.onOpenLeaderboard,
     this.onCreateDirectAsk,
   });
 
@@ -117,6 +120,22 @@ class _CommunityHomeContentState extends State<CommunityHomeContent> {
     );
   }
 
+  void _openLeaderboard() {
+    final callback = widget.onOpenLeaderboard;
+    if (callback != null) {
+      callback();
+      return;
+    }
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => CommunityLeaderboardScreen(
+          communityId: widget.community.communityId,
+          communityName: widget.community.name,
+        ),
+      ),
+    );
+  }
+
   void _toggleCreateAsk() {
     setState(() {
       _panel = _panel == _CommunityHomePanel.createAsk
@@ -167,9 +186,12 @@ class _CommunityHomeContentState extends State<CommunityHomeContent> {
             24,
             6,
           ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
               _HomeHeaderAction(
                 key: const ValueKey('community-header-action'),
                 label: 'Community',
@@ -216,7 +238,20 @@ class _CommunityHomeContentState extends State<CommunityHomeContent> {
                   size: 27,
                 ),
               ),
-            ],
+              const SizedBox(width: 10),
+              _HomeHeaderAction(
+                key: const ValueKey('leaderboard-header-action'),
+                label: 'Leaderboard',
+                selected: false,
+                onTap: _openLeaderboard,
+                child: const Icon(
+                  Icons.emoji_events_rounded,
+                  color: Color(0xFF2563EB),
+                  size: 24,
+                ),
+              ),
+              ],
+            ),
           ),
         ),
         if (!widget.isKeyboardOpen && _panel == _CommunityHomePanel.community)

@@ -279,6 +279,12 @@ async function seedCommunityMembership() {
       communityId: 'c1', name: 'Community', ownerId: ids.communityOwner,
       memberCount: 2, visibility: 'public', role: 'member', joinedAt: now(),
     });
+    batch.set(doc(seedDb, 'communityUserProgress', ids.communityOwner), {
+      xp: 0, communityIds: ['c1'],
+    });
+    batch.set(doc(seedDb, 'communityUserProgress', ids.communityMember), {
+      xp: 0, communityIds: ['c1'],
+    });
     await batch.commit();
   });
 }
@@ -348,6 +354,11 @@ function leaveCommunity(actor, target = actor) {
   batch.update(doc(clientDb, 'communities', 'c1'), { memberCount: 1 });
   batch.delete(doc(clientDb, 'communities', 'c1', 'members', target));
   batch.delete(doc(clientDb, 'users', target, 'communities', 'c1'));
+  batch.set(doc(clientDb, 'communityUserProgress', target), {
+    communityIds: [], membershipProjectionCommunityId: 'c1',
+    membershipProjectionAction: 'leave',
+    membershipProjectionUpdatedAt: serverTimestamp(),
+  }, { merge: true });
   return batch.commit();
 }
 
@@ -372,6 +383,11 @@ function banCommunity(actor, target = ids.communityMember) {
   });
   batch.delete(doc(clientDb, 'communities', 'c1', 'members', target));
   batch.delete(doc(clientDb, 'users', target, 'communities', 'c1'));
+  batch.set(doc(clientDb, 'communityUserProgress', target), {
+    communityIds: [], membershipProjectionCommunityId: 'c1',
+    membershipProjectionAction: 'ban',
+    membershipProjectionUpdatedAt: serverTimestamp(),
+  }, { merge: true });
   return batch.commit();
 }
 
@@ -388,6 +404,11 @@ function joinOpenCommunity(actor = ids.communityMember) {
     memberCount: 2, visibility: 'public', role: 'member',
     joinedAt: serverTimestamp(),
   });
+  batch.set(doc(clientDb, 'communityUserProgress', actor), {
+    xp: 0, communityIds: ['c1'], membershipProjectionCommunityId: 'c1',
+    membershipProjectionAction: 'join',
+    membershipProjectionUpdatedAt: serverTimestamp(),
+  }, { merge: true });
   return batch.commit();
 }
 
@@ -420,6 +441,11 @@ function approveCommunityRequest(target = ids.communityMember) {
     action: 'approve', userId: target, ownerId: ids.communityOwner,
     createdAt: serverTimestamp(),
   });
+  batch.set(doc(clientDb, 'communityUserProgress', target), {
+    xp: 0, communityIds: ['c1'], membershipProjectionCommunityId: 'c1',
+    membershipProjectionAction: 'join',
+    membershipProjectionUpdatedAt: serverTimestamp(),
+  }, { merge: true });
   return batch.commit();
 }
 
@@ -430,10 +456,12 @@ function approveCommunityRequestTransaction(target = ids.communityMember) {
   const memberReference = doc(clientDb, 'communities', 'c1', 'members', target);
   const copyReference = doc(clientDb, 'users', target, 'communities', 'c1');
   const mutationReference = doc(clientDb, 'communities', 'c1', 'membershipMutations', 'current');
+  const progressReference = doc(clientDb, 'communityUserProgress', target);
   return runTransaction(clientDb, async (transaction) => {
     await transaction.get(communityReference);
     await transaction.get(requestReference);
     await transaction.get(memberReference);
+    await transaction.get(progressReference);
     transaction.update(communityReference, { memberCount: 3 });
     transaction.set(memberReference, {
       uid: target, displayName: target, photoUrl: null, role: 'member',
@@ -451,6 +479,11 @@ function approveCommunityRequestTransaction(target = ids.communityMember) {
       action: 'approve', userId: target, ownerId: ids.communityOwner,
       createdAt: serverTimestamp(),
     });
+    transaction.set(progressReference, {
+      xp: 0, communityIds: ['c1'], membershipProjectionCommunityId: 'c1',
+      membershipProjectionAction: 'join',
+      membershipProjectionUpdatedAt: serverTimestamp(),
+    }, { merge: true });
   });
 }
 
@@ -586,11 +619,46 @@ describe('revocation, deletion, retry, and Community isolation', () => {
     batch.set(doc(clientDb, 'communities', 'c1', 'members', ids.communityOwner), { uid: ids.communityOwner, displayName: ids.communityOwner, photoUrl: null, role: 'owner', joinedAt: serverTimestamp() });
     batch.set(doc(clientDb, 'users', ids.communityOwner, 'communities', 'c1'), { communityId: 'c1', name: 'Community', ownerId: ids.communityOwner, memberCount: 1, visibility: 'public', role: 'owner', joinedAt: serverTimestamp() });
     batch.set(doc(clientDb, 'communityOwnership', ids.communityOwner), { ownerId: ids.communityOwner, communityId: 'c1', createdAt: serverTimestamp() });
+    batch.set(doc(clientDb, 'communityUserProgress', ids.communityOwner), {
+      xp: 0, communityIds: ['c1'], membershipProjectionCommunityId: 'c1',
+      membershipProjectionAction: 'join',
+      membershipProjectionUpdatedAt: serverTimestamp(),
+    });
     await assertSucceeds(batch.commit());
   });
 });
 
 describe('Step 1A membership leave and removal', () => {
+  test('Community membership projection cannot add an unrelated Community', async () => {
+    await seedCommunityMembership();
+    await assertFails(updateDoc(
+      doc(db(ids.communityMember), 'communityUserProgress', ids.communityMember),
+      {
+        communityIds: ['c1', 'forged'],
+        membershipProjectionCommunityId: 'forged',
+        membershipProjectionAction: 'backfill',
+        membershipProjectionUpdatedAt: serverTimestamp(),
+      },
+    ));
+  });
+
+  test('Community member can backfill only an authoritative current membership', async () => {
+    await seedCommunityMembership();
+    await env.withSecurityRulesDisabled((context) => updateDoc(
+      doc(context.firestore(), 'communityUserProgress', ids.communityMember),
+      { communityIds: [] },
+    ));
+    await assertSucceeds(updateDoc(
+      doc(db(ids.communityMember), 'communityUserProgress', ids.communityMember),
+      {
+        communityIds: ['c1'],
+        membershipProjectionCommunityId: 'c1',
+        membershipProjectionAction: 'backfill',
+        membershipProjectionUpdatedAt: serverTimestamp(),
+      },
+    ));
+  });
+
   test('57 private member can execute the real leave cleanup flow', async () => {
     await seedLeaveCleanupData();
     await assertSucceeds(leavePrivateGubClientFlow());

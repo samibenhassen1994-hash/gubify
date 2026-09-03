@@ -713,6 +713,7 @@ service cloud.firestore {
     function communityAnswerPath(id, askId, answerId) { return /databases/$(database)/documents/communities/$(id)/asks/$(askId)/answers/$(answerId); }
     function communityActiveAskSlotPath(id, uid) { return /databases/$(database)/documents/communities/$(id)/activeAskSlots/$(uid); }
     function communityUserProgressPath(uid) { return /databases/$(database)/documents/communityUserProgress/$(uid); }
+    function communityDeletionMemberPath(id, uid) { return /databases/$(database)/documents/communities/$(id)/deletionMembers/$(uid); }
     function communityBanPath(id, uid) { return /databases/$(database)/documents/communities/$(id)/bans/$(uid); }
     function userCommunityPath(uid, id) { return /databases/$(database)/documents/users/$(uid)/communities/$(id); }
     function communityJoinRequestPath(id, uid) { return /databases/$(database)/documents/communities/$(id)/joinRequests/$(uid); }
@@ -796,7 +797,10 @@ service cloud.firestore {
         : 0;
       return linkedCommunityAccount()
         && afterProgress.keys().hasOnly([
-          'xp','updatedAt','lastRewardCommunityId','lastRewardAskId','lastRewardRole'
+          'xp','updatedAt','lastRewardCommunityId','lastRewardAskId','lastRewardRole',
+          'communityIds','membershipProjectionCommunityId',
+          'membershipProjectionAction','membershipProjectionUpdatedAt',
+          'communityProjectionVersion'
         ])
         && afterProgress.xp is int
         && afterProgress.xp >= 0
@@ -804,6 +808,11 @@ service cloud.firestore {
         && id is string && id.size() > 0
         && askId is string && askId.size() > 0
         && exists(communityMemberPath(id, uid))
+        && afterProgress.get('communityIds', []).toSet().hasAny([id])
+        && afterProgress.get('communityIds', []).toSet()
+          == (exists(communityUserProgressPath(uid))
+            ? get(communityUserProgressPath(uid)).data.get('communityIds', []).toSet()
+            : [].toSet()).union([id].toSet())
         && askBefore.status == 'active'
         && askBefore.authorId == request.auth.uid
         && askAfter.status == 'resolved'
@@ -815,6 +824,78 @@ service cloud.firestore {
           || (role == 'askAuthor'
             && uid == askAfter.authorId
             && afterProgress.xp == oldXp + 2));
+    }
+    function validCommunityProgressSchema(data) {
+      return data.keys().hasOnly([
+          'xp','updatedAt','lastRewardCommunityId','lastRewardAskId','lastRewardRole',
+          'communityIds','membershipProjectionCommunityId',
+          'membershipProjectionAction','membershipProjectionUpdatedAt',
+          'communityProjectionVersion'
+        ])
+        && data.xp is int && data.xp >= 0
+        && data.get('communityIds', []) is list;
+    }
+    function validCommunityProjectionJoin(uid) {
+      let after = request.resource.data;
+      let id = after.get('membershipProjectionCommunityId', '');
+      let beforeIds = exists(communityUserProgressPath(uid))
+        ? resource.data.get('communityIds', []).toSet()
+        : [].toSet();
+      let afterIds = after.get('communityIds', []).toSet();
+      return linkedCommunityAccount()
+        && validCommunityProgressSchema(after)
+        && id is string && id.size() > 0
+        && after.membershipProjectionAction in ['join','backfill']
+        && after.membershipProjectionUpdatedAt == request.time
+        && afterIds == beforeIds.union([id].toSet())
+        && existsAfter(communityMemberPath(id, uid))
+        && getAfter(communityMemberPath(id, uid)).data.uid == uid
+        && (own(uid) || validCommunityApprovalSignal(id, uid))
+        && (!exists(communityUserProgressPath(uid)) || after.xp == resource.data.xp);
+    }
+    function validCommunityProjectionRemoval(uid) {
+      let after = request.resource.data;
+      let id = after.get('membershipProjectionCommunityId', '');
+      let beforeIds = resource.data.get('communityIds', []).toSet();
+      let afterIds = after.get('communityIds', []).toSet();
+      let deletionCleanup = after.membershipProjectionAction == 'delete'
+        && communityDeletingOwner(id)
+        && exists(communityDeletionMemberPath(id, uid))
+        && !existsAfter(communityDeletionMemberPath(id, uid))
+        && !existsAfter(userCommunityPath(uid, id));
+      return linkedCommunityAccount()
+        && validCommunityProgressSchema(after)
+        && id is string && id.size() > 0
+        && after.membershipProjectionAction in ['leave','ban','delete']
+        && after.membershipProjectionUpdatedAt == request.time
+        && beforeIds.hasAny([id])
+        && afterIds == beforeIds.difference([id].toSet())
+        && after.xp == resource.data.xp
+        && ((request.auth.uid == uid || isCommunityOwner(id))
+          && !existsAfter(communityMemberPath(id, uid))
+          || deletionCleanup);
+    }
+    function validCommunityProjectionVersion(uid) {
+      let after = request.resource.data;
+      return linkedCommunityAccount() && own(uid)
+        && validCommunityProgressSchema(after)
+        && after.communityProjectionVersion == 1
+        && ((!exists(communityUserProgressPath(uid))
+            && after.xp == 0
+            && after.get('communityIds', []).size() == 0)
+          || (exists(communityUserProgressPath(uid))
+            && after.diff(resource.data).affectedKeys()
+              .hasOnly(['communityProjectionVersion'])));
+    }
+    function communityProjectionContains(id, uid) {
+      return existsAfter(communityUserProgressPath(uid))
+        && getAfter(communityUserProgressPath(uid)).data
+          .get('communityIds', []).toSet().hasAny([id]);
+    }
+    function communityProjectionAbsent(id, uid) {
+      return !existsAfter(communityUserProgressPath(uid))
+        || !getAfter(communityUserProgressPath(uid)).data
+          .get('communityIds', []).toSet().hasAny([id]);
     }
     function validCommunityAskResolution(id, askId) {
       let afterAsk = request.resource.data;
@@ -1298,6 +1379,7 @@ service cloud.firestore {
       let root = communityAfter(id);
       return validCommunityMemberData(member.data, uid, role)
         && validCommunityCopyData(copy.data, id, uid, role)
+        && communityProjectionContains(id, uid)
         && ((role == 'owner' && exists(communityPath(id)))
           || member.data.joinedAt == request.time)
         && (role == 'owner' || validCommunityJoin(id, uid));
@@ -1343,6 +1425,7 @@ service cloud.firestore {
       return !exists(communityMemberPath(id, uid))
         && !exists(communityBanPath(id, uid))
         && validCommunityMemberData(member.data, uid, 'member')
+        && communityProjectionContains(id, uid)
         && member.data.displayName == get(communityJoinRequestPath(id, uid)).data.displayName
         && member.data.joinedAt == request.time;
     }
@@ -1362,7 +1445,10 @@ service cloud.firestore {
 
     match /communityUserProgress/{uid} {
       allow read: if linkedCommunityAccount();
-      allow create, update: if validCommunityProgressReward(uid);
+      allow create, update: if validCommunityProgressReward(uid)
+        || validCommunityProjectionJoin(uid)
+        || validCommunityProjectionVersion(uid);
+      allow update: if validCommunityProjectionRemoval(uid);
       allow delete: if own(uid)
         && !existsAfter(/databases/$(database)/documents/users/$(uid));
     }
@@ -1779,9 +1865,11 @@ service cloud.firestore {
         allow delete: if communityDeletingOwner(id)
           || (isCommunityOwner(id) && uid != request.auth.uid
             && communityActive(id)
+            && communityProjectionAbsent(id, uid)
             && communityAfter(id).data.memberCount == communityDoc(id).data.memberCount - 1)
           || (linkedCommunityAccount() && own(uid) && uid != communityDoc(id).data.ownerId
             && communityActive(id)
+            && communityProjectionAbsent(id, uid)
             && communityAfter(id).data.memberCount == communityDoc(id).data.memberCount - 1);
       }
       match /bans/{uid} {
@@ -1795,6 +1883,7 @@ service cloud.firestore {
           && validNullableString(request.resource.data.photoUrl)
           && request.resource.data.bannedBy == request.auth.uid
           && request.resource.data.bannedAt == request.time
+          && communityProjectionAbsent(id, uid)
           && !existsAfter(communityMemberPath(id, uid));
         allow delete: if isCommunityOwner(id);
       }

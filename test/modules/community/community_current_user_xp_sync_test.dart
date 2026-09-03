@@ -43,6 +43,28 @@ void main() {
     },
   );
 
+  test('linked session starts the existing-membership projection backfill', () async {
+    final progress = _FakeProgressSource();
+    final backfilled = <String>[];
+    final sync = CommunityCurrentUserXpSync(
+      currentAccount: () => const CommunityCurrentUserAccount(
+        userId: 'user-a',
+        isAnonymous: false,
+      ),
+      accountChanges: () => const Stream.empty(),
+      watchUserXp: progress.watch,
+      backfillProjection: (userId) async => backfilled.add(userId),
+      cache: CommunityUserXpCache(loadXp: (_) async => {}),
+    );
+    addTearDown(sync.dispose);
+
+    await sync.start();
+    await Future<void>.delayed(Duration.zero);
+
+    expect(backfilled, ['user-a']);
+    expect(progress.watchCalls, 1);
+  });
+
   test(
     'shares one current-user listener, updates the cache, and cancels it',
     () async {

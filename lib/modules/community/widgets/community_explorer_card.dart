@@ -7,12 +7,14 @@ import '../models/community_model.dart';
 class CommunityExplorerCard extends StatelessWidget {
   final CommunityModel community;
   final bool isJoined;
+  final bool isOwner;
   final VoidCallback onOpen;
 
   const CommunityExplorerCard({
     super.key,
     required this.community,
     required this.isJoined,
+    this.isOwner = false,
     required this.onOpen,
   });
 
@@ -57,13 +59,15 @@ class CommunityExplorerCard extends StatelessWidget {
                         ),
                         const SizedBox(width: 8),
                         _StatusBadge(
-                          label: isJoined
-                              ? "Member"
+                          label: isOwner
+                              ? 'Owner'
+                              : isJoined
+                              ? 'Member'
                               : community.accessMode ==
                                       CommunityModel.openAccessMode
                                   ? "Open"
                                   : "Approval",
-                          color: isJoined
+                          color: isOwner || isJoined
                               ? const Color(0xFF059669)
                               : const Color(0xFF2563EB),
                         ),

@@ -194,6 +194,7 @@ void main() {
             ),
             discoveryFilter: (communities) async => communities,
             joinedCommunityIdsStream: joinedController.stream,
+            isOwner: (_) => false,
           ),
         ),
       );
@@ -221,6 +222,7 @@ void main() {
             hasMore: false,
           ),
           discoveryFilter: (communities) async => communities,
+          isOwner: (_) => false,
           linkedAccountGate: (_) async {
             gateCalls++;
             return gateAllowed;

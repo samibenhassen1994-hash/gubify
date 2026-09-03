@@ -52,6 +52,24 @@ class CommunityUserXpCache {
     _emitAll();
   }
 
+  /// Seeds XP already paid for by a bounded query without marking a reward.
+  /// Live current-user data and an optimistic local reward always win.
+  void cacheLoaded(Map<String, int> xpByUserId) {
+    for (final item in xpByUserId.entries) {
+      final id = item.key.trim();
+      if (id.isEmpty) continue;
+      final entry = _entries[id] ??= _XpEntry();
+      if (entry.pendingLocalReward != null ||
+          (entry.retentions > 0 && entry.value != null)) {
+        continue;
+      }
+      entry
+        ..value = item.value < 0 ? 0 : item.value
+        ..loading = null;
+    }
+    _emitAll();
+  }
+
   /// Keeps the current linked user's XP available between Community surfaces.
   ///
   /// The session owner releases this retention when the account changes or
