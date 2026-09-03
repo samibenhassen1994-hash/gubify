@@ -11,8 +11,10 @@ import '../restrictions/models/community_restriction_model.dart';
 import '../restrictions/services/community_restriction_service.dart';
 import '../services/community_chat_service.dart';
 import '../services/community_ask_service.dart';
+import '../services/community_user_xp_cache.dart';
 import '../../profile/screens/user_profile_screen.dart';
 import 'community_chat_message_bubble.dart';
+import 'community_user_xp_scope.dart';
 import 'community_ask_type_sheet.dart';
 
 typedef CommunityChatSend = Future<void> Function(String text);
@@ -30,6 +32,7 @@ class CommunityChatView extends StatefulWidget {
   final CommunityChatSend? onSend;
   final CommunityAskCreate? onCreateAsk;
   final ValueChanged<CommunityChatMessageModel>? onOpenProfile;
+  final CommunityUserXpCache? membershipXpCache;
 
   const CommunityChatView({
     super.key,
@@ -40,6 +43,7 @@ class CommunityChatView extends StatefulWidget {
     this.onSend,
     this.onCreateAsk,
     this.onOpenProfile,
+    this.membershipXpCache,
   });
 
   @override
@@ -117,6 +121,13 @@ class _CommunityChatViewState extends State<CommunityChatView> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Ask created.')));
+    } on CommunityActiveAskExistsException {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('You already have an active Ask in this Community.'),
+        ),
+      );
     } on CommunityAskAlreadyExistsException {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -124,6 +135,11 @@ class _CommunityChatViewState extends State<CommunityChatView> {
           content: Text('An ask already exists for this message.'),
         ),
       );
+    } on CommunityAskCooldownException catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.userMessage)));
     } catch (error, stackTrace) {
       if (kDebugMode) {
         final firebaseError = error is FirebaseException ? error : null;
@@ -158,6 +174,7 @@ class _CommunityChatViewState extends State<CommunityChatView> {
           communityId: widget.communityId,
           communityName: widget.communityName,
           userId: message.senderId,
+          communityUserXpCache: widget.membershipXpCache,
         ),
       ),
     );
@@ -421,82 +438,89 @@ class _CommunityChatViewState extends State<CommunityChatView> {
 
                   _handleMessages(messages, currentUserId);
 
-                  return Stack(
-                    children: [
-                      SingleChildScrollView(
-                        controller: _scrollController,
-                        keyboardDismissBehavior:
-                            ScrollViewKeyboardDismissBehavior.onDrag,
-                        padding: EdgeInsets.fromLTRB(
-                          16,
-                          16,
-                          16,
-                          _pendingReceivedMessageCount > 0 ? 72 : 12,
-                        ),
-                        child: GestureDetector(
-                          behavior: HitTestBehavior.translucent,
-                          onTap: _dismissKeyboard,
-                          child: Column(
-                            children: [
-                              for (final message in messages)
-                                CommunityChatMessageBubble(
-                                  key: ValueKey(message.messageId),
-                                  message: message,
-                                  isCurrentUser:
-                                      currentUserId != null &&
-                                      message.senderId == currentUserId,
-                                  onProfileTap: () => _openProfile(message),
-                                  onCreateAsk:
-                                      currentUserId != null &&
-                                          message.senderId == currentUserId &&
-                                          !_askCreationMessageIds.contains(
-                                            message.messageId,
-                                          )
-                                      ? () => _startAsk(message)
-                                      : null,
-                                ),
-                            ],
+                  return CommunityUserXpScope(
+                    userIds: messages
+                        .map((message) => message.senderId)
+                        .toSet(),
+                    cache: widget.membershipXpCache,
+                    builder: (context, xpByUserId) => Stack(
+                      children: [
+                        SingleChildScrollView(
+                          controller: _scrollController,
+                          keyboardDismissBehavior:
+                              ScrollViewKeyboardDismissBehavior.onDrag,
+                          padding: EdgeInsets.fromLTRB(
+                            16,
+                            16,
+                            16,
+                            _pendingReceivedMessageCount > 0 ? 72 : 12,
+                          ),
+                          child: GestureDetector(
+                            behavior: HitTestBehavior.translucent,
+                            onTap: _dismissKeyboard,
+                            child: Column(
+                              children: [
+                                for (final message in messages)
+                                  CommunityChatMessageBubble(
+                                    key: ValueKey(message.messageId),
+                                    message: message,
+                                    xp: xpByUserId[message.senderId],
+                                    isCurrentUser:
+                                        currentUserId != null &&
+                                        message.senderId == currentUserId,
+                                    onProfileTap: () => _openProfile(message),
+                                    onCreateAsk:
+                                        currentUserId != null &&
+                                            message.senderId == currentUserId &&
+                                            !_askCreationMessageIds.contains(
+                                              message.messageId,
+                                            )
+                                        ? () => _startAsk(message)
+                                        : null,
+                                  ),
+                              ],
+                            ),
                           ),
                         ),
-                      ),
-                      if (_pendingReceivedMessageCount > 0)
-                        Positioned(
-                          left: 0,
-                          right: 0,
-                          bottom: 12,
-                          child: Center(
-                            child: Semantics(
-                              button: true,
-                              excludeSemantics: true,
-                              label:
-                                  '$_pendingReceivedMessageCount new '
-                                  '${_pendingReceivedMessageCount == 1 ? 'message' : 'messages'}. '
-                                  'Scroll to the latest messages.',
-                              child: FilledButton.icon(
-                                onPressed: _isScrollingToPendingMessages
-                                    ? null
-                                    : _scrollToPendingMessages,
-                                icon: const Icon(
-                                  Icons.keyboard_arrow_down_rounded,
-                                ),
-                                label: Text(
-                                  '$_pendingReceivedMessageCount new '
-                                  '${_pendingReceivedMessageCount == 1 ? 'message' : 'messages'}',
-                                ),
-                                style: FilledButton.styleFrom(
-                                  backgroundColor: const Color(0xFF2563EB),
-                                  foregroundColor: Colors.white,
-                                  disabledBackgroundColor: const Color(
-                                    0xFF2563EB,
+                        if (_pendingReceivedMessageCount > 0)
+                          Positioned(
+                            left: 0,
+                            right: 0,
+                            bottom: 12,
+                            child: Center(
+                              child: Semantics(
+                                button: true,
+                                excludeSemantics: true,
+                                label:
+                                    '$_pendingReceivedMessageCount new '
+                                    '${_pendingReceivedMessageCount == 1 ? 'message' : 'messages'}. '
+                                    'Scroll to the latest messages.',
+                                child: FilledButton.icon(
+                                  onPressed: _isScrollingToPendingMessages
+                                      ? null
+                                      : _scrollToPendingMessages,
+                                  icon: const Icon(
+                                    Icons.keyboard_arrow_down_rounded,
                                   ),
-                                  disabledForegroundColor: Colors.white,
-                                  elevation: 4,
+                                  label: Text(
+                                    '$_pendingReceivedMessageCount new '
+                                    '${_pendingReceivedMessageCount == 1 ? 'message' : 'messages'}',
+                                  ),
+                                  style: FilledButton.styleFrom(
+                                    backgroundColor: const Color(0xFF2563EB),
+                                    foregroundColor: Colors.white,
+                                    disabledBackgroundColor: const Color(
+                                      0xFF2563EB,
+                                    ),
+                                    disabledForegroundColor: Colors.white,
+                                    elevation: 4,
+                                  ),
                                 ),
                               ),
                             ),
                           ),
-                        ),
-                    ],
+                      ],
+                    ),
                   );
                 },
               ),

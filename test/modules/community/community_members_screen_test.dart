@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gubify/modules/community/models/community_model.dart';
 import 'package:gubify/modules/community/screens/community_members_screen.dart';
+import 'package:gubify/modules/community/services/community_user_xp_cache.dart';
 import 'package:gubify/modules/profile/models/user_profile_model.dart';
 import 'package:gubify/modules/profile/screens/user_profile_screen.dart';
 
@@ -32,6 +33,7 @@ const _member = CommunityMemberModel(
   photoUrl: null,
   role: 'member',
   joinedAt: null,
+  xp: 900,
 );
 
 Widget _screen({
@@ -46,6 +48,9 @@ Widget _screen({
     isOwner: owner,
     currentUserId: currentUserId,
     memberStream: Stream.value(const [_owner, _member]),
+    userXpCache: CommunityUserXpCache(
+      loadXp: (_) async => const {'owner': 0, 'member': 900},
+    ),
     onRemove: onRemove,
     onBan: onBan,
     profileLoader: profileLoader,
@@ -61,6 +66,7 @@ void main() {
 
     expect(find.text('Owner'), findsAtLeastNWidgets(1));
     expect(find.text('Alex'), findsOneWidget);
+    expect(find.text('Lv 10'), findsOneWidget);
     expect(find.text('You'), findsOneWidget);
     expect(find.byIcon(Icons.more_vert), findsNothing);
   });
@@ -151,6 +157,9 @@ void main() {
           communityId: _community.communityId,
           communityName: _community.name,
           userId: _member.userId,
+          communityUserXpCache: CommunityUserXpCache(
+            loadXp: (_) async => const {'member': 900},
+          ),
           profileFuture: Future.value(
             const UserProfileModel(
               userId: 'member',
@@ -159,6 +168,7 @@ void main() {
               isCurrentUser: true,
             ),
           ),
+          activeAsksStream: Stream.value(const []),
         ),
       ),
     );
@@ -204,6 +214,9 @@ void main() {
             communityId: _community.communityId,
             communityName: _community.name,
             userId: _member.userId,
+            communityUserXpCache: CommunityUserXpCache(
+              loadXp: (_) async => const {'member': 900},
+            ),
             profileFuture: Future.value(
               const UserProfileModel(
                 userId: 'member',
@@ -212,6 +225,7 @@ void main() {
                 isCurrentUser: false,
               ),
             ),
+            activeAsksStream: Stream.value(const []),
           ),
         ),
       );

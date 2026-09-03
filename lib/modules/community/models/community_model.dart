@@ -270,6 +270,7 @@ class CommunityMemberModel {
   final String? photoUrl;
   final String role;
   final Timestamp? joinedAt;
+  final int xp;
 
   const CommunityMemberModel({
     required this.userId,
@@ -277,5 +278,6 @@ class CommunityMemberModel {
     required this.photoUrl,
     required this.role,
     required this.joinedAt,
+    this.xp = 0,
   });
 }

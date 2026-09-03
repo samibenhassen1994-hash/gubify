@@ -4,8 +4,15 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:gubify/modules/community/models/community_ask_model.dart';
 import 'package:gubify/modules/community/screens/community_ask_details_screen.dart';
 import 'package:gubify/modules/community/screens/community_asks_screen.dart';
+import 'package:gubify/modules/community/services/community_user_xp_cache.dart';
 
-CommunityAskModel _ask(String id, CommunityAskType type) => CommunityAskModel(
+final _xpCache = CommunityUserXpCache(loadXp: (_) async => const {});
+
+CommunityAskModel _ask(
+  String id,
+  CommunityAskType type, {
+  CommunityAskStatus status = CommunityAskStatus.active,
+}) => CommunityAskModel(
   askId: id,
   communityId: 'community-1',
   authorId: 'author-$id',
@@ -14,18 +21,41 @@ CommunityAskModel _ask(String id, CommunityAskType type) => CommunityAskModel(
   sourceMessageId: id,
   text: 'Preview $id',
   createdAt: Timestamp.fromMillisecondsSinceEpoch(type.index + 1),
-  status: CommunityAskStatus.active,
+  status: status,
 );
 
-Widget _board(List<CommunityAskModel> asks) => MaterialApp(
+Widget _board(
+  List<CommunityAskModel> asks, {
+  Widget Function(BuildContext context, CommunityAskModel ask)? detailsBuilder,
+  CommunityUserXpCache? membershipXpCache,
+}) => MaterialApp(
   home: CommunityAsksScreen(
     communityId: 'community-1',
     communityName: 'Flutter Friends',
     asksStream: Stream.value(asks),
+    detailsBuilder: detailsBuilder,
+    membershipXpCache: membershipXpCache ?? _xpCache,
   ),
 );
 
 void main() {
+  testWidgets(
+    'active Ask card renders a level from the shared membership map',
+    (tester) async {
+      final levelCache = CommunityUserXpCache(
+        loadXp: (_) async => const {'author-help': 640},
+      );
+      await tester.pumpWidget(
+        _board([
+          _ask('help', CommunityAskType.help),
+        ], membershipXpCache: levelCache),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Lv 8'), findsOneWidget);
+    },
+  );
+
   testWidgets('board shows all active asks and filters one shared stream', (
     tester,
   ) async {
@@ -63,7 +93,19 @@ void main() {
   });
 
   testWidgets('ask card opens details with the selected data', (tester) async {
-    await tester.pumpWidget(_board([_ask('help', CommunityAskType.help)]));
+    await tester.pumpWidget(
+      _board(
+        [_ask('help', CommunityAskType.help)],
+        detailsBuilder: (context, ask) => CommunityAskDetailsScreen(
+          ask: ask,
+          communityName: 'Flutter Friends',
+          askStream: Stream.value(ask),
+          answersStream: Stream.value(const []),
+          currentUserId: 'viewer',
+          membershipXpCache: _xpCache,
+        ),
+      ),
+    );
     await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const ValueKey('ask-card-help')));
@@ -93,6 +135,25 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('ask-filter-advice')));
     await tester.pump();
     expect(find.text('No Advice asks'), findsOneWidget);
+  });
+
+  testWidgets('board excludes resolved asks from the active list', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _board([
+        _ask('active', CommunityAskType.help),
+        _ask(
+          'resolved',
+          CommunityAskType.advice,
+          status: CommunityAskStatus.resolved,
+        ),
+      ]),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Preview active'), findsOneWidget);
+    expect(find.text('Preview resolved'), findsNothing);
   });
 
   testWidgets('board fits a phone viewport', (tester) async {

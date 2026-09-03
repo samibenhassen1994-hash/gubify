@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gubify/modules/community/models/community_ask_model.dart';
 import 'package:gubify/modules/community/repositories/community_ask_repository.dart';
@@ -88,6 +89,29 @@ void main() {
     );
   });
 
+  test('active Ask result becomes a controlled anti-spam exception', () async {
+    final service = CommunityAskService.forTesting(
+      currentAccount: () =>
+          const CommunityAskAccount(userId: 'user-1', isAnonymous: false),
+      createAskFromMessage:
+          ({
+            required communityId,
+            required sourceMessageId,
+            required type,
+            required authorId,
+          }) async => CommunityAskCreateResult.activeAskExists,
+    );
+
+    await expectLater(
+      service.createAskFromMessage(
+        communityId: 'community-1',
+        sourceMessageId: 'message-1',
+        type: CommunityAskType.help,
+      ),
+      throwsA(isA<CommunityActiveAskExistsException>()),
+    );
+  });
+
   test('not-author result remains protected at service level', () async {
     final service = CommunityAskService.forTesting(
       currentAccount: () =>
@@ -170,15 +194,206 @@ void main() {
     expect(count, 4);
   });
 
+  test('active Ask author edits only text through the repository', () async {
+    CommunityAskModel? editedAsk;
+    String? editedText;
+    final service = CommunityAskService.forTesting(
+      currentAccount: () =>
+          const CommunityAskAccount(userId: 'author-1', isAnonymous: false),
+      createAskFromMessage:
+          ({
+            required communityId,
+            required sourceMessageId,
+            required type,
+            required authorId,
+          }) async => CommunityAskCreateResult.created,
+      editAsk: ({required communityId, required askId, required text}) async {
+        editedAsk = CommunityAskModel(
+          askId: askId,
+          communityId: communityId,
+          authorId: 'author-1',
+          authorDisplayName: 'Author',
+          type: CommunityAskType.help,
+          text: text,
+          createdAt: Timestamp(1, 0),
+          status: CommunityAskStatus.active,
+        );
+        editedText = text;
+      },
+    );
+    final ask = CommunityAskModel(
+      askId: 'ask-1',
+      communityId: 'community-1',
+      authorId: 'author-1',
+      authorDisplayName: 'Author',
+      type: CommunityAskType.help,
+      text: 'Original',
+      createdAt: Timestamp(1, 0),
+      status: CommunityAskStatus.active,
+    );
+
+    await service.editAsk(ask: ask, text: '  Updated question  ');
+
+    expect(editedAsk?.askId, 'ask-1');
+    expect(editedText, 'Updated question');
+  });
+
+  test(
+    'Ask edit rejects non-author and resolved Asks before repository',
+    () async {
+      var edits = 0;
+      final service = CommunityAskService.forTesting(
+        currentAccount: () =>
+            const CommunityAskAccount(userId: 'member-1', isAnonymous: false),
+        createAskFromMessage:
+            ({
+              required communityId,
+              required sourceMessageId,
+              required type,
+              required authorId,
+            }) async => CommunityAskCreateResult.created,
+        editAsk: ({required communityId, required askId, required text}) async {
+          edits++;
+        },
+      );
+      final ask = CommunityAskModel(
+        askId: 'ask-1',
+        communityId: 'community-1',
+        authorId: 'author-1',
+        authorDisplayName: 'Author',
+        type: CommunityAskType.help,
+        text: 'Original',
+        createdAt: Timestamp(1, 0),
+        status: CommunityAskStatus.active,
+      );
+
+      await expectLater(
+        service.editAsk(ask: ask, text: 'Updated'),
+        throwsA(isA<CommunityAskNotAllowedException>()),
+      );
+      await expectLater(
+        service.editAsk(
+          ask: CommunityAskModel(
+            askId: ask.askId,
+            communityId: ask.communityId,
+            authorId: 'member-1',
+            authorDisplayName: ask.authorDisplayName,
+            type: ask.type,
+            text: ask.text,
+            createdAt: ask.createdAt,
+            status: CommunityAskStatus.resolved,
+          ),
+          text: 'Updated',
+        ),
+        throwsA(isA<CommunityAskEditUnavailableException>()),
+      );
+      expect(edits, 0);
+    },
+  );
+
+  test(
+    'Ask edit rejects blank and over-limit text before repository',
+    () async {
+      var edits = 0;
+      final service = CommunityAskService.forTesting(
+        currentAccount: () =>
+            const CommunityAskAccount(userId: 'author-1', isAnonymous: false),
+        createAskFromMessage:
+            ({
+              required communityId,
+              required sourceMessageId,
+              required type,
+              required authorId,
+            }) async => CommunityAskCreateResult.created,
+        editAsk: ({required communityId, required askId, required text}) async {
+          edits++;
+        },
+      );
+      final ask = CommunityAskModel(
+        askId: 'ask-1',
+        communityId: 'community-1',
+        authorId: 'author-1',
+        authorDisplayName: 'Author',
+        type: CommunityAskType.help,
+        text: 'Original',
+        createdAt: Timestamp(1, 0),
+        status: CommunityAskStatus.active,
+      );
+
+      await expectLater(
+        service.editAsk(ask: ask, text: '   '),
+        throwsArgumentError,
+      );
+      await expectLater(
+        service.editAsk(
+          ask: ask,
+          text: List.filled(CommunityAskService.maxTextLength + 1, 'x').join(),
+        ),
+        throwsArgumentError,
+      );
+      expect(edits, 0);
+    },
+  );
+
   for (final type in CommunityAskType.values) {
-    test('Direct ${type.label} ask uses normalized text and current name', () async {
-      String? capturedText;
-      String? capturedName;
-      CommunityAskType? capturedType;
+    test(
+      'Direct ${type.label} ask uses normalized text and current name',
+      () async {
+        String? capturedText;
+        String? capturedName;
+        CommunityAskType? capturedType;
+        final service = CommunityAskService.forTesting(
+          currentAccount: () =>
+              const CommunityAskAccount(userId: 'user-1', isAnonymous: false),
+          currentDisplayName: () async => 'Current Sami',
+          createAskFromMessage:
+              ({
+                required communityId,
+                required sourceMessageId,
+                required type,
+                required authorId,
+              }) async => CommunityAskCreateResult.created,
+          createDirectAsk:
+              ({
+                required communityId,
+                required text,
+                required type,
+                required authorId,
+                required authorDisplayName,
+              }) async {
+                expect(communityId, 'community-1');
+                expect(authorId, 'user-1');
+                capturedText = text;
+                capturedName = authorDisplayName;
+                capturedType = type;
+                return const CommunityDirectAskCreateResult.created(
+                  'generated-id',
+                );
+              },
+        );
+
+        final askId = await service.createDirectAsk(
+          communityId: ' community-1 ',
+          text: '  A direct question  ',
+          type: type,
+        );
+
+        expect(askId, 'generated-id');
+        expect(capturedText, 'A direct question');
+        expect(capturedName, 'Current Sami');
+        expect(capturedType, type);
+      },
+    );
+  }
+
+  test(
+    'Direct ask rejects blank and over-limit text before repository',
+    () async {
+      var repositoryCalls = 0;
       final service = CommunityAskService.forTesting(
         currentAccount: () =>
             const CommunityAskAccount(userId: 'user-1', isAnonymous: false),
-        currentDisplayName: () async => 'Current Sami',
+        currentDisplayName: () async => 'Sami',
         createAskFromMessage:
             ({
               required communityId,
@@ -194,34 +409,125 @@ void main() {
               required authorId,
               required authorDisplayName,
             }) async {
-              expect(communityId, 'community-1');
-              expect(authorId, 'user-1');
-              capturedText = text;
-              capturedName = authorDisplayName;
-              capturedType = type;
-              return 'generated-id';
+              repositoryCalls++;
+              return const CommunityDirectAskCreateResult.created(
+                'generated-id',
+              );
             },
       );
 
-      final askId = await service.createDirectAsk(
-        communityId: ' community-1 ',
-        text: '  A direct question  ',
-        type: type,
+      expect(
+        () => service.createDirectAsk(
+          communityId: 'community-1',
+          text: '   ',
+          type: CommunityAskType.help,
+        ),
+        throwsArgumentError,
+      );
+      expect(
+        () => service.createDirectAsk(
+          communityId: 'community-1',
+          text: List.filled(CommunityAskService.maxTextLength + 1, 'x').join(),
+          type: CommunityAskType.help,
+        ),
+        throwsArgumentError,
+      );
+      expect(repositoryCalls, 0);
+    },
+  );
+
+  test(
+    'Direct Ask reports an existing active slot without returning an id',
+    () async {
+      final service = CommunityAskService.forTesting(
+        currentAccount: () =>
+            const CommunityAskAccount(userId: 'user-1', isAnonymous: false),
+        currentDisplayName: () async => 'Sami',
+        createAskFromMessage:
+            ({
+              required communityId,
+              required sourceMessageId,
+              required type,
+              required authorId,
+            }) async => CommunityAskCreateResult.created,
+        createDirectAsk:
+            ({
+              required communityId,
+              required text,
+              required type,
+              required authorId,
+              required authorDisplayName,
+            }) async => const CommunityDirectAskCreateResult.activeAskExists(),
       );
 
-      expect(askId, 'generated-id');
-      expect(capturedText, 'A direct question');
-      expect(capturedName, 'Current Sami');
-      expect(capturedType, type);
-    });
-  }
+      await expectLater(
+        service.createDirectAsk(
+          communityId: 'community-1',
+          text: 'A direct Ask',
+          type: CommunityAskType.help,
+        ),
+        throwsA(isA<CommunityActiveAskExistsException>()),
+      );
+    },
+  );
 
-  test('Direct ask rejects blank and over-limit text before repository', () async {
+  test(
+    'Ask cooldown rounds a remaining few seconds up to one minute',
+    () async {
+      final now = DateTime.utc(2026, 9, 1, 12);
+      final service = CommunityAskService.forTesting(
+        currentAccount: () =>
+            const CommunityAskAccount(userId: 'user-1', isAnonymous: false),
+        currentDisplayName: () async => 'Sami',
+        now: () => now,
+        createAskFromMessage:
+            ({
+              required communityId,
+              required sourceMessageId,
+              required type,
+              required authorId,
+            }) async => CommunityAskCreateResult.created,
+        createDirectAsk:
+            ({
+              required communityId,
+              required text,
+              required type,
+              required authorId,
+              required authorDisplayName,
+            }) async => CommunityDirectAskCreateResult.cooldown(
+              Timestamp.fromDate(
+                now
+                    .subtract(const Duration(hours: 8))
+                    .add(const Duration(seconds: 1)),
+              ),
+            ),
+      );
+
+      await expectLater(
+        service.createDirectAsk(
+          communityId: 'community-1',
+          text: 'A direct Ask',
+          type: CommunityAskType.help,
+        ),
+        throwsA(
+          isA<CommunityAskCooldownException>().having(
+            (error) => error.userMessage,
+            'user message',
+            'You can create another Ask in 1m.',
+          ),
+        ),
+      );
+    },
+  );
+
+  test('Ask creation succeeds at the exact cooldown expiry result', () async {
+    final now = DateTime.utc(2026, 9, 1, 12);
     var repositoryCalls = 0;
     final service = CommunityAskService.forTesting(
       currentAccount: () =>
           const CommunityAskAccount(userId: 'user-1', isAnonymous: false),
       currentDisplayName: () async => 'Sami',
+      now: () => now,
       createAskFromMessage:
           ({
             required communityId,
@@ -238,26 +544,17 @@ void main() {
             required authorDisplayName,
           }) async {
             repositoryCalls++;
-            return 'generated-id';
+            return const CommunityDirectAskCreateResult.created('ask-2');
           },
     );
 
-    expect(
-      () => service.createDirectAsk(
-        communityId: 'community-1',
-        text: '   ',
-        type: CommunityAskType.help,
-      ),
-      throwsArgumentError,
+    final askId = await service.createDirectAsk(
+      communityId: 'community-1',
+      text: 'A direct Ask',
+      type: CommunityAskType.help,
     );
-    expect(
-      () => service.createDirectAsk(
-        communityId: 'community-1',
-        text: List.filled(CommunityAskService.maxTextLength + 1, 'x').join(),
-        type: CommunityAskType.help,
-      ),
-      throwsArgumentError,
-    );
-    expect(repositoryCalls, 0);
+
+    expect(askId, 'ask-2');
+    expect(repositoryCalls, 1);
   });
 }

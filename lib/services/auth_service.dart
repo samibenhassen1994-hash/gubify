@@ -2,6 +2,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
+import '../modules/community/services/community_current_user_xp_sync.dart';
 import '../repositories/user_repository.dart';
 import 'user_service.dart';
 
@@ -378,6 +379,7 @@ class AuthService {
     PasswordChangeGateway? passwordChangeGateway,
     AccountDeletionAuthGateway? accountDeletionAuthGateway,
     GoogleSignOutGateway? googleSignOutGateway,
+    Future<void> Function()? onCurrentAccountLinked,
     this.clearUserCache,
     this.userProfileExists,
   }) : _auth = auth ?? (authLinkGateway == null ? FirebaseAuth.instance : null),
@@ -417,7 +419,12 @@ class AuthService {
            googleSignOutGateway ??
            (authLinkGateway == null
                ? GoogleSignInSessionGateway()
-               : const _UnavailableGoogleSignOutGateway()) {
+               : const _UnavailableGoogleSignOutGateway()),
+       _onCurrentAccountLinked =
+           onCurrentAccountLinked ??
+           (authLinkGateway == null
+               ? CommunityCurrentUserXpSync.instance.refresh
+               : null) {
     _userService = userService;
   }
 
@@ -431,6 +438,7 @@ class AuthService {
   final PasswordChangeGateway _passwordChangeGateway;
   final AccountDeletionAuthGateway _accountDeletionAuthGateway;
   final GoogleSignOutGateway _googleSignOutGateway;
+  final Future<void> Function()? _onCurrentAccountLinked;
   final void Function()? clearUserCache;
   final Future<bool> Function(String userId)? userProfileExists;
 
@@ -529,6 +537,7 @@ class AuthService {
       if (linkedUser.uid != uidBeforeLink) {
         return const GoogleLinkResult.failure(GoogleLinkStatus.uidChanged);
       }
+      await _notifyCurrentAccountLinked();
 
       return GoogleLinkResult.success(
         uid: uidBeforeLink,
@@ -575,6 +584,7 @@ class AuthService {
           EmailPasswordLinkStatus.uidChanged,
         );
       }
+      await _notifyCurrentAccountLinked();
       final verification = await sendCurrentUserEmailVerification();
       return EmailPasswordLinkResult.success(
         uid: uidBeforeLink,
@@ -987,6 +997,21 @@ class AuthService {
       'operation-not-allowed' => AccountAuthStatus.operationNotAllowed,
       _ => AccountAuthStatus.unknownFailure,
     };
+  }
+
+  Future<void> _notifyCurrentAccountLinked() async {
+    final callback = _onCurrentAccountLinked;
+    if (callback == null) return;
+    try {
+      await callback();
+    } catch (error) {
+      assert(() {
+        debugPrint(
+          'Community current-user XP refresh failed after linking: $error',
+        );
+        return true;
+      }());
+    }
   }
 
   PasswordResetStatus _passwordResetErrorStatus(String code) {

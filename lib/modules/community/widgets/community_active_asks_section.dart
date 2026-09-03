@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../widgets/gub_content_card.dart';
 import '../models/community_ask_model.dart';
 import '../services/community_ask_service.dart';
 
@@ -21,26 +22,33 @@ class CommunityActiveAsksSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(
-          'Active asks',
-          style: Theme.of(
-            context,
-          ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
-        ),
-        const SizedBox(height: 12),
         StreamBuilder<List<CommunityAskModel>>(
           stream: stream,
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator());
+              return const _ActiveAsksContainer(
+                message: CircularProgressIndicator(),
+              );
             }
             if (snapshot.hasError) {
-              return const Text('Unable to load active asks.');
+              return const _ActiveAsksContainer(
+                message: Text('Unable to load active Asks.'),
+              );
             }
-            final asks = snapshot.data ?? const [];
-            if (asks.isEmpty) return const Text('No active asks.');
+            final asks = (snapshot.data ?? const [])
+                .where((ask) => ask.status == CommunityAskStatus.active)
+                .toList(growable: false);
+            if (asks.isEmpty) {
+              return const _ActiveAsksContainer(
+                message: Text('No active Asks'),
+              );
+            }
             return Column(
-              children: [for (final ask in asks) _ActiveAskCard(ask: ask)],
+              children: [
+                const _ActiveAsksContainer(),
+                const SizedBox(height: 12),
+                for (final ask in asks) _ActiveAskCard(ask: ask),
+              ],
             );
           },
         ),
@@ -49,7 +57,9 @@ class CommunityActiveAsksSection extends StatelessWidget {
   }
 
   Stream<List<CommunityAskModel>> _asksStream() {
-    if (asksStream != null) return asksStream!;
+    if (asksStream != null) {
+      return asksStream!;
+    }
     try {
       return CommunityAskService.instance.activeAsksStream(
         communityId: communityId,
@@ -59,6 +69,33 @@ class CommunityActiveAsksSection extends StatelessWidget {
       return Stream.error(error, stackTrace);
     }
   }
+}
+
+class _ActiveAsksContainer extends StatelessWidget {
+  const _ActiveAsksContainer({this.message});
+
+  final Widget? message;
+
+  @override
+  Widget build(BuildContext context) => GubContentCard(
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Center(
+          child: Text(
+            'Active Asks',
+            style: Theme.of(
+              context,
+            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+          ),
+        ),
+        if (message != null) ...[
+          const SizedBox(height: 14),
+          Center(child: message!),
+        ],
+      ],
+    ),
+  );
 }
 
 class _ActiveAskCard extends StatelessWidget {
@@ -109,11 +146,7 @@ class _ActiveAskCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 10),
-            Text(
-              ask.text,
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
-            ),
+            Text(ask.text, maxLines: 3, overflow: TextOverflow.ellipsis),
             const SizedBox(height: 8),
             Text(
               dateLabel,

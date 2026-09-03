@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../../../repositories/user_repository.dart';
-import '../../chat/widgets/chat_user_avatar.dart';
 import '../../chat/widgets/deleted_user_identity_builder.dart';
 import '../models/community_chat_message_model.dart';
+import 'community_level_avatar.dart';
 
 class CommunityChatMessageBubble extends StatelessWidget {
   final CommunityChatMessageModel message;
@@ -12,6 +12,7 @@ class CommunityChatMessageBubble extends StatelessWidget {
   final Stream<UserIdentity>? identity;
   final VoidCallback? onProfileTap;
   final VoidCallback? onCreateAsk;
+  final int? xp;
 
   const CommunityChatMessageBubble({
     super.key,
@@ -21,6 +22,7 @@ class CommunityChatMessageBubble extends StatelessWidget {
     this.identity,
     this.onProfileTap,
     this.onCreateAsk,
+    this.xp,
   });
 
   @override
@@ -117,9 +119,11 @@ class CommunityChatMessageBubble extends StatelessWidget {
         );
         final avatar = Padding(
           padding: const EdgeInsets.only(top: 2),
-          child: ChatUserAvatar(
+          child: CommunityLevelAvatar(
             displayName: displayName,
             userId: message.senderId,
+            photoUrl: null,
+            xp: xp,
             onTap: profileAvailable ? onProfileTap : null,
           ),
         );

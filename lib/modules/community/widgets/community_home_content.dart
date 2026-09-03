@@ -4,9 +4,11 @@ import '../../../widgets/gub_content_card.dart';
 import '../models/community_ask_model.dart';
 import '../models/community_model.dart';
 import '../images/community_image_view.dart';
-import '../services/community_service.dart';
 import '../services/community_ask_service.dart';
+import '../services/community_service.dart';
 import '../screens/community_asks_screen.dart';
+import '../screens/community_resolved_asks_screen.dart';
+import '../screens/community_my_asks_screen.dart';
 import 'community_chat_view.dart';
 import 'community_create_ask_card.dart';
 
@@ -17,8 +19,9 @@ class CommunityHomeContent extends StatefulWidget {
   final bool isKeyboardOpen;
   final bool? isOwner;
   final Widget? chatView;
-  final Future<int> Function()? activeAskCountLoader;
   final VoidCallback? onOpenAsks;
+  final VoidCallback? onOpenResolvedAsks;
+  final VoidCallback? onOpenMyAsks;
   final CommunityDirectAskSubmit? onCreateDirectAsk;
 
   const CommunityHomeContent({
@@ -27,8 +30,9 @@ class CommunityHomeContent extends StatefulWidget {
     required this.isKeyboardOpen,
     this.isOwner,
     this.chatView,
-    this.activeAskCountLoader,
     this.onOpenAsks,
+    this.onOpenResolvedAsks,
+    this.onOpenMyAsks,
     this.onCreateDirectAsk,
   });
 
@@ -38,8 +42,6 @@ class CommunityHomeContent extends StatefulWidget {
 
 class _CommunityHomeContentState extends State<CommunityHomeContent> {
   _CommunityHomePanel _panel = _CommunityHomePanel.none;
-  int? _activeAskCount;
-  bool _loadingCount = false;
 
   @override
   void didUpdateWidget(CommunityHomeContent oldWidget) {
@@ -59,37 +61,15 @@ class _CommunityHomeContentState extends State<CommunityHomeContent> {
     });
   }
 
-  Future<void> _handleAsks() async {
+  void _handleAsks() {
     if (_panel == _CommunityHomePanel.asks) {
       setState(() => _panel = _CommunityHomePanel.none);
       return;
     }
-
-    setState(() {
-      _panel = _CommunityHomePanel.asks;
-      _loadingCount = true;
-      _activeAskCount = null;
-    });
-    try {
-      final loader =
-          widget.activeAskCountLoader ??
-          () => CommunityAskService.instance.getActiveAskCount(
-            widget.community.communityId,
-          );
-      final count = await loader();
-      if (!mounted || _panel != _CommunityHomePanel.asks) return;
-      setState(() => _activeAskCount = count);
-    } catch (_) {
-      if (!mounted || _panel != _CommunityHomePanel.asks) return;
-      setState(() => _activeAskCount = 0);
-    } finally {
-      if (mounted && _panel == _CommunityHomePanel.asks) {
-        setState(() => _loadingCount = false);
-      }
-    }
+    setState(() => _panel = _CommunityHomePanel.asks);
   }
 
-  void _openAsks() {
+  void _openActiveAsks() {
     final callback = widget.onOpenAsks;
     if (callback != null) {
       callback();
@@ -98,6 +78,38 @@ class _CommunityHomeContentState extends State<CommunityHomeContent> {
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => CommunityAsksScreen(
+          communityId: widget.community.communityId,
+          communityName: widget.community.name,
+        ),
+      ),
+    );
+  }
+
+  void _openResolvedAsks() {
+    final callback = widget.onOpenResolvedAsks;
+    if (callback != null) {
+      callback();
+      return;
+    }
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => CommunityResolvedAsksScreen(
+          communityId: widget.community.communityId,
+          communityName: widget.community.name,
+        ),
+      ),
+    );
+  }
+
+  void _openMyAsks() {
+    final callback = widget.onOpenMyAsks;
+    if (callback != null) {
+      callback();
+      return;
+    }
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => CommunityMyAsksScreen(
           communityId: widget.community.communityId,
           communityName: widget.community.name,
         ),
@@ -168,7 +180,7 @@ class _CommunityHomeContentState extends State<CommunityHomeContent> {
                   size: 44,
                 ),
               ),
-              const SizedBox(width: 18),
+              const SizedBox(width: 10),
               _HomeHeaderAction(
                 key: const ValueKey('asks-header-action'),
                 label: 'Asks',
@@ -180,7 +192,19 @@ class _CommunityHomeContentState extends State<CommunityHomeContent> {
                   size: 25,
                 ),
               ),
-              const SizedBox(width: 18),
+              const SizedBox(width: 10),
+              _HomeHeaderAction(
+                key: const ValueKey('my-asks-header-action'),
+                label: 'My Asks',
+                selected: false,
+                onTap: _openMyAsks,
+                child: const Icon(
+                  Icons.person_search_rounded,
+                  color: Color(0xFF2563EB),
+                  size: 24,
+                ),
+              ),
+              const SizedBox(width: 10),
               _HomeHeaderAction(
                 key: const ValueKey('create-ask-header-action'),
                 label: 'Create',
@@ -203,9 +227,8 @@ class _CommunityHomeContentState extends State<CommunityHomeContent> {
           ),
         if (!widget.isKeyboardOpen && _panel == _CommunityHomePanel.asks)
           _AsksSummaryPanel(
-            count: _activeAskCount,
-            loading: _loadingCount,
-            onTap: _openAsks,
+            onOpenActiveAsks: _openActiveAsks,
+            onOpenResolvedAsks: _openResolvedAsks,
           ),
         if (_panel == _CommunityHomePanel.createAsk)
           CommunityCreateAskCard(
@@ -251,14 +274,20 @@ class _HomeHeaderAction extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-                color: selected
-                    ? const Color(0xFF2563EB)
-                    : const Color(0xFF475569),
+            SizedBox(
+              width: 48,
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: selected
+                        ? const Color(0xFF2563EB)
+                        : const Color(0xFF475569),
+                  ),
+                ),
               ),
             ),
             const SizedBox(height: 3),
@@ -361,75 +390,74 @@ class _CommunityInfoPanel extends StatelessWidget {
 
 class _AsksSummaryPanel extends StatelessWidget {
   const _AsksSummaryPanel({
-    required this.count,
-    required this.loading,
-    required this.onTap,
+    required this.onOpenActiveAsks,
+    required this.onOpenResolvedAsks,
   });
 
-  final int? count;
-  final bool loading;
-  final VoidCallback onTap;
+  final VoidCallback onOpenActiveAsks;
+  final VoidCallback onOpenResolvedAsks;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
-      child: Semantics(
-        button: true,
-        label: 'Open active asks',
-        child: InkWell(
-          key: const ValueKey('asks-summary-card'),
-          borderRadius: BorderRadius.circular(18),
-          onTap: onTap,
-          child: GubContentCard(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Text(
-                        'Asks',
-                        style: TextStyle(fontWeight: FontWeight.w700),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        loading
-                            ? 'Loading active asks…'
-                            : _activeAskLabel(count),
-                        style: const TextStyle(
-                          fontSize: 11,
-                          color: Color(0xFF2563EB),
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const Text(
-                  'Tap to view',
-                  style: TextStyle(fontSize: 11, color: Color(0xFF64748B)),
-                ),
-                const SizedBox(width: 3),
-                const Icon(
-                  Icons.chevron_right_rounded,
-                  size: 18,
-                  color: Color(0xFF64748B),
-                ),
-              ],
-            ),
+      child: Column(
+        children: [
+          _AskMenuCard(
+            key: const ValueKey('active-asks-summary-card'),
+            label: 'Active Asks',
+            onTap: onOpenActiveAsks,
           ),
-        ),
+          const SizedBox(height: 8),
+          _AskMenuCard(
+            key: const ValueKey('resolved-asks-summary-card'),
+            label: 'Resolved Asks',
+            onTap: onOpenResolvedAsks,
+          ),
+        ],
       ),
     );
   }
+}
 
-  String _activeAskLabel(int? count) {
-    final value = count ?? 0;
-    return value == 1 ? '1 ask active' : '$value asks active';
-  }
+class _AskMenuCard extends StatelessWidget {
+  const _AskMenuCard({super.key, required this.label, required this.onTap});
+
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    button: true,
+    label: 'Open $label',
+    child: InkWell(
+      borderRadius: BorderRadius.circular(18),
+      onTap: onTap,
+      child: GubContentCard(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                label,
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+            ),
+            const Text(
+              'Tap to view',
+              style: TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+            ),
+            const SizedBox(width: 3),
+            const Icon(
+              Icons.chevron_right_rounded,
+              size: 18,
+              color: Color(0xFF64748B),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
 }
 
 class CommunityStateMessage extends StatelessWidget {

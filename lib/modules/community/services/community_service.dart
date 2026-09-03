@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 
 import '../../../config/app_limits.dart';
 import '../../../repositories/user_repository.dart';
@@ -380,6 +381,26 @@ class CommunityService {
       throw const CommunityDeletionException('Please sign in again.');
     }
     await _runDeletion(communityId: communityId, confirmationName: null);
+  }
+
+  Future<void> resumeIncompleteOwnedDeletions() async {
+    final user = _auth.currentUser;
+    if (user == null) return;
+
+    final communityIds = await CommunityRepository.instance
+        .incompleteDeletionIdsForOwner(user.uid);
+    for (final communityId in communityIds) {
+      try {
+        await resumeDeletion(communityId: communityId);
+      } on Object catch (error) {
+        if (kDebugMode) {
+          debugPrint(
+            'Community deletion recovery failed: '
+            'community=owned_deleting code=${error.runtimeType}',
+          );
+        }
+      }
+    }
   }
 
   Future<void> _runDeletion({

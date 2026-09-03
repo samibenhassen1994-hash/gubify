@@ -17,6 +17,7 @@ void main() {
     AuthVerificationGateway? verification,
     PasswordResetGateway? passwordReset,
     GoogleSignOutGateway? googleSignOut,
+    Future<void> Function()? onCurrentAccountLinked,
     void Function()? clearUserCache,
     Future<bool> Function(String userId)? userProfileExists,
   }) {
@@ -26,6 +27,7 @@ void main() {
       authVerificationGateway: verification,
       passwordResetGateway: passwordReset,
       googleSignOutGateway: googleSignOut,
+      onCurrentAccountLinked: onCurrentAccountLinked,
       clearUserCache: clearUserCache,
       googleCredentialProvider: google,
       userProfileExists: userProfileExists,
@@ -65,6 +67,27 @@ void main() {
     expect(auth.linkCalls, 1);
     expect(auth.lastIdToken, identity.idToken);
   });
+
+  test(
+    'refreshes the session XP sync after Google links the same UID',
+    () async {
+      final auth = _FakeAuthLinkGateway(
+        currentUserId: 'existing-uid',
+        linkedUid: 'existing-uid',
+        linkedProviderIds: const ['anonymous', 'google.com'],
+      );
+      var refreshCalls = 0;
+
+      final result = await serviceFor(
+        auth: auth,
+        google: _FakeGoogleCredentialProvider(identity: identity),
+        onCurrentAccountLinked: () async => refreshCalls++,
+      ).linkCurrentAnonymousUserWithGoogle();
+
+      expect(result.isSuccess, isTrue);
+      expect(refreshCalls, 1);
+    },
+  );
 
   test('does not link or modify the user when Google is cancelled', () async {
     final auth = _FakeAuthLinkGateway(currentUserId: 'existing-uid');
@@ -193,10 +216,12 @@ void main() {
       linkedProviderIds: const ['password'],
     );
 
+    var refreshCalls = 0;
     final result =
         await serviceFor(
           auth: auth,
           google: _FakeGoogleCredentialProvider(identity: identity),
+          onCurrentAccountLinked: () async => refreshCalls++,
         ).linkCurrentUserWithEmailAndPassword(
           email: 'person@example.com',
           password: 'secure-password',
@@ -206,6 +231,7 @@ void main() {
     expect(result.uid, 'existing-uid');
     expect(result.email, 'person@example.com');
     expect(auth.emailLinkCalls, 1);
+    expect(refreshCalls, 1);
   });
 
   test(

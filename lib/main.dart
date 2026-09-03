@@ -7,6 +7,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'core/invites/invite_link_coordinator.dart';
 import 'firebase_options.dart';
 import 'modules/chat/widgets/gub_chat_overlay.dart';
+import 'modules/community/services/community_current_user_xp_sync.dart';
 import 'screens/gub/join_gub_screen.dart';
 import 'theme/app_theme.dart';
 import 'pages/startup_screen.dart';
@@ -35,6 +36,7 @@ class GubifyApp extends StatefulWidget {
 class _GubifyAppState extends State<GubifyApp> {
   final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
   late final InviteLinkCoordinator _inviteLinkCoordinator;
+  late final CommunityCurrentUserXpSync _currentUserXpSync;
 
   @override
   void initState() {
@@ -43,6 +45,8 @@ class _GubifyAppState extends State<GubifyApp> {
       source: AppLinksInviteLinkSource(),
       openJoin: _openJoin,
     )..start();
+    _currentUserXpSync = CommunityCurrentUserXpSync.instance;
+    unawaited(_currentUserXpSync.start());
   }
 
   Future<void> _openJoin(String visibleCode) async {
@@ -61,6 +65,7 @@ class _GubifyAppState extends State<GubifyApp> {
   @override
   void dispose() {
     unawaited(_inviteLinkCoordinator.dispose());
+    unawaited(_currentUserXpSync.dispose());
     super.dispose();
   }
 

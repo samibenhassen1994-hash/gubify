@@ -3,11 +3,13 @@ import 'package:flutter/material.dart';
 
 import '../../../widgets/gub_content_card.dart';
 import '../../../widgets/gub_screen_background.dart';
-import '../../chat/widgets/chat_user_avatar.dart';
 import '../../profile/screens/user_profile_screen.dart';
 import '../../profile/models/user_profile_model.dart';
 import '../models/community_model.dart';
 import '../services/community_service.dart';
+import '../services/community_user_xp_cache.dart';
+import '../widgets/community_level_avatar.dart';
+import '../widgets/community_user_xp_scope.dart';
 
 class CommunityMembersScreen extends StatelessWidget {
   final CommunityModel community;
@@ -17,6 +19,7 @@ class CommunityMembersScreen extends StatelessWidget {
   final Future<void> Function(String userId)? onRemove;
   final Future<void> Function(String userId)? onBan;
   final Future<UserProfileModel?> Function(String userId)? profileLoader;
+  final CommunityUserXpCache? userXpCache;
 
   const CommunityMembersScreen({
     super.key,
@@ -27,6 +30,7 @@ class CommunityMembersScreen extends StatelessWidget {
     this.onRemove,
     this.onBan,
     this.profileLoader,
+    this.userXpCache,
   });
 
   @override
@@ -63,18 +67,25 @@ class CommunityMembersScreen extends StatelessWidget {
                 return const Center(child: CircularProgressIndicator());
               }
               final members = snapshot.data!;
-              return ListView.separated(
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
-                itemCount: members.length,
-                separatorBuilder: (_, _) => const SizedBox(height: 10),
-                itemBuilder: (context, index) => _CommunityMemberTile(
-                  community: community,
-                  member: members[index],
-                  isCurrentUser: members[index].userId == currentUserId,
-                  canManage: isOwner && members[index].userId != currentUserId,
-                  onRemove: onRemove,
-                  onBan: onBan,
-                  profileLoader: profileLoader,
+              return CommunityUserXpScope(
+                cache: userXpCache,
+                userIds: members.map((member) => member.userId).toSet(),
+                builder: (context, xpByUserId) => ListView.separated(
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
+                  itemCount: members.length,
+                  separatorBuilder: (_, _) => const SizedBox(height: 10),
+                  itemBuilder: (context, index) => _CommunityMemberTile(
+                    community: community,
+                    member: members[index],
+                    xp: xpByUserId[members[index].userId],
+                    isCurrentUser: members[index].userId == currentUserId,
+                    canManage:
+                        isOwner && members[index].userId != currentUserId,
+                    onRemove: onRemove,
+                    onBan: onBan,
+                    profileLoader: profileLoader,
+                    userXpCache: userXpCache,
+                  ),
                 ),
               );
             },
@@ -88,20 +99,24 @@ class CommunityMembersScreen extends StatelessWidget {
 class _CommunityMemberTile extends StatelessWidget {
   final CommunityModel community;
   final CommunityMemberModel member;
+  final int? xp;
   final bool isCurrentUser;
   final bool canManage;
   final Future<void> Function(String userId)? onRemove;
   final Future<void> Function(String userId)? onBan;
   final Future<UserProfileModel?> Function(String userId)? profileLoader;
+  final CommunityUserXpCache? userXpCache;
 
   const _CommunityMemberTile({
     required this.community,
     required this.member,
+    required this.xp,
     required this.isCurrentUser,
     required this.canManage,
     required this.onRemove,
     required this.onBan,
     required this.profileLoader,
+    required this.userXpCache,
   });
 
   Future<void> _confirmAction(BuildContext context, String action) async {
@@ -166,76 +181,87 @@ class _CommunityMemberTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return GubContentCard(
       padding: EdgeInsets.zero,
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-        leading: InkWell(
-          key: ValueKey('member-avatar-${member.userId}'),
-          borderRadius: BorderRadius.circular(28),
-          onTap: () => Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => UserProfileScreen.community(
-                communityId: community.communityId,
-                communityName: community.name,
-                userId: member.userId,
-                profileFuture: profileLoader?.call(member.userId),
+      child: Material(
+        type: MaterialType.transparency,
+        child: ListTile(
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 14,
+            vertical: 6,
+          ),
+          leading: InkWell(
+            key: ValueKey('member-avatar-${member.userId}'),
+            borderRadius: BorderRadius.circular(28),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => UserProfileScreen.community(
+                  communityId: community.communityId,
+                  communityName: community.name,
+                  userId: member.userId,
+                  profileFuture: profileLoader?.call(member.userId),
+                  activeAsksStream: profileLoader == null
+                      ? null
+                      : Stream.value(const []),
+                  communityUserXpCache: userXpCache,
+                ),
               ),
             ),
-          ),
-          child: ChatUserAvatar(
-            displayName: member.displayName,
-            userId: member.userId,
-            photoUrl: member.photoUrl,
-            radius: 24,
-          ),
-        ),
-        title: Row(
-          children: [
-            Expanded(
-              child: Text(
-                member.displayName,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontWeight: FontWeight.w700),
-              ),
+            child: CommunityLevelAvatar(
+              displayName: member.displayName,
+              userId: member.userId,
+              photoUrl: member.photoUrl,
+              radius: 24,
+              xp: xp,
             ),
-            if (isCurrentUser) ...[
-              const SizedBox(width: 8),
-              const Chip(
-                visualDensity: VisualDensity.compact,
-                label: Text('You'),
+          ),
+          title: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  member.displayName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
               ),
+              if (isCurrentUser) ...[
+                const SizedBox(width: 8),
+                const Chip(
+                  visualDensity: VisualDensity.compact,
+                  label: Text('You'),
+                ),
+              ],
             ],
-          ],
+          ),
+          subtitle: Text(member.role == 'owner' ? 'Owner' : 'Member'),
+          trailing: canManage
+              ? PopupMenuButton<String>(
+                  onSelected: (value) {
+                    if (value == 'assign') {
+                      showDialog<void>(
+                        context: context,
+                        builder: (context) => AlertDialog(
+                          title: const Text('Assign role'),
+                          content: const Text('Coming soon'),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(context),
+                              child: const Text('OK'),
+                            ),
+                          ],
+                        ),
+                      );
+                    } else {
+                      _confirmAction(context, value);
+                    }
+                  },
+                  itemBuilder: (_) => const [
+                    PopupMenuItem(value: 'assign', child: Text('Assign role')),
+                    PopupMenuItem(value: 'Remove', child: Text('Remove')),
+                    PopupMenuItem(value: 'Ban', child: Text('Ban')),
+                  ],
+                )
+              : null,
         ),
-        subtitle: Text(member.role == 'owner' ? 'Owner' : 'Member'),
-        trailing: canManage
-            ? PopupMenuButton<String>(
-                onSelected: (value) {
-                  if (value == 'assign') {
-                    showDialog<void>(
-                      context: context,
-                      builder: (context) => AlertDialog(
-                        title: const Text('Assign role'),
-                        content: const Text('Coming soon'),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.pop(context),
-                            child: const Text('OK'),
-                          ),
-                        ],
-                      ),
-                    );
-                  } else {
-                    _confirmAction(context, value);
-                  }
-                },
-                itemBuilder: (_) => const [
-                  PopupMenuItem(value: 'assign', child: Text('Assign role')),
-                  PopupMenuItem(value: 'Remove', child: Text('Remove')),
-                  PopupMenuItem(value: 'Ban', child: Text('Ban')),
-                ],
-              )
-            : null,
       ),
     );
   }

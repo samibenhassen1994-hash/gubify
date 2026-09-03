@@ -1,16 +1,28 @@
 import 'package:flutter/material.dart';
 
-import '../../chat/widgets/chat_user_avatar.dart';
 import '../models/community_ask_model.dart';
+import 'community_level_avatar.dart';
 
 class CommunityAskCard extends StatelessWidget {
-  const CommunityAskCard({super.key, required this.ask, required this.onTap});
+  const CommunityAskCard({
+    super.key,
+    required this.ask,
+    required this.onTap,
+    this.onOpenAuthor,
+    this.authorXp,
+  });
 
   final CommunityAskModel ask;
   final VoidCallback onTap;
+  final VoidCallback? onOpenAuthor;
+  final int? authorXp;
 
   @override
   Widget build(BuildContext context) {
+    final isResolved = ask.status == CommunityAskStatus.resolved;
+    final statusDate = isResolved
+        ? ask.resolvedAt ?? ask.createdAt
+        : ask.createdAt;
     return Card(
       margin: const EdgeInsets.only(bottom: 10),
       child: InkWell(
@@ -23,18 +35,28 @@ class CommunityAskCard extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  ChatUserAvatar(
-                    displayName: ask.authorDisplayName,
-                    userId: ask.authorId,
-                    radius: 18,
+                  InkWell(
+                    key: ValueKey('ask-author-${ask.askId}'),
+                    borderRadius: BorderRadius.circular(18),
+                    onTap: onOpenAuthor,
+                    child: CommunityLevelAvatar(
+                      displayName: ask.authorDisplayName,
+                      userId: ask.authorId,
+                      photoUrl: null,
+                      radius: 18,
+                      xp: authorXp,
+                    ),
                   ),
                   const SizedBox(width: 9),
                   Expanded(
-                    child: Text(
-                      ask.authorDisplayName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    child: InkWell(
+                      onTap: onOpenAuthor,
+                      child: Text(
+                        ask.authorDisplayName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontWeight: FontWeight.w700),
+                      ),
                     ),
                   ),
                   _AskTypeBadge(type: ask.type),
@@ -52,7 +74,7 @@ class CommunityAskCard extends StatelessWidget {
                 children: [
                   Expanded(
                     child: Text(
-                      formatCommunityAskDate(ask.createdAt.toDate()),
+                      formatCommunityAskDate(statusDate.toDate()),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
@@ -62,16 +84,28 @@ class CommunityAskCard extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  const Text(
-                    'Active',
+                  Text(
+                    isResolved ? 'Resolved' : 'Active',
                     style: TextStyle(
-                      color: Color(0xFF059669),
+                      color: isResolved
+                          ? const Color(0xFF475569)
+                          : const Color(0xFF059669),
                       fontSize: 11,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
                 ],
               ),
+              if (ask.updatedAt != null) ...[
+                const SizedBox(height: 5),
+                Text(
+                  'Edited ${formatCommunityAskDate(ask.updatedAt!.toDate())}',
+                  style: const TextStyle(
+                    color: Color(0xFF64748B),
+                    fontSize: 11,
+                  ),
+                ),
+              ],
             ],
           ),
         ),

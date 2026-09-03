@@ -17,7 +17,7 @@ enum CommunityAskType {
 
 enum CommunityAskStatus {
   active('active'),
-  closed('closed');
+  resolved('resolved');
 
   const CommunityAskStatus(this.value);
 
@@ -39,7 +39,12 @@ class CommunityAskModel {
     required this.text,
     this.sourceMessageId,
     required this.createdAt,
+    this.updatedAt,
     required this.status,
+    this.bestAnswerId,
+    this.bestAnswerAuthorId,
+    this.resolvedAt,
+    this.xpAwarded = false,
   });
 
   final String askId;
@@ -50,7 +55,12 @@ class CommunityAskModel {
   final String text;
   final String? sourceMessageId;
   final Timestamp createdAt;
+  final Timestamp? updatedAt;
   final CommunityAskStatus status;
+  final String? bestAnswerId;
+  final String? bestAnswerAuthorId;
+  final Timestamp? resolvedAt;
+  final bool xpAwarded;
 
   factory CommunityAskModel.fromFirestore(
     Map<String, dynamic> data, {
@@ -66,7 +76,16 @@ class CommunityAskModel {
       text: data['text'] as String? ?? '',
       sourceMessageId: data['sourceMessageId'] as String?,
       createdAt: createdAt is Timestamp ? createdAt : Timestamp(0, 0),
+      updatedAt: data['updatedAt'] is Timestamp
+          ? data['updatedAt'] as Timestamp
+          : null,
       status: CommunityAskStatus.fromValue(data['status'] as String? ?? ''),
+      bestAnswerId: data['bestAnswerId'] as String?,
+      bestAnswerAuthorId: data['bestAnswerAuthorId'] as String?,
+      resolvedAt: data['resolvedAt'] is Timestamp
+          ? data['resolvedAt'] as Timestamp
+          : null,
+      xpAwarded: data['xpAwarded'] == true,
     );
   }
 
@@ -79,6 +98,11 @@ class CommunityAskModel {
     'text': text,
     if (sourceMessageId != null) 'sourceMessageId': sourceMessageId,
     'createdAt': createdAt,
+    if (updatedAt != null) 'updatedAt': updatedAt,
     'status': status.value,
+    if (bestAnswerId != null) 'bestAnswerId': bestAnswerId,
+    if (bestAnswerAuthorId != null) 'bestAnswerAuthorId': bestAnswerAuthorId,
+    if (resolvedAt != null) 'resolvedAt': resolvedAt,
+    if (xpAwarded) 'xpAwarded': true,
   };
 }

@@ -5,7 +5,12 @@ import '../../chat/widgets/chat_user_avatar.dart';
 import '../../community/moderation/services/community_moderation_service.dart';
 import '../../community/moderation/widgets/community_report_dialog.dart';
 import '../../community/models/community_ask_model.dart';
+import '../../community/leveling/community_level.dart';
 import '../../community/widgets/community_active_asks_section.dart';
+import '../../community/widgets/community_level_avatar.dart';
+import '../../community/widgets/community_profile_asks_section.dart';
+import '../../community/services/community_user_xp_cache.dart';
+import '../../community/widgets/community_user_xp_scope.dart';
 import '../models/user_profile_model.dart';
 import '../services/user_profile_service.dart';
 import 'user_activity_screen.dart';
@@ -17,6 +22,7 @@ class UserProfileScreen extends StatefulWidget {
   final String userId;
   final Future<UserProfileModel?>? profileFuture;
   final Stream<List<CommunityAskModel>>? activeAsksStream;
+  final CommunityUserXpCache? communityUserXpCache;
 
   const UserProfileScreen({
     super.key,
@@ -24,6 +30,7 @@ class UserProfileScreen extends StatefulWidget {
     required this.userId,
     this.profileFuture,
     this.activeAsksStream,
+    this.communityUserXpCache,
   }) : communityId = null,
        communityName = null;
 
@@ -34,6 +41,7 @@ class UserProfileScreen extends StatefulWidget {
     required this.userId,
     this.profileFuture,
     this.activeAsksStream,
+    this.communityUserXpCache,
   }) : gubId = null;
 
   @override
@@ -97,10 +105,10 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                 );
               }
 
-              return ListView(
+              Widget content(int? communityXp) => ListView(
                 padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
                 children: [
-                  _ProfileHeader(profile: profile),
+                  _ProfileHeader(profile: profile, communityXp: communityXp),
                   if (widget.communityId != null && !profile.isCurrentUser) ...[
                     const SizedBox(height: 18),
                     Center(
@@ -124,11 +132,20 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                   ],
                   if (widget.communityId != null) ...[
                     const SizedBox(height: 30),
-                    CommunityActiveAsksSection(
-                      communityId: widget.communityId!,
-                      authorId: widget.userId,
-                      asksStream: widget.activeAsksStream,
-                    ),
+                    if (widget.activeAsksStream != null)
+                      CommunityActiveAsksSection(
+                        communityId: widget.communityId!,
+                        authorId: widget.userId,
+                        asksStream: widget.activeAsksStream,
+                      )
+                    else
+                      CommunityProfileAsksSection(
+                        targetUserId: widget.userId,
+                        knownCommunities: {
+                          widget.communityId!: widget.communityName!,
+                        },
+                        userXpCache: widget.communityUserXpCache,
+                      ),
                   ],
                   if (widget.communityId == null) ...[
                     const SizedBox(height: 30),
@@ -156,6 +173,13 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                   ],
                 ],
               );
+              if (widget.communityId == null) return content(null);
+              return CommunityUserXpScope(
+                cache: widget.communityUserXpCache,
+                userIds: {profile.userId},
+                builder: (context, xpByUserId) =>
+                    content(xpByUserId[profile.userId]),
+              );
             },
           ),
         ),
@@ -166,19 +190,29 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
 class _ProfileHeader extends StatelessWidget {
   final UserProfileModel profile;
+  final int? communityXp;
 
-  const _ProfileHeader({required this.profile});
+  const _ProfileHeader({required this.profile, required this.communityXp});
 
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
-        ChatUserAvatar(
-          displayName: profile.displayName,
-          userId: profile.userId,
-          photoUrl: profile.photoUrl,
-          radius: 42,
-        ),
+        if (communityXp == null)
+          ChatUserAvatar(
+            displayName: profile.displayName,
+            userId: profile.userId,
+            photoUrl: profile.photoUrl,
+            radius: 42,
+          )
+        else
+          CommunityLevelAvatar(
+            displayName: profile.displayName,
+            userId: profile.userId,
+            photoUrl: profile.photoUrl,
+            radius: 42,
+            xp: communityXp!,
+          ),
         const SizedBox(height: 14),
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -212,7 +246,93 @@ class _ProfileHeader extends StatelessWidget {
             ).textTheme.bodyMedium?.copyWith(color: Colors.black54),
           ),
         ],
+        if (communityXp != null) ...[
+          const SizedBox(height: 18),
+          _CommunityLevelCard(level: CommunityLevel.fromXp(communityXp!)),
+        ],
       ],
+    );
+  }
+}
+
+class _CommunityLevelCard extends StatelessWidget {
+  const _CommunityLevelCard({required this.level});
+
+  final CommunityLevel level;
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    final colorScheme = Theme.of(context).colorScheme;
+    final barText = level.isMaxLevel
+        ? '${CommunityLevel.maxXp}+ XP'
+        : '${level.xpWithinCurrentLevel} / '
+              '${level.xpRequiredForNextLevel} XP';
+    final detail = level.isMaxLevel
+        ? 'Max level'
+        : '${level.percentage}% to Level ${level.nextLevel}';
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.8),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        children: [
+          Text(
+            'Level ${level.level}',
+            style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+          ),
+          if (level.recognition != null) ...[
+            const SizedBox(height: 3),
+            Text(
+              level.recognition!,
+              style: textTheme.bodyMedium?.copyWith(color: Colors.black54),
+            ),
+          ],
+          const SizedBox(height: 10),
+          const SizedBox(height: 12),
+          SizedBox(
+            height: 32,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: colorScheme.primaryContainer,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: colorScheme.primary),
+                  ),
+                  child: const SizedBox.expand(),
+                ),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: FractionallySizedBox(
+                    widthFactor: level.progress,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: colorScheme.primary,
+                        borderRadius: BorderRadius.circular(11),
+                      ),
+                      child: const SizedBox.expand(),
+                    ),
+                  ),
+                ),
+                Text(
+                  barText,
+                  style: textTheme.labelLarge?.copyWith(
+                    color: colorScheme.onPrimary,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+          Center(child: Text(detail, style: textTheme.bodySmall)),
+        ],
+      ),
     );
   }
 }

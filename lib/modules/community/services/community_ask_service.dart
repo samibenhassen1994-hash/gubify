@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import '../../../config/app_limits.dart';
@@ -21,7 +22,7 @@ typedef CommunityAskFromMessageCreate =
       required String authorId,
     });
 typedef CommunityDirectAskCreate =
-    Future<String> Function({
+    Future<CommunityDirectAskCreateResult> Function({
       required String communityId,
       required String text,
       required CommunityAskType type,
@@ -37,6 +38,31 @@ typedef CommunityActiveAsks =
 typedef CommunityAsksWatch =
     Stream<List<CommunityAskModel>> Function({required String communityId});
 typedef CommunityAskCount = Future<int> Function({required String communityId});
+typedef CommunityAskDelete =
+    Future<CommunityAskDeleteResult> Function({
+      required String communityId,
+      required String askId,
+      required String authorId,
+    });
+typedef CommunityAskEdit =
+    Future<void> Function({
+      required String communityId,
+      required String askId,
+      required String text,
+    });
+typedef CommunityResolvedAsksLoad =
+    Future<CommunityResolvedAsksPage> Function({
+      required String communityId,
+      CommunityResolvedAsksCursor? after,
+    });
+typedef CommunityUserAsksLoad =
+    Future<CommunityUserAsksPage> Function({
+      required String communityId,
+      required String authorId,
+      required CommunityAskStatus status,
+      CommunityUserAsksCursor? after,
+    });
+typedef CommunityAskNow = DateTime Function();
 
 class CommunityAskService {
   CommunityAskService._({
@@ -47,6 +73,11 @@ class CommunityAskService {
     required this._activeAsks,
     required this._watchActiveAsks,
     required this._getActiveAskCount,
+    required this._loadResolvedAsksPage,
+    required this._loadUserAsksPage,
+    required this._editAsk,
+    required this._deleteAsk,
+    required this._now,
   });
 
   factory CommunityAskService.forTesting({
@@ -57,6 +88,11 @@ class CommunityAskService {
     CommunityActiveAsks? activeAsks,
     CommunityAsksWatch? watchActiveAsks,
     CommunityAskCount? getActiveAskCount,
+    CommunityResolvedAsksLoad? loadResolvedAsksPage,
+    CommunityUserAsksLoad? loadUserAsksPage,
+    CommunityAskEdit? editAsk,
+    CommunityAskDelete? deleteAsk,
+    CommunityAskNow? now,
   }) => CommunityAskService._(
     currentAccount: currentAccount,
     currentDisplayName: currentDisplayName ?? () async => 'User',
@@ -69,7 +105,8 @@ class CommunityAskService {
           required type,
           required authorId,
           required authorDisplayName,
-        }) async => 'generated-id',
+        }) async =>
+            const CommunityDirectAskCreateResult.created('generated-id'),
     activeAsks:
         activeAsks ??
         ({required communityId, required authorId}) =>
@@ -78,6 +115,34 @@ class CommunityAskService {
         watchActiveAsks ??
         ({required communityId}) => Stream.value(const <CommunityAskModel>[]),
     getActiveAskCount: getActiveAskCount ?? ({required communityId}) async => 0,
+    loadResolvedAsksPage:
+        loadResolvedAsksPage ??
+        ({required communityId, after}) async =>
+            const CommunityResolvedAsksPage(
+              asks: [],
+              nextCursor: null,
+              hasMore: false,
+            ),
+    loadUserAsksPage:
+        loadUserAsksPage ??
+        ({
+          required communityId,
+          required authorId,
+          required status,
+          after,
+        }) async => const CommunityUserAsksPage(
+          asks: [],
+          nextCursor: null,
+          hasMore: false,
+        ),
+    editAsk:
+        editAsk ??
+        ({required communityId, required askId, required text}) async {},
+    deleteAsk:
+        deleteAsk ??
+        ({required communityId, required askId, required authorId}) async =>
+            CommunityAskDeleteResult.deleted,
+    now: now ?? DateTime.now,
   );
 
   static final CommunityAskService instance = CommunityAskService._(
@@ -96,6 +161,11 @@ class CommunityAskService {
     activeAsks: CommunityAskRepository.instance.activeAsksStream,
     watchActiveAsks: CommunityAskRepository.instance.watchActiveAsks,
     getActiveAskCount: CommunityAskRepository.instance.getActiveAskCount,
+    loadResolvedAsksPage: CommunityAskRepository.instance.loadResolvedAsksPage,
+    loadUserAsksPage: CommunityAskRepository.instance.loadUserAsksPage,
+    editAsk: CommunityAskRepository.instance.editAsk,
+    deleteAsk: CommunityAskRepository.instance.deleteAsk,
+    now: DateTime.now,
   );
 
   final CommunityAskCurrentAccount _currentAccount;
@@ -105,6 +175,11 @@ class CommunityAskService {
   final CommunityActiveAsks _activeAsks;
   final CommunityAsksWatch _watchActiveAsks;
   final CommunityAskCount _getActiveAskCount;
+  final CommunityResolvedAsksLoad _loadResolvedAsksPage;
+  final CommunityUserAsksLoad _loadUserAsksPage;
+  final CommunityAskEdit _editAsk;
+  final CommunityAskDelete _deleteAsk;
+  final CommunityAskNow _now;
 
   static const int maxTextLength = AppLimits.communityMessageMaxLength;
 
@@ -126,15 +201,21 @@ class CommunityAskService {
       type: type,
       authorId: account.userId,
     );
-    switch (result) {
-      case CommunityAskCreateResult.created:
+    switch (result.status) {
+      case CommunityAskCreateStatus.created:
         return;
-      case CommunityAskCreateResult.duplicate:
+      case CommunityAskCreateStatus.duplicate:
         throw const CommunityAskAlreadyExistsException();
-      case CommunityAskCreateResult.missingSource:
+      case CommunityAskCreateStatus.activeAskExists:
+        throw const CommunityActiveAskExistsException();
+      case CommunityAskCreateStatus.missingSource:
         throw const CommunityAskSourceMissingException();
-      case CommunityAskCreateResult.notAuthor:
+      case CommunityAskCreateStatus.notAuthor:
         throw const CommunityAskNotAllowedException();
+      case CommunityAskCreateStatus.cooldown:
+        throw CommunityAskCooldownException(
+          _remainingCooldown(result.lastAskCreatedAt),
+        );
     }
   }
 
@@ -160,13 +241,22 @@ class CommunityAskService {
     if (displayName.isEmpty) {
       throw StateError('Your display name is unavailable.');
     }
-    return _createDirectAsk(
+    final result = await _createDirectAsk(
       communityId: normalizedCommunityId,
       text: normalizedText,
       type: type,
       authorId: account.userId,
       authorDisplayName: displayName,
     );
+    if (result.lastAskCreatedAt != null) {
+      throw CommunityAskCooldownException(
+        _remainingCooldown(result.lastAskCreatedAt),
+      );
+    }
+    if (result.activeAskExists || result.askId == null) {
+      throw const CommunityActiveAskExistsException();
+    }
+    return result.askId!;
   }
 
   Stream<List<CommunityAskModel>> activeAsksStream({
@@ -205,6 +295,82 @@ class CommunityAskService {
     return _getActiveAskCount(communityId: normalizedCommunityId);
   }
 
+  Future<CommunityResolvedAsksPage> loadResolvedAsksPage({
+    required String communityId,
+    CommunityResolvedAsksCursor? after,
+  }) {
+    _requireLinkedAccount();
+    final normalizedCommunityId = communityId.trim();
+    if (normalizedCommunityId.isEmpty) {
+      throw ArgumentError('Community ID is required.');
+    }
+    return _loadResolvedAsksPage(
+      communityId: normalizedCommunityId,
+      after: after,
+    );
+  }
+
+  Future<CommunityUserAsksPage> loadMyAsksPage({
+    required String communityId,
+    required CommunityAskStatus status,
+    CommunityUserAsksCursor? after,
+  }) {
+    final account = _requireLinkedAccount();
+    final normalizedCommunityId = communityId.trim();
+    if (normalizedCommunityId.isEmpty) {
+      throw ArgumentError('Community ID is required.');
+    }
+    return _loadUserAsksPage(
+      communityId: normalizedCommunityId,
+      authorId: account.userId,
+      status: status,
+      after: after,
+    );
+  }
+
+  Future<void> editAsk({
+    required CommunityAskModel ask,
+    required String text,
+  }) async {
+    final account = _requireLinkedAccount();
+    if (ask.authorId != account.userId) {
+      throw const CommunityAskNotAllowedException();
+    }
+    if (ask.status != CommunityAskStatus.active) {
+      throw const CommunityAskEditUnavailableException();
+    }
+    final normalizedText = text.trim();
+    if (normalizedText.isEmpty) {
+      throw ArgumentError('Ask text cannot be empty.');
+    }
+    if (normalizedText.length > maxTextLength) {
+      throw ArgumentError('Ask cannot exceed $maxTextLength characters.');
+    }
+    await _editAsk(
+      communityId: ask.communityId,
+      askId: ask.askId,
+      text: normalizedText,
+    );
+  }
+
+  Future<void> deleteAsk(CommunityAskModel ask) async {
+    final account = _requireLinkedAccount();
+    if (ask.authorId != account.userId) {
+      throw const CommunityAskNotAllowedException();
+    }
+    final result = await _deleteAsk(
+      communityId: ask.communityId,
+      askId: ask.askId,
+      authorId: account.userId,
+    );
+    if (result == CommunityAskDeleteResult.missing) {
+      throw StateError('This Ask is unavailable.');
+    }
+    if (result == CommunityAskDeleteResult.activeSlotMismatch) {
+      throw StateError('Unable to remove this Ask safely.');
+    }
+  }
+
   CommunityAskAccount _requireLinkedAccount() {
     final account = _currentAccount();
     if (account == null) {
@@ -215,6 +381,38 @@ class CommunityAskService {
     }
     return account;
   }
+
+  Duration _remainingCooldown(Timestamp? lastAskCreatedAt) {
+    if (lastAskCreatedAt == null) return const Duration(minutes: 1);
+    final remaining = lastAskCreatedAt
+        .toDate()
+        .add(const Duration(hours: 8))
+        .difference(_now());
+    return remaining.isNegative || remaining == Duration.zero
+        ? const Duration(minutes: 1)
+        : remaining;
+  }
+}
+
+class CommunityAskCooldownException implements Exception {
+  CommunityAskCooldownException(this.remaining);
+
+  final Duration remaining;
+
+  String get userMessage {
+    final minutes = (remaining.inSeconds + 59) ~/ 60;
+    final hours = minutes ~/ 60;
+    final remainingMinutes = minutes % 60;
+    final duration = hours == 0
+        ? '${minutes}m'
+        : remainingMinutes == 0
+        ? '${hours}h'
+        : '${hours}h ${remainingMinutes}m';
+    return 'You can create another Ask in $duration.';
+  }
+
+  @override
+  String toString() => userMessage;
 }
 
 class CommunityAskAlreadyExistsException implements Exception {
@@ -222,6 +420,13 @@ class CommunityAskAlreadyExistsException implements Exception {
 
   @override
   String toString() => 'An ask already exists for this message.';
+}
+
+class CommunityActiveAskExistsException implements Exception {
+  const CommunityActiveAskExistsException();
+
+  @override
+  String toString() => 'You already have an active Ask in this Community.';
 }
 
 class CommunityAskSourceMissingException implements Exception {
@@ -236,6 +441,13 @@ class CommunityAskNotAllowedException implements Exception {
 
   @override
   String toString() => 'You can only create an ask from your own message.';
+}
+
+class CommunityAskEditUnavailableException implements Exception {
+  const CommunityAskEditUnavailableException();
+
+  @override
+  String toString() => 'This Ask has already been resolved.';
 }
 
 class CommunityAskLinkedAccountException implements Exception {

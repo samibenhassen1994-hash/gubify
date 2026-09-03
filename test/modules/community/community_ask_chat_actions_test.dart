@@ -62,6 +62,26 @@ void main() {
     expect(find.text('Create ask'), findsNothing);
   });
 
+  testWidgets('Community chat avatar renders the supplied shared XP level', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: CommunityChatMessageBubble(
+            message: _message(senderId: 'other'),
+            isCurrentUser: false,
+            xp: 640,
+            identity: Stream.value(const UserIdentity.existing('Sami')),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('Lv 8'), findsOneWidget);
+  });
+
   testWidgets(
     'Community message avatar and name open the existing profile flow',
     (tester) async {

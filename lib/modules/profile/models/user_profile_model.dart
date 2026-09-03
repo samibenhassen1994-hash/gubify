@@ -12,12 +12,14 @@ class UserProfileModel {
   final String? photoUrl;
   final String? role;
   final bool isCurrentUser;
+  final int? communityXp;
 
   const UserProfileModel({
     required this.userId,
     required this.displayName,
     this.photoUrl,
     this.role,
+    this.communityXp,
     required this.isCurrentUser,
   });
 }

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'auth_entry_screen.dart';
@@ -13,6 +14,7 @@ import '../modules/profile/repositories/account_deletion_marker_store.dart';
 import '../modules/profile/screens/account_deletion_recovery_screen.dart';
 import '../modules/profile/services/account_deletion_service.dart';
 import '../modules/community/restrictions/services/community_restriction_service.dart';
+import '../modules/community/services/community_service.dart';
 import '../widgets/startup_artwork_background.dart';
 import 'verify_email_screen.dart';
 
@@ -29,6 +31,7 @@ class StartupScreen extends StatefulWidget {
     this.accountDeletionRecoveryBuilder,
     this.clearLocalProfileState,
     this.clearUserCache,
+    this.communityDeletionRecovery,
   });
 
   final VoidCallback onNavigationReady;
@@ -42,6 +45,7 @@ class StartupScreen extends StatefulWidget {
   accountDeletionRecoveryBuilder;
   final Future<void> Function()? clearLocalProfileState;
   final VoidCallback? clearUserCache;
+  final Future<void> Function()? communityDeletionRecovery;
 
   @override
   State<StartupScreen> createState() => _StartupScreenState();
@@ -146,6 +150,8 @@ class _StartupScreenState extends State<StartupScreen> {
       if (!mounted) return;
 
       if (exists) {
+        await _resumeIncompleteCommunityDeletions();
+        if (!mounted) return;
         unawaited(_initializePlatformRestriction(uid));
         Navigator.pushReplacement(
           context,
@@ -190,6 +196,20 @@ class _StartupScreenState extends State<StartupScreen> {
     } on Object {
       _isRouting = false;
       rethrow;
+    }
+  }
+
+  Future<void> _resumeIncompleteCommunityDeletions() async {
+    try {
+      await (widget.communityDeletionRecovery?.call() ??
+          CommunityService.instance.resumeIncompleteOwnedDeletions());
+    } on Object catch (error) {
+      if (kDebugMode) {
+        debugPrint(
+          'Community deletion recovery startup check failed: '
+          'error=${error.runtimeType}',
+        );
+      }
     }
   }
 

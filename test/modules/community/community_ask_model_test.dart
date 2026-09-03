@@ -57,4 +57,22 @@ void main() {
     expect(decoded.sourceMessageId, isNull);
     expect(decoded.text, 'Which approach would you recommend?');
   });
+
+  test('Ask retains its optional edit timestamp from Firestore', () {
+    final updatedAt = Timestamp.fromMillisecondsSinceEpoch(5678);
+    final ask = CommunityAskModel.fromFirestore({
+      'askId': 'ask-1',
+      'communityId': 'community-1',
+      'authorId': 'author-1',
+      'authorDisplayName': 'Sami',
+      'type': 'help',
+      'text': 'Updated question',
+      'createdAt': Timestamp.fromMillisecondsSinceEpoch(1234),
+      'updatedAt': updatedAt,
+      'status': 'active',
+    }, askId: 'ask-1');
+
+    expect(ask.updatedAt, updatedAt);
+    expect(ask.toFirestore()['updatedAt'], updatedAt);
+  });
 }

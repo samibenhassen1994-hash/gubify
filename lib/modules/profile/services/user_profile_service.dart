@@ -176,6 +176,7 @@ class UserProfileService {
       displayName: target.displayName,
       photoUrl: target.photoUrl,
       role: target.role,
+      communityXp: null,
       isCurrentUser: currentUserId == target.userId,
     );
   }

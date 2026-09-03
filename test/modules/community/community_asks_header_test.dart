@@ -18,8 +18,9 @@ const community = CommunityModel(
 );
 
 Widget _home({
-  Future<int> Function()? countLoader,
   VoidCallback? onOpenAsks,
+  VoidCallback? onOpenResolvedAsks,
+  VoidCallback? onOpenMyAsks,
   CommunityDirectAskSubmit? onCreateDirectAsk,
 }) => MaterialApp(
   home: Scaffold(
@@ -27,8 +28,9 @@ Widget _home({
       community: community,
       isKeyboardOpen: false,
       isOwner: false,
-      activeAskCountLoader: countLoader,
       onOpenAsks: onOpenAsks,
+      onOpenResolvedAsks: onOpenResolvedAsks,
+      onOpenMyAsks: onOpenMyAsks,
       onCreateDirectAsk: onCreateDirectAsk,
       chatView: const ColoredBox(color: Colors.white),
     ),
@@ -39,15 +41,16 @@ void main() {
   testWidgets('compact Community and Asks circles toggle exclusive panels', (
     tester,
   ) async {
-    await tester.pumpWidget(_home(countLoader: () async => 4));
+    await tester.pumpWidget(_home());
 
     expect(
       find.byKey(const ValueKey('community-header-action')),
       findsOneWidget,
     );
     expect(find.byKey(const ValueKey('asks-header-action')), findsOneWidget);
+    expect(find.byKey(const ValueKey('my-asks-header-action')), findsOneWidget);
     expect(find.text('4 members'), findsNothing);
-    expect(find.text('4 asks active'), findsNothing);
+    expect(find.text('Tap to view'), findsNothing);
 
     await tester.tap(find.byKey(const ValueKey('community-header-action')));
     await tester.pump();
@@ -58,41 +61,76 @@ void main() {
     expect(find.text('4 members'), findsNothing);
 
     await tester.tap(find.byKey(const ValueKey('asks-header-action')));
-    await tester.pumpAndSettle();
-    expect(find.text('Asks'), findsWidgets);
-    expect(find.text('4 asks active'), findsOneWidget);
-    expect(find.text('Tap to view'), findsOneWidget);
+    await tester.pump();
+    expect(find.text('Active Asks'), findsOneWidget);
+    expect(find.text('Resolved Asks'), findsOneWidget);
+    expect(find.text('Tap to view'), findsNWidgets(2));
     expect(find.text('4 members'), findsNothing);
 
     await tester.tap(find.byKey(const ValueKey('community-header-action')));
     await tester.pump();
     expect(find.text('4 members'), findsOneWidget);
-    expect(find.text('4 asks active'), findsNothing);
+    expect(find.text('Active Asks'), findsNothing);
+    expect(find.text('Resolved Asks'), findsNothing);
+  });
+
+  testWidgets('My Asks action opens the current-user bounded history', (
+    tester,
+  ) async {
+    var opens = 0;
+    await tester.pumpWidget(_home(onOpenMyAsks: () => opens++));
+
+    await tester.tap(find.byKey(const ValueKey('my-asks-header-action')));
+    await tester.pump();
+
+    expect(opens, 1);
   });
 
   testWidgets('Asks circle toggles summary and only the card opens the board', (
     tester,
   ) async {
     var opens = 0;
-    await tester.pumpWidget(
-      _home(countLoader: () async => 2, onOpenAsks: () => opens++),
-    );
-
-    await tester.tap(find.byKey(const ValueKey('asks-header-action')));
-    await tester.pumpAndSettle();
-    expect(opens, 0);
-    expect(find.text('2 asks active'), findsOneWidget);
+    await tester.pumpWidget(_home(onOpenAsks: () => opens++));
 
     await tester.tap(find.byKey(const ValueKey('asks-header-action')));
     await tester.pump();
-    expect(find.text('2 asks active'), findsNothing);
+    expect(opens, 0);
+    expect(find.text('Active Asks'), findsOneWidget);
+    expect(find.text('Resolved Asks'), findsOneWidget);
+    expect(find.text('Tap to view'), findsNWidgets(2));
+
+    await tester.tap(find.byKey(const ValueKey('asks-header-action')));
+    await tester.pump();
+    expect(find.text('Active Asks'), findsNothing);
+    expect(find.text('Resolved Asks'), findsNothing);
     expect(opens, 0);
 
     await tester.tap(find.byKey(const ValueKey('asks-header-action')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('asks-summary-card')));
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('active-asks-summary-card')));
     await tester.pump();
     expect(opens, 1);
+  });
+
+  testWidgets('both static Ask cards open their corresponding flows', (
+    tester,
+  ) async {
+    var activeOpens = 0;
+    var resolvedOpens = 0;
+    await tester.pumpWidget(
+      _home(
+        onOpenAsks: () => activeOpens++,
+        onOpenResolvedAsks: () => resolvedOpens++,
+      ),
+    );
+    await tester.tap(find.byKey(const ValueKey('asks-header-action')));
+    await tester.pump();
+
+    await tester.tap(find.byKey(const ValueKey('active-asks-summary-card')));
+    await tester.tap(find.byKey(const ValueKey('resolved-asks-summary-card')));
+
+    expect(activeOpens, 1);
+    expect(resolvedOpens, 1);
   });
 
   testWidgets(
@@ -103,31 +141,31 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
 
-      await tester.pumpWidget(_home(countLoader: () async => 12));
+      await tester.pumpWidget(_home());
       await tester.tap(find.byKey(const ValueKey('asks-header-action')));
-      await tester.pumpAndSettle();
+      await tester.pump();
 
       expect(tester.takeException(), isNull);
     },
   );
 
-  testWidgets('Asks summary uses the singular active count', (tester) async {
-    await tester.pumpWidget(_home(countLoader: () async => 1));
+  testWidgets('Asks summary has no active-count status', (tester) async {
+    await tester.pumpWidget(_home());
     await tester.tap(find.byKey(const ValueKey('asks-header-action')));
-    await tester.pumpAndSettle();
+    await tester.pump();
 
-    expect(find.text('1 ask active'), findsOneWidget);
-    expect(find.text('1 asks active'), findsNothing);
+    expect(find.text('Active Asks'), findsOneWidget);
+    expect(find.text('Resolved Asks'), findsOneWidget);
+    expect(find.text('Tap to view'), findsNWidgets(2));
+    expect(find.textContaining('ask active'), findsNothing);
+    expect(find.text('Loading active asks…'), findsNothing);
   });
 
   testWidgets('Create circle toggles its card and excludes other panels', (
     tester,
   ) async {
     await tester.pumpWidget(
-      _home(
-        countLoader: () async => 2,
-        onCreateDirectAsk: ({required text, required type}) async {},
-      ),
+      _home(onCreateDirectAsk: ({required text, required type}) async {}),
     );
 
     expect(
@@ -144,14 +182,16 @@ void main() {
     expect(find.text('4 members'), findsNothing);
 
     await tester.tap(find.byKey(const ValueKey('asks-header-action')));
-    await tester.pumpAndSettle();
+    await tester.pump();
     expect(find.byType(CommunityCreateAskCard), findsNothing);
-    expect(find.text('2 asks active'), findsOneWidget);
+    expect(find.text('Active Asks'), findsOneWidget);
+    expect(find.text('Resolved Asks'), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('create-ask-header-action')));
     await tester.pump();
     expect(find.byType(CommunityCreateAskCard), findsOneWidget);
-    expect(find.text('2 asks active'), findsNothing);
+    expect(find.text('Active Asks'), findsNothing);
+    expect(find.text('Resolved Asks'), findsNothing);
 
     await tester.tap(find.byKey(const ValueKey('create-ask-header-action')));
     await tester.pump();

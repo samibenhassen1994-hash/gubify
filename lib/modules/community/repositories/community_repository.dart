@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 
 import '../models/community_access_request_model.dart';
 import '../models/community_model.dart';
@@ -29,6 +30,7 @@ class CommunityRepository {
   static const List<String> _knownCommunitySubcollections = [
     "messages",
     "asks",
+    "activeAskSlots",
     "members",
     "joinRequests",
     "bans",
@@ -548,6 +550,7 @@ class CommunityRepository {
               ? role.trim()
               : 'member',
           joinedAt: _timestampValue(data['joinedAt']),
+          xp: (data['xp'] as num?)?.toInt() ?? 0,
         );
       }).toList();
       members.sort((first, second) {
@@ -617,6 +620,7 @@ class CommunityRepository {
           : null,
       role: role is String && role.trim().isNotEmpty ? role.trim() : 'member',
       joinedAt: _timestampValue(data['joinedAt']),
+      xp: (data['xp'] as num?)?.toInt() ?? 0,
     );
   }
 
@@ -750,6 +754,8 @@ class CommunityRepository {
     }
 
     final communityReference = _communities.doc(normalizedCommunityId);
+    var deletionStep = 'mark_root';
+    var deletionPath = 'communities/*';
     try {
       await _markCommunityForDeletion(
         communityReference: communityReference,
@@ -758,27 +764,44 @@ class CommunityRepository {
       );
       final ownerId = user.uid;
 
+      deletionStep = 'capture_members';
+      deletionPath = 'communities/*/members';
       final hasImage = await _captureDeletionMembers(
         communityReference: communityReference,
         ownerId: ownerId,
       );
+      deletionStep = 'delete_image';
+      deletionPath = 'community_image';
       await runCommunityDeletionAfterMediaCleanup(
         communityId: normalizedCommunityId,
         hasImage: hasImage,
         deleteImageAsset: deleteImageAsset,
         continueDeletion: () async {
+          deletionStep = 'delete_user_membership_copies';
+          deletionPath = 'users/*/communities/*';
           await _deleteUserMembershipCopies(
             communityId: normalizedCommunityId,
             communityReference: communityReference,
           );
 
+          deletionStep = 'delete_ask_answers';
+          deletionPath = 'communities/*/asks/*/answers';
+          await _deleteCommunityAsksAndAnswers(communityReference);
+
           for (final subcollection in _knownCommunitySubcollections) {
-            if (subcollection == _deletionMembersSubcollection) continue;
+            if (subcollection == _deletionMembersSubcollection ||
+                subcollection == 'asks') {
+              continue;
+            }
+            deletionStep = 'delete_$subcollection';
+            deletionPath = 'communities/*/$subcollection';
             await _deleteCollectionInBatches(
               communityReference.collection(subcollection),
             );
           }
 
+          deletionStep = 'finalize_root_and_registries';
+          deletionPath = 'community_linkage';
           await _deleteOwnershipAndCommunity(
             ownerId: ownerId,
             communityId: normalizedCommunityId,
@@ -787,8 +810,58 @@ class CommunityRepository {
           );
         },
       );
+    } on FirebaseException catch (error) {
+      if (kDebugMode) {
+        debugPrint(
+          'Community deletion failed: '
+          'step=$deletionStep path=$deletionPath code=${error.code}',
+        );
+      }
+      rethrow;
     } on CommunityDeletionException {
       rethrow;
+    }
+  }
+
+  Future<List<String>> incompleteDeletionIdsForOwner(String ownerId) async {
+    final normalizedOwnerId = ownerId.trim();
+    if (normalizedOwnerId.isEmpty) return const <String>[];
+
+    final snapshot = await _communities
+        .where('ownerId', isEqualTo: normalizedOwnerId)
+        .get(const GetOptions(source: Source.server));
+    return snapshot.docs
+        .where((document) {
+          final data = document.data();
+          if (data['deletionStatus'] != 'deleting') return false;
+          return data['deletionRequestedBy'] == normalizedOwnerId ||
+              data['deletionStartedBy'] == normalizedOwnerId;
+        })
+        .map((document) => document.id)
+        .toList(growable: false);
+  }
+
+  Future<void> _deleteCommunityAsksAndAnswers(
+    DocumentReference<Map<String, dynamic>> communityReference,
+  ) async {
+    while (true) {
+      final asks = await communityReference
+          .collection('asks')
+          .limit(_batchSize)
+          .get();
+      if (asks.docs.isEmpty) {
+        return;
+      }
+
+      for (final ask in asks.docs) {
+        await _deleteCollectionInBatches(ask.reference.collection('answers'));
+      }
+
+      final batch = _firestore.batch();
+      for (final ask in asks.docs) {
+        batch.delete(ask.reference);
+      }
+      await batch.commit();
     }
   }
 

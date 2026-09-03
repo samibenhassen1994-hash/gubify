@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../config/app_limits.dart';
 import '../../../widgets/gub_content_card.dart';
 import '../models/community_ask_model.dart';
+import '../services/community_ask_service.dart';
 
 typedef CommunityDirectAskSubmit =
     Future<void> Function({
@@ -58,6 +59,18 @@ class _CommunityCreateAskCardState extends State<CommunityCreateAskCard> {
         _submitting = false;
       });
       widget.onCreated();
+    } on CommunityActiveAskExistsException {
+      if (!mounted) return;
+      setState(() {
+        _submitting = false;
+        _errorMessage = 'You already have an active Ask in this Community.';
+      });
+    } on CommunityAskCooldownException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _submitting = false;
+        _errorMessage = error.userMessage;
+      });
     } catch (_) {
       if (!mounted) return;
       setState(() {

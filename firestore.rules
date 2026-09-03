@@ -709,6 +709,10 @@ service cloud.firestore {
     function communityDoc(id) { return get(communityPath(id)); }
     function communityAfter(id) { return getAfter(communityPath(id)); }
     function communityMemberPath(id, uid) { return /databases/$(database)/documents/communities/$(id)/members/$(uid); }
+    function communityAskPath(id, askId) { return /databases/$(database)/documents/communities/$(id)/asks/$(askId); }
+    function communityAnswerPath(id, askId, answerId) { return /databases/$(database)/documents/communities/$(id)/asks/$(askId)/answers/$(answerId); }
+    function communityActiveAskSlotPath(id, uid) { return /databases/$(database)/documents/communities/$(id)/activeAskSlots/$(uid); }
+    function communityUserProgressPath(uid) { return /databases/$(database)/documents/communityUserProgress/$(uid); }
     function communityBanPath(id, uid) { return /databases/$(database)/documents/communities/$(id)/bans/$(uid); }
     function userCommunityPath(uid, id) { return /databases/$(database)/documents/users/$(uid)/communities/$(id); }
     function communityJoinRequestPath(id, uid) { return /databases/$(database)/documents/communities/$(id)/joinRequests/$(uid); }
@@ -759,6 +763,141 @@ service cloud.firestore {
     function communityActive(id) {
       return communityExists(id)
         && communityDoc(id).data.get('deletionStatus', 'active') != 'deleting';
+    }
+    function validCommunityRewardMemberUpdate(id, uid) {
+      let afterMember = request.resource.data;
+      let progress = getAfter(communityUserProgressPath(uid)).data;
+      let askId = progress.get('lastRewardAskId', '');
+      let askBefore = get(communityAskPath(id, askId)).data;
+      let askAfter = getAfter(communityAskPath(id, askId)).data;
+      let oldBest = resource.data.get('bestAnswerCount', 0);
+      return isCommunityMember(id) && communityActive(id)
+        && askId is string && askId.size() > 0
+        && progress.lastRewardCommunityId == id
+        && progress.lastRewardRole == 'bestAnswer'
+        && askBefore.status == 'active'
+        && askBefore.authorId == request.auth.uid
+        && askAfter.status == 'resolved'
+        && askAfter.xpAwarded == true
+        && afterMember.diff(resource.data).affectedKeys().hasOnly(['bestAnswerCount'])
+        && uid == askAfter.bestAnswerAuthorId
+        && uid != askAfter.authorId
+        && afterMember.bestAnswerCount == oldBest + 1;
+    }
+    function validCommunityProgressReward(uid) {
+      let afterProgress = request.resource.data;
+      let id = afterProgress.get('lastRewardCommunityId', '');
+      let askId = afterProgress.get('lastRewardAskId', '');
+      let role = afterProgress.get('lastRewardRole', '');
+      let askBefore = get(communityAskPath(id, askId)).data;
+      let askAfter = getAfter(communityAskPath(id, askId)).data;
+      let oldXp = exists(communityUserProgressPath(uid))
+        ? get(communityUserProgressPath(uid)).data.get('xp', 0)
+        : 0;
+      return linkedCommunityAccount()
+        && afterProgress.keys().hasOnly([
+          'xp','updatedAt','lastRewardCommunityId','lastRewardAskId','lastRewardRole'
+        ])
+        && afterProgress.xp is int
+        && afterProgress.xp >= 0
+        && afterProgress.updatedAt == request.time
+        && id is string && id.size() > 0
+        && askId is string && askId.size() > 0
+        && exists(communityMemberPath(id, uid))
+        && askBefore.status == 'active'
+        && askBefore.authorId == request.auth.uid
+        && askAfter.status == 'resolved'
+        && askAfter.xpAwarded == true
+        && ((role == 'bestAnswer'
+            && uid == askAfter.bestAnswerAuthorId
+            && uid != askAfter.authorId
+            && afterProgress.xp == oldXp + 20)
+          || (role == 'askAuthor'
+            && uid == askAfter.authorId
+            && afterProgress.xp == oldXp + 2));
+    }
+    function validCommunityAskResolution(id, askId) {
+      let afterAsk = request.resource.data;
+      let answer = get(communityAnswerPath(id, askId, afterAsk.bestAnswerId)).data;
+      let winnerBefore = get(communityMemberPath(id, afterAsk.bestAnswerAuthorId)).data;
+      let winnerAfter = getAfter(communityMemberPath(id, afterAsk.bestAnswerAuthorId)).data;
+      let winnerProgress = getAfter(communityUserProgressPath(afterAsk.bestAnswerAuthorId)).data;
+      let askerProgress = getAfter(communityUserProgressPath(resource.data.authorId)).data;
+      return isCommunityMember(id) && communityActive(id)
+        && resource.data.status == 'active'
+        && resource.data.authorId == request.auth.uid
+        && afterAsk.diff(resource.data).affectedKeys().hasOnly([
+          'status','bestAnswerId','bestAnswerAuthorId','resolvedAt','xpAwarded'
+        ])
+        && afterAsk.status == 'resolved'
+        && afterAsk.bestAnswerId is string
+        && afterAsk.bestAnswerAuthorId == answer.authorId
+        && answer.authorId != resource.data.authorId
+        && afterAsk.resolvedAt == request.time
+        && afterAsk.xpAwarded == true
+        && !existsAfter(communityActiveAskSlotPath(id, resource.data.authorId))
+        && winnerAfter.bestAnswerCount == winnerBefore.get('bestAnswerCount', 0) + 1
+        && winnerProgress.lastRewardCommunityId == id
+        && winnerProgress.lastRewardAskId == askId
+        && winnerProgress.lastRewardRole == 'bestAnswer'
+        && askerProgress.lastRewardCommunityId == id
+        && askerProgress.lastRewardAskId == askId
+        && askerProgress.lastRewardRole == 'askAuthor';
+    }
+    function validCommunityAskAuthorEdit(id) {
+      let afterAsk = request.resource.data;
+      return isCommunityMember(id) && communityActive(id)
+        && resource.data.status == 'active'
+        && resource.data.authorId == request.auth.uid
+        && afterAsk.status == 'active'
+        && afterAsk.diff(resource.data).affectedKeys().hasOnly(['text','updatedAt'])
+        && validText(afterAsk.text, 1, 2000)
+        && afterAsk.updatedAt == request.time;
+    }
+    function validCommunityActiveAskSlot(id, askId, uid) {
+      let slot = getAfter(communityActiveAskSlotPath(id, uid)).data;
+      let ask = getAfter(communityAskPath(id, askId)).data;
+      return existsAfter(communityActiveAskSlotPath(id, uid))
+        && slot.keys().hasOnly(['askId','authorId','createdAt'])
+        && slot.askId == askId
+        && slot.authorId == uid
+        && slot.createdAt == request.time
+        && ask.askId == askId
+        && ask.authorId == uid
+        && ask.status == 'active';
+    }
+    function validCommunityAskCooldown(id, askId, uid) {
+      let beforeMember = get(communityMemberPath(id, uid)).data;
+      let afterMember = getAfter(communityMemberPath(id, uid)).data;
+      return existsAfter(communityMemberPath(id, uid))
+        && afterMember.diff(beforeMember).affectedKeys().hasOnly([
+          'lastAskCreatedAt'
+        ])
+        && afterMember.lastAskCreatedAt == request.time
+        && (!beforeMember.keys().hasAny(['lastAskCreatedAt'])
+          || request.time >= beforeMember.lastAskCreatedAt + duration.value(8, 'h'))
+        && validCommunityActiveAskSlot(id, askId, uid);
+    }
+    function validCommunityAskCooldownMemberUpdate(id, uid) {
+      let afterSlot = getAfter(communityActiveAskSlotPath(id, uid)).data;
+      let afterAsk = getAfter(communityAskPath(id, afterSlot.askId)).data;
+      let beforeMember = resource.data;
+      let afterMember = request.resource.data;
+      return isCommunityMember(id) && communityActive(id)
+        && existsAfter(communityActiveAskSlotPath(id, uid))
+        && existsAfter(communityAskPath(id, afterSlot.askId))
+        && afterSlot.authorId == uid
+        && afterSlot.createdAt == request.time
+        && afterAsk.askId == afterSlot.askId
+        && afterAsk.authorId == uid
+        && afterAsk.status == 'active'
+        && afterAsk.createdAt == request.time
+        && afterMember.diff(beforeMember).affectedKeys().hasOnly([
+          'lastAskCreatedAt'
+        ])
+        && afterMember.lastAskCreatedAt == request.time
+        && (!beforeMember.keys().hasAny(['lastAskCreatedAt'])
+          || request.time >= beforeMember.lastAskCreatedAt + duration.value(8, 'h'));
     }
     function communityChatAllowed(uid) {
       return !exists(platformRestrictionPath(uid))
@@ -1221,6 +1360,13 @@ service cloud.firestore {
         && validCommunityCopyData(getAfter(userCommunityPath(uid, id)).data, id, uid, 'member');
     }
 
+    match /communityUserProgress/{uid} {
+      allow read: if linkedCommunityAccount();
+      allow create, update: if validCommunityProgressReward(uid);
+      allow delete: if own(uid)
+        && !existsAfter(/databases/$(database)/documents/users/$(uid));
+    }
+
     match /users/{uid} {
       allow read: if signedIn();
       allow delete: if own(uid);
@@ -1255,7 +1401,9 @@ service cloud.firestore {
         allow delete: if own(uid) || gubDeletingOwner(id) || gubOwnerRemovingMember(id, uid);
       }
       match /communities/{id} {
-        allow read: if linkedCommunityAccount() && own(uid);
+        allow read: if linkedCommunityAccount()
+          && (own(uid) || (isCommunityMember(id)
+            && exists(communityMemberPath(id, uid))));
         allow create: if (linkedCommunityAccount() && own(uid) && (
             validCommunityMemberAndCopy(id, uid,
               communityAfter(id).data.ownerId == uid ? 'owner' : 'member')
@@ -1621,11 +1769,13 @@ service cloud.firestore {
           && validCommunityMemberAndCopy(id,uid,request.resource.data.role))
           || (validCommunityApprovalSignal(id, uid)
             && validCommunityApprovalMember(id, uid));
-        allow update: if linkedCommunityAccount() && own(uid) && communityActive(id)
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['displayName'])
-          && validText(request.resource.data.displayName, 1, 25)
-          && request.resource.data.displayName
-            == getAfter(/databases/$(database)/documents/users/$(uid)).data.displayName;
+        allow update: if (linkedCommunityAccount() && own(uid) && communityActive(id)
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['displayName'])
+            && validText(request.resource.data.displayName, 1, 25)
+            && request.resource.data.displayName
+              == getAfter(/databases/$(database)/documents/users/$(uid)).data.displayName)
+          || validCommunityRewardMemberUpdate(id, uid)
+          || validCommunityAskCooldownMemberUpdate(id, uid);
         allow delete: if communityDeletingOwner(id)
           || (isCommunityOwner(id) && uid != request.auth.uid
             && communityActive(id)
@@ -1671,10 +1821,14 @@ service cloud.firestore {
       match /asks/{askId} {
         allow get: if isCommunityMember(id) && communityActive(id)
           && (!exists(/databases/$(database)/documents/communities/$(id)/asks/$(askId))
-            || resource.data.status == 'active');
-        allow list: if isCommunityMember(id) && communityActive(id)
-          && resource.data.status == 'active';
+            || resource.data.status in ['active','resolved']);
+        allow list: if communityDeletingOwner(id)
+          || (isCommunityMember(id) && communityActive(id)
+            && resource.data.status in ['active','resolved']);
         allow create: if isCommunityMember(id) && communityActive(id)
+          && !exists(communityActiveAskSlotPath(id, request.auth.uid))
+          && validCommunityActiveAskSlot(id, askId, request.auth.uid)
+          && validCommunityAskCooldown(id, askId, request.auth.uid)
           && request.resource.data.keys().hasOnly([
             'askId','communityId','authorId','authorDisplayName','type',
             'sourceMessageId','text','createdAt','status'
@@ -1704,7 +1858,63 @@ service cloud.firestore {
               && request.resource.data.authorDisplayName
                 == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.displayName)
           );
-        allow delete: if communityDeletingOwner(id);
+        allow update: if validCommunityAskResolution(id, askId)
+          || validCommunityAskAuthorEdit(id);
+        allow delete: if communityDeletingOwner(id)
+          || (isCommunityMember(id) && communityActive(id)
+            && resource.data.authorId == request.auth.uid
+            && (resource.data.status != 'active'
+              || !existsAfter(communityActiveAskSlotPath(id, request.auth.uid))));
+        match /answers/{answerId} {
+          allow read: if communityDeletingOwner(id)
+            || (isCommunityMember(id) && communityActive(id)
+              && get(communityAskPath(id, askId)).data.status in ['active','resolved']);
+          allow create: if isCommunityMember(id) && communityActive(id)
+            && get(communityAskPath(id, askId)).data.status == 'active'
+            && request.auth.uid != get(communityAskPath(id, askId)).data.authorId
+            && request.resource.data.keys().hasOnly([
+              'answerId','authorId','authorDisplayName','text','createdAt'
+            ])
+            && request.resource.data.answerId == answerId
+            && answerId == request.auth.uid
+            && request.resource.data.authorId == request.auth.uid
+            && request.resource.data.authorDisplayName
+              == get(communityMemberPath(id, request.auth.uid)).data.displayName
+            && validText(request.resource.data.authorDisplayName, 1, 25)
+            && validText(request.resource.data.text, 1, 2000)
+            && request.resource.data.createdAt == request.time;
+          allow update: if isCommunityMember(id) && communityActive(id)
+            && get(communityAskPath(id, askId)).data.status == 'active'
+            && resource.data.answerId == answerId
+            && answerId == request.auth.uid
+            && resource.data.authorId == request.auth.uid
+            && resource.data.get('updatedAt', null) == null
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['text','updatedAt'])
+            && validText(request.resource.data.text, 1, 2000)
+            && request.resource.data.updatedAt == request.time;
+          allow delete: if communityDeletingOwner(id)
+            || (isCommunityMember(id) && communityActive(id)
+              && (resource.data.authorId == request.auth.uid
+                || get(communityAskPath(id, askId)).data.authorId == request.auth.uid)
+              && !(get(communityAskPath(id, askId)).data.status == 'resolved'
+                && get(communityAskPath(id, askId)).data.get('bestAnswerId', '') == answerId));
+        }
+      }
+      match /activeAskSlots/{uid} {
+        allow get: if communityDeletingOwner(id)
+          || (isCommunityMember(id) && communityActive(id) && uid == request.auth.uid);
+        allow list: if communityDeletingOwner(id);
+        allow create: if isCommunityMember(id) && communityActive(id)
+          && uid == request.auth.uid
+          && !exists(communityActiveAskSlotPath(id, uid))
+          && validCommunityActiveAskSlot(id, request.resource.data.askId, uid);
+        allow update: if false;
+        allow delete: if communityDeletingOwner(id)
+          || (isCommunityMember(id) && communityActive(id)
+            && uid == request.auth.uid
+            && resource.data.authorId == request.auth.uid
+            && (!existsAfter(communityAskPath(id, resource.data.askId))
+              || getAfter(communityAskPath(id, resource.data.askId)).data.status == 'resolved'));
       }
       match /deletionMembers/{uid} {
         allow read: if communityDeletingOwner(id);
@@ -1764,6 +1974,15 @@ service cloud.firestore {
         allow read, delete: if communityDeletingOwner(id);
       }
     }
+
+    match /{path=**}/asks/{askId} {
+      allow list: if linkedCommunityAccount()
+        && resource.data.communityId is string
+        && isCommunityMember(resource.data.communityId)
+        && communityActive(resource.data.communityId)
+        && resource.data.status in ['active', 'resolved'];
+    }
+
     match /communitySlugs/{slug} {
       allow get: if signedIn();
       allow list: if false;

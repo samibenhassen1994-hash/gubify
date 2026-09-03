@@ -12,10 +12,12 @@ import {
   doc,
   getDoc,
   getDocs,
+  query,
   runTransaction,
   serverTimestamp,
   setDoc,
   updateDoc,
+  where,
   writeBatch,
 } from 'firebase/firestore';
 
@@ -216,6 +218,11 @@ async function cleanupCommunity(clientDb, id = 'c1', ownerId = uid.ownerCommunit
   const memberIds = [...new Set([ownerId, ...memberSnapshot.docs.map((item) => item.id)])];
   for (const memberId of memberIds) await setDoc(doc(clientDb, 'communities', id, 'deletionMembers', memberId), { uid: memberId });
   await updateDoc(rootRef, { deletionMembersCapturedAt: serverTimestamp() });
+  const asks = await getDocs(collection(clientDb, 'communities', id, 'asks'));
+  for (const ask of asks.docs) {
+    await deleteCollection(clientDb, ['communities', id, 'asks', ask.id, 'answers']);
+  }
+  await deleteCollection(clientDb, ['communities', id, 'asks']);
   await deleteCollection(clientDb, ['communities', id, 'messages']);
   await deleteCollection(clientDb, ['communities', id, 'members']);
   while (true) {
@@ -419,21 +426,62 @@ describe('Community transition, cleanup, legacy, and retry', () => {
   });
   test('full current Community pipeline deletes all data and preserves unrelated Community', async () => {
     await seed(['communities', 'c1', 'messages', 'message1'], { messageId: 'message1', communityId: 'c1', senderId: uid.memberCommunity, senderName: uid.memberCommunity, text: 'Message', createdAt: ts() });
+    await seed(['communities', 'c1', 'asks', 'ask1'], { askId: 'ask1', communityId: 'c1', authorId: uid.ownerCommunity, authorDisplayName: uid.ownerCommunity, type: 'help', text: 'Help', createdAt: ts(), status: 'active' });
+    await seed(['communities', 'c1', 'asks', 'ask1', 'answers', 'answer1'], { answerId: 'answer1', authorId: uid.memberCommunity, authorDisplayName: uid.memberCommunity, text: 'Answer', createdAt: ts() });
     await seed(['communities', 'c2'], communityRoot('c2', uid.falseOwner, { memberCount: 0 }));
     await assertSucceeds(startCommunityDeletion());
     await cleanupCommunity(db(uid.ownerCommunity));
     await env.withSecurityRulesDisabled(async (context) => {
-      assert.equal((await getDoc(doc(context.firestore(), 'communities', 'c1'))).exists(), false);
-      assert.equal((await getDoc(doc(context.firestore(), 'communities', 'c2'))).exists(), true);
-      for (const memberId of communityMembers) assert.equal((await getDoc(doc(context.firestore(), 'users', memberId, 'communities', 'c1'))).exists(), false);
+      const firestore = context.firestore();
+      assert.equal((await getDoc(doc(firestore, 'communities', 'c1'))).exists(), false);
+      assert.equal((await getDoc(doc(firestore, 'communities', 'c1', 'messages', 'message1'))).exists(), false);
+      assert.equal((await getDoc(doc(firestore, 'communities', 'c1', 'asks', 'ask1'))).exists(), false);
+      assert.equal((await getDoc(doc(firestore, 'communities', 'c1', 'asks', 'ask1', 'answers', 'answer1'))).exists(), false);
+      assert.equal((await getDoc(doc(firestore, 'communities', 'c1', 'members', uid.ownerCommunity))).exists(), false);
+      assert.equal((await getDoc(doc(firestore, 'communities', 'c1', 'members', uid.memberCommunity))).exists(), false);
+      assert.equal((await getDoc(doc(firestore, 'communityOwnership', uid.ownerCommunity))).exists(), false);
+      assert.equal((await getDoc(doc(firestore, 'communities', 'c2'))).exists(), true);
+      for (const memberId of communityMembers) assert.equal((await getDoc(doc(firestore, 'users', memberId, 'communities', 'c1'))).exists(), false);
     });
   });
   test('partial Community pipeline resumes after messages and one copy are already absent', async () => {
     await seed(['communities', 'c1', 'messages', 'message1'], { value: true });
+    await seed(['communities', 'c1', 'asks', 'ask1'], { askId: 'ask1', communityId: 'c1', authorId: uid.ownerCommunity, authorDisplayName: uid.ownerCommunity, type: 'help', text: 'Help', createdAt: ts(), status: 'active' });
+    await seed(['communities', 'c1', 'asks', 'ask1', 'answers', 'answer1'], { answerId: 'answer1', authorId: uid.memberCommunity, authorDisplayName: uid.memberCommunity, text: 'Answer', createdAt: ts() });
     await assertSucceeds(startCommunityDeletion());
     await assertSucceeds(deleteDoc(doc(db(uid.ownerCommunity), 'communities', 'c1', 'messages', 'message1')));
+    await assertSucceeds(deleteDoc(doc(db(uid.ownerCommunity), 'communities', 'c1', 'asks', 'ask1', 'answers', 'answer1')));
     await assertSucceeds(deleteDoc(doc(db(uid.ownerCommunity), 'users', uid.memberCommunity, 'communities', 'c1')));
     await cleanupCommunity(db(uid.ownerCommunity));
+  });
+  test('owner discovers and resumes a deleting Community after its copy is gone', async () => {
+    await seed(['communities', 'c1', 'messages', 'message1'], { value: true });
+    await seed(['communities', 'c1', 'asks', 'ask1'], { askId: 'ask1', communityId: 'c1', authorId: uid.ownerCommunity, authorDisplayName: uid.ownerCommunity, type: 'help', text: 'Help', createdAt: ts(), status: 'active' });
+    await seed(['communities', 'c1', 'asks', 'ask1', 'answers', 'answer1'], { answerId: 'answer1', authorId: uid.memberCommunity, authorDisplayName: uid.memberCommunity, text: 'Answer', createdAt: ts() });
+    await seed(['communities', 'c2'], communityRoot('c2', uid.ownerCommunity, { memberCount: 0 }));
+    await assertSucceeds(startCommunityDeletion());
+    await assertSucceeds(deleteDoc(doc(db(uid.ownerCommunity), 'users', uid.ownerCommunity, 'communities', 'c1')));
+    await assertSucceeds(deleteDoc(doc(db(uid.ownerCommunity), 'communities', 'c1', 'asks', 'ask1', 'answers', 'answer1')));
+
+    const ownerDb = db(uid.ownerCommunity);
+    const ownedCommunities = await assertSucceeds(getDocs(query(
+      collection(ownerDb, 'communities'),
+      where('ownerId', '==', uid.ownerCommunity),
+    )));
+    const incompleteIds = ownedCommunities.docs
+      .filter((item) => item.data().deletionStatus === 'deleting'
+        && (item.data().deletionRequestedBy === uid.ownerCommunity
+          || item.data().deletionStartedBy === uid.ownerCommunity))
+      .map((item) => item.id);
+
+    assert.deepEqual(incompleteIds, ['c1']);
+    await cleanupCommunity(ownerDb);
+    await env.withSecurityRulesDisabled(async (context) => {
+      const firestore = context.firestore();
+      assert.equal((await getDoc(doc(firestore, 'communities', 'c1'))).exists(), false);
+      assert.equal((await getDoc(doc(firestore, 'communities', 'c1', 'asks', 'ask1'))).exists(), false);
+      assert.equal((await getDoc(doc(firestore, 'communities', 'c2'))).exists(), true);
+    });
   });
   test('legacy deleting Community with deletionStartedBy only remains recoverable', async () => {
     await seed(['communities', 'c1'], { name: 'Legacy', ownerId: uid.ownerCommunity, memberCount: 2, visibility: 'public', createdAt: ts(), deletionStatus: 'deleting', deletionStartedAt: ts(), deletionStartedBy: uid.ownerCommunity });
