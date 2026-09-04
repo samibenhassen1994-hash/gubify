@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 
 import '../models/community_access_request_model.dart';
 import '../models/community_model.dart';
@@ -21,13 +22,16 @@ class CommunityRepository {
   final Set<String> _roleBackfillAttempts = {};
 
   static const int _batchSize = 400;
-  static const int _membershipCleanupPageSize = 200;
+  // Three writes per member: user copy, progress projection, deletion marker.
+  static const int _membershipCleanupPageSize = 150;
   static const String _deletionMembersSubcollection = "deletionMembers";
 
   // Community deletion is client-side for Firebase Spark compatibility.
   // Every future Community subcollection must be added to this cleanup list.
   static const List<String> _knownCommunitySubcollections = [
     "messages",
+    "asks",
+    "activeAskSlots",
     "members",
     "joinRequests",
     "bans",
@@ -46,6 +50,41 @@ class CommunityRepository {
 
   CollectionReference<Map<String, dynamic>> get _communityNames =>
       _firestore.collection('communityNames');
+
+  DocumentReference<Map<String, dynamic>> _progressReference(String userId) =>
+      _firestore.collection('communityUserProgress').doc(userId);
+
+  void _addCommunityProjection({
+    required Transaction transaction,
+    required DocumentReference<Map<String, dynamic>> reference,
+    required DocumentSnapshot<Map<String, dynamic>> snapshot,
+    required String communityId,
+  }) {
+    final data = <String, dynamic>{
+      'communityIds': FieldValue.arrayUnion([communityId]),
+      'membershipProjectionCommunityId': communityId,
+      'membershipProjectionAction': 'join',
+      'membershipProjectionUpdatedAt': FieldValue.serverTimestamp(),
+    };
+    if (!snapshot.exists) data['xp'] = 0;
+    transaction.set(reference, data, SetOptions(merge: true));
+  }
+
+  void _removeCommunityProjection({
+    required Transaction transaction,
+    required DocumentReference<Map<String, dynamic>> reference,
+    required DocumentSnapshot<Map<String, dynamic>> snapshot,
+    required String communityId,
+    String action = 'leave',
+  }) {
+    if (!snapshot.exists) return;
+    transaction.set(reference, {
+      'communityIds': FieldValue.arrayRemove([communityId]),
+      'membershipProjectionCommunityId': communityId,
+      'membershipProjectionAction': action,
+      'membershipProjectionUpdatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+  }
 
   Future<CommunityModel?> createCommunity({
     required String name,
@@ -151,6 +190,7 @@ class CommunityRepository {
         .doc(ownerId)
         .collection('communities')
         .doc(communityId);
+    final progressReference = _progressReference(ownerId);
 
     return _firestore.runTransaction<_CommunityCreationTransactionResult>((
       transaction,
@@ -182,6 +222,7 @@ class CommunityRepository {
               : null,
         );
       }
+      final progressSnapshot = await transaction.get(progressReference);
 
       transaction.set(communityReference, communityData);
       transaction.set(nameReference, {
@@ -232,6 +273,12 @@ class CommunityRepository {
         "communityId": communityId,
         "createdAt": FieldValue.serverTimestamp(),
       });
+      _addCommunityProjection(
+        transaction: transaction,
+        reference: progressReference,
+        snapshot: progressSnapshot,
+        communityId: communityId,
+      );
 
       return _CommunityCreationTransactionResult.created(community);
     });
@@ -547,6 +594,8 @@ class CommunityRepository {
               ? role.trim()
               : 'member',
           joinedAt: _timestampValue(data['joinedAt']),
+          xp: (data['xp'] as num?)?.toInt() ?? 0,
+          bestAnswerCount: (data['bestAnswerCount'] as num?)?.toInt() ?? 0,
         );
       }).toList();
       members.sort((first, second) {
@@ -616,6 +665,8 @@ class CommunityRepository {
           : null,
       role: role is String && role.trim().isNotEmpty ? role.trim() : 'member',
       joinedAt: _timestampValue(data['joinedAt']),
+      xp: (data['xp'] as num?)?.toInt() ?? 0,
+      bestAnswerCount: (data['bestAnswerCount'] as num?)?.toInt() ?? 0,
     );
   }
 
@@ -644,11 +695,13 @@ class CommunityRepository {
         .doc(userId)
         .collection('communities')
         .doc(communityId);
+    final progressReference = _progressReference(userId);
     final failure = await _firestore.runTransaction<String?>((
       transaction,
     ) async {
       final community = await transaction.get(communityReference);
       final member = await transaction.get(memberReference);
+      final progress = await transaction.get(progressReference);
       if (!community.exists ||
           community.data()?['deletionStatus'] == 'deleting') {
         return 'This Community is no longer available.';
@@ -670,6 +723,12 @@ class CommunityRepository {
       transaction.update(communityReference, {
         'memberCount': (memberCount - 1).clamp(1, memberCount),
       });
+      _removeCommunityProjection(
+        transaction: transaction,
+        reference: progressReference,
+        snapshot: progress,
+        communityId: communityId,
+      );
       return null;
     });
     if (failure != null) throw StateError(failure);
@@ -690,11 +749,13 @@ class CommunityRepository {
         .collection('communities')
         .doc(communityId);
     final banReference = communityReference.collection('bans').doc(userId);
+    final progressReference = _progressReference(userId);
     final failure = await _firestore.runTransaction<String?>((
       transaction,
     ) async {
       final community = await transaction.get(communityReference);
       final member = await transaction.get(memberReference);
+      final progress = await transaction.get(progressReference);
       if (!community.exists ||
           community.data()?['ownerId'] != ownerId ||
           !member.exists ||
@@ -714,6 +775,13 @@ class CommunityRepository {
       transaction.update(communityReference, {
         'memberCount': (count - 1).clamp(1, count),
       });
+      _removeCommunityProjection(
+        transaction: transaction,
+        reference: progressReference,
+        snapshot: progress,
+        communityId: communityId,
+        action: 'ban',
+      );
       return null;
     });
     if (failure != null) throw StateError(failure);
@@ -749,6 +817,8 @@ class CommunityRepository {
     }
 
     final communityReference = _communities.doc(normalizedCommunityId);
+    var deletionStep = 'mark_root';
+    var deletionPath = 'communities/*';
     try {
       await _markCommunityForDeletion(
         communityReference: communityReference,
@@ -757,27 +827,44 @@ class CommunityRepository {
       );
       final ownerId = user.uid;
 
+      deletionStep = 'capture_members';
+      deletionPath = 'communities/*/members';
       final hasImage = await _captureDeletionMembers(
         communityReference: communityReference,
         ownerId: ownerId,
       );
+      deletionStep = 'delete_image';
+      deletionPath = 'community_image';
       await runCommunityDeletionAfterMediaCleanup(
         communityId: normalizedCommunityId,
         hasImage: hasImage,
         deleteImageAsset: deleteImageAsset,
         continueDeletion: () async {
+          deletionStep = 'delete_user_membership_copies';
+          deletionPath = 'users/*/communities/*';
           await _deleteUserMembershipCopies(
             communityId: normalizedCommunityId,
             communityReference: communityReference,
           );
 
+          deletionStep = 'delete_ask_answers';
+          deletionPath = 'communities/*/asks/*/answers';
+          await _deleteCommunityAsksAndAnswers(communityReference);
+
           for (final subcollection in _knownCommunitySubcollections) {
-            if (subcollection == _deletionMembersSubcollection) continue;
+            if (subcollection == _deletionMembersSubcollection ||
+                subcollection == 'asks') {
+              continue;
+            }
+            deletionStep = 'delete_$subcollection';
+            deletionPath = 'communities/*/$subcollection';
             await _deleteCollectionInBatches(
               communityReference.collection(subcollection),
             );
           }
 
+          deletionStep = 'finalize_root_and_registries';
+          deletionPath = 'community_linkage';
           await _deleteOwnershipAndCommunity(
             ownerId: ownerId,
             communityId: normalizedCommunityId,
@@ -786,8 +873,58 @@ class CommunityRepository {
           );
         },
       );
+    } on FirebaseException catch (error) {
+      if (kDebugMode) {
+        debugPrint(
+          'Community deletion failed: '
+          'step=$deletionStep path=$deletionPath code=${error.code}',
+        );
+      }
+      rethrow;
     } on CommunityDeletionException {
       rethrow;
+    }
+  }
+
+  Future<List<String>> incompleteDeletionIdsForOwner(String ownerId) async {
+    final normalizedOwnerId = ownerId.trim();
+    if (normalizedOwnerId.isEmpty) return const <String>[];
+
+    final snapshot = await _communities
+        .where('ownerId', isEqualTo: normalizedOwnerId)
+        .get(const GetOptions(source: Source.server));
+    return snapshot.docs
+        .where((document) {
+          final data = document.data();
+          if (data['deletionStatus'] != 'deleting') return false;
+          return data['deletionRequestedBy'] == normalizedOwnerId ||
+              data['deletionStartedBy'] == normalizedOwnerId;
+        })
+        .map((document) => document.id)
+        .toList(growable: false);
+  }
+
+  Future<void> _deleteCommunityAsksAndAnswers(
+    DocumentReference<Map<String, dynamic>> communityReference,
+  ) async {
+    while (true) {
+      final asks = await communityReference
+          .collection('asks')
+          .limit(_batchSize)
+          .get();
+      if (asks.docs.isEmpty) {
+        return;
+      }
+
+      for (final ask in asks.docs) {
+        await _deleteCollectionInBatches(ask.reference.collection('answers'));
+      }
+
+      final batch = _firestore.batch();
+      for (final ask in asks.docs) {
+        batch.delete(ask.reference);
+      }
+      await batch.commit();
     }
   }
 
@@ -908,7 +1045,11 @@ class CommunityRepository {
       if (page.docs.isEmpty) return;
 
       final batch = _firestore.batch();
-      for (final marker in page.docs) {
+      final progressSnapshots = await Future.wait(
+        page.docs.map((marker) => _progressReference(marker.id).get()),
+      );
+      for (var index = 0; index < page.docs.length; index++) {
+        final marker = page.docs[index];
         batch.delete(
           _firestore
               .collection("users")
@@ -916,6 +1057,18 @@ class CommunityRepository {
               .collection("communities")
               .doc(communityId),
         );
+        if (progressSnapshots[index].exists) {
+          batch.set(
+            progressSnapshots[index].reference,
+            {
+              'communityIds': FieldValue.arrayRemove([communityId]),
+              'membershipProjectionCommunityId': communityId,
+              'membershipProjectionAction': 'delete',
+              'membershipProjectionUpdatedAt': FieldValue.serverTimestamp(),
+            },
+            SetOptions(merge: true),
+          );
+        }
         batch.delete(marker.reference);
       }
       await batch.commit();
@@ -1229,6 +1382,7 @@ class CommunityRepository {
         .doc(userId)
         .collection("communities")
         .doc(communityId);
+    final progressReference = _progressReference(userId);
     final result = await _firestore.runTransaction<_CommunityJoinResult>((
       transaction,
     ) async {
@@ -1257,6 +1411,7 @@ class CommunityRepository {
         userCommunityReference,
       );
       final memberSnapshot = await transaction.get(memberReference);
+      final progressSnapshot = await transaction.get(progressReference);
       if (memberSnapshot.exists) {
         if (!userCommunitySnapshot.exists) {
           final memberData = memberSnapshot.data();
@@ -1273,6 +1428,12 @@ class CommunityRepository {
             });
           }
         }
+        _addCommunityProjection(
+          transaction: transaction,
+          reference: progressReference,
+          snapshot: progressSnapshot,
+          communityId: communityId,
+        );
         return _CommunityJoinResult.success(community);
       }
 
@@ -1296,6 +1457,12 @@ class CommunityRepository {
         "role": "member",
         "joinedAt": FieldValue.serverTimestamp(),
       });
+      _addCommunityProjection(
+        transaction: transaction,
+        reference: progressReference,
+        snapshot: progressSnapshot,
+        communityId: communityId,
+      );
 
       return _CommunityJoinResult.success(
         community.copyWith(memberCount: updatedMemberCount),
@@ -1470,12 +1637,14 @@ class CommunityRepository {
     final mutationReference = communityReference
         .collection("membershipMutations")
         .doc("current");
+    final progressReference = _progressReference(userId);
     final failure = await _firestore.runTransaction<String?>((
       transaction,
     ) async {
       final communitySnapshot = await transaction.get(communityReference);
       final requestSnapshot = await transaction.get(requestReference);
       final memberSnapshot = await transaction.get(memberReference);
+      final progressSnapshot = await transaction.get(progressReference);
       if (!communitySnapshot.exists) return "Community not found.";
       final community = CommunityModel.fromFirestore(communitySnapshot);
       if (community.ownerId != ownerId) {
@@ -1525,6 +1694,12 @@ class CommunityRepository {
         "ownerId": ownerId,
         "createdAt": FieldValue.serverTimestamp(),
       });
+      _addCommunityProjection(
+        transaction: transaction,
+        reference: progressReference,
+        snapshot: progressSnapshot,
+        communityId: communityId,
+      );
       return null;
     });
     if (failure != null) throw StateError(failure);

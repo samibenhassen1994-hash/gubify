@@ -413,6 +413,13 @@ function createCommunityBatch({
       ...markerOverrides,
     });
   }
+  batch.set(doc(clientDb, 'communityUserProgress', actor), {
+    xp: 0,
+    communityIds: [id],
+    membershipProjectionCommunityId: id,
+    membershipProjectionAction: 'join',
+    membershipProjectionUpdatedAt: serverTimestamp(),
+  }, { merge: true });
   return batch.commit();
 }
 
@@ -450,6 +457,13 @@ function joinCommunityBatch({
       }),
     );
   }
+  batch.set(doc(clientDb, 'communityUserProgress', actor), {
+    xp: 0,
+    communityIds: [id],
+    membershipProjectionCommunityId: id,
+    membershipProjectionAction: 'join',
+    membershipProjectionUpdatedAt: serverTimestamp(),
+  }, { merge: true });
   return batch.commit();
 }
 

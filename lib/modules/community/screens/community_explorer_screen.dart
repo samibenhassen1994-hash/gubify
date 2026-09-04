@@ -23,6 +23,7 @@ class CommunityExplorerScreen extends StatefulWidget {
   final CommunityDiscoveryFilter? discoveryFilter;
   final Stream<Set<String>>? joinedCommunityIdsStream;
   final bool Function()? isAnonymous;
+  final bool Function(CommunityModel community)? isOwner;
   final CommunityLinkedAccountGate? linkedAccountGate;
   final CommunityOpenHandler? onCommunityOpen;
 
@@ -32,6 +33,7 @@ class CommunityExplorerScreen extends StatefulWidget {
     this.discoveryFilter,
     this.joinedCommunityIdsStream,
     this.isAnonymous,
+    this.isOwner,
     this.linkedAccountGate,
     this.onCommunityOpen,
   });
@@ -49,6 +51,7 @@ class _CommunityExplorerScreenState extends State<CommunityExplorerScreen> {
 
   late Stream<Set<String>> _joinedCommunityIdsStream;
   late final bool Function() _isAnonymous;
+  late final bool Function(CommunityModel community) _isOwner;
   CommunityExplorerFilters _filters = const CommunityExplorerFilters();
   CommunityExplorerCursor? _cursor;
   Object? _loadError;
@@ -64,6 +67,8 @@ class _CommunityExplorerScreenState extends State<CommunityExplorerScreen> {
         () =>
             widget.joinedCommunityIdsStream == null &&
             CommunityService.instance.isCurrentUserAnonymous;
+    _isOwner =
+        widget.isOwner ?? CommunityService.instance.isCurrentUserOwner;
     _joinedCommunityIdsStream = _createJoinedCommunityIdsStream();
     _searchController.addListener(_onSearchChanged);
     _scrollController.addListener(_onScroll);
@@ -320,6 +325,7 @@ class _CommunityExplorerScreenState extends State<CommunityExplorerScreen> {
             return CommunityExplorerCard(
               community: community,
               isJoined: isJoined,
+              isOwner: _isOwner(community),
               onOpen: () => _openCommunity(community, isJoined),
             );
           },

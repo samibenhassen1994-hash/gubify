@@ -68,6 +68,15 @@ beforeEach(async () => {
         joinedAt,
       });
     }
+    await setDoc(doc(firestore, 'communities', 'c1', 'asks', 'ask-1'), {
+      askId: 'ask-1', communityId: 'c1', authorId: ids.target,
+      authorDisplayName: 'Target User', type: 'help', text: 'Ask text',
+      createdAt: joinedAt, status: 'active',
+    });
+    await setDoc(doc(firestore, 'communities', 'c1', 'asks', 'ask-1', 'answers', 'target'), {
+      answerId: 'target', authorId: ids.target,
+      authorDisplayName: 'Target User', text: 'Answer text', createdAt: joinedAt,
+    });
   });
 });
 
@@ -104,7 +113,11 @@ const userReport = (reporterId = ids.member, overrides = {}) => ({
 const submitReport = (uid, report) => {
   const clientDb = db(uid);
   const reportReference = doc(clientDb, 'moderationReports', report.reportId);
-  const targetKey = `${report.targetType}__${report.targetId}`;
+  const targetKey = report.targetType === 'ask'
+    ? `ask__${report.communityId}__${report.targetId}`
+    : report.targetType === 'answer'
+      ? `answer__${report.communityId}__${report.askId}__${report.targetId}`
+      : `${report.targetType}__${report.targetId}`;
   const targetReference = doc(clientDb, 'moderationTargets', targetKey);
   const targetNameSnapshot =
     report.targetType === 'community'
@@ -333,6 +346,46 @@ describe('central Community moderation reports', () => {
 
   test('member can report another Community member', () =>
     assertSucceeds(submitReport(ids.member, userReport())));
+
+  test('member can report an Ask with an authoritative content snapshot', () =>
+    assertSucceeds(submitReport(ids.member, {
+      reportId: 'ask__c1__ask-1__member', reporterId: ids.member,
+      communityId: 'c1', targetType: 'ask', targetId: 'ask-1',
+      targetUserId: ids.target, reason: 'spam', details: '',
+      createdAt: serverTimestamp(), status: 'open',
+      communityNameSnapshot: 'Safe Community', targetNameSnapshot: 'Target User',
+      contentSnapshot: 'Ask text',
+    })));
+
+  test('member can report an Answer using the full Community and Ask key', async () => {
+    const report = {
+      reportId: 'answer__c1__ask-1__target__member', reporterId: ids.member,
+      communityId: 'c1', askId: 'ask-1', targetType: 'answer', targetId: ids.target,
+      targetUserId: ids.target, reason: 'spam', details: '',
+      createdAt: serverTimestamp(), status: 'open',
+      communityNameSnapshot: 'Safe Community', targetNameSnapshot: 'Target User',
+      contentSnapshot: 'Answer text',
+    };
+    await assertSucceeds(submitReport(ids.member, report));
+    const summary = await readTargetSummary('answer__c1__ask-1__target');
+    assert.strictEqual(summary.data().reportCount, 1);
+  });
+
+  test('forged Ask/Answer report content and self reports are denied', async () => {
+    const base = {
+      reportId: 'ask__c1__ask-1__member', reporterId: ids.member,
+      communityId: 'c1', targetType: 'ask', targetId: 'ask-1',
+      targetUserId: ids.target, reason: 'spam', details: '',
+      createdAt: serverTimestamp(), status: 'open',
+      communityNameSnapshot: 'Safe Community', targetNameSnapshot: 'Target User',
+      contentSnapshot: 'Ask text',
+    };
+    await assertFails(submitReport(ids.member, { ...base, contentSnapshot: 'forged' }));
+    await assertFails(submitReport(ids.target, {
+      ...base, reportId: 'ask__c1__ask-1__target', reporterId: ids.target,
+      targetUserId: ids.target,
+    }));
+  });
 
   test('user cannot report self', () =>
     assertFails(setDoc(reportRef(ids.member, 'user__c1__member__member'), userReport(ids.member, { reportId: 'user__c1__member__member', targetId: ids.member, targetUserId: ids.member, targetNameSnapshot: 'Member' }))));

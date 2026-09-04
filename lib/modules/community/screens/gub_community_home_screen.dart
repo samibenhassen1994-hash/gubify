@@ -13,6 +13,7 @@ import '../moderation/widgets/community_report_menu.dart';
 import '../repositories/community_repository.dart';
 import '../services/community_service.dart';
 import '../widgets/community_home_content.dart';
+import '../widgets/community_home_top_actions.dart';
 import '../widgets/community_pending_requests_button.dart';
 import 'community_join_requests_screen.dart';
 import 'community_public_details_screen.dart';
@@ -233,61 +234,60 @@ class _GubCommunityHomeScreenState extends State<GubCommunityHomeScreen> {
                       Positioned(
                         top: 12,
                         right: 20,
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            CommunityPendingRequestsButton(
-                              isVisible: canManageJoinRequests,
-                              countStream: _pendingRequestCountStream,
-                              onPressed: () => Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => CommunityJoinRequestsScreen(
-                                    community: community,
-                                  ),
-                                ),
-                              ),
-                            ),
-                            if (canManageJoinRequests)
-                              const SizedBox(width: 10),
-                            if (!isOwner)
-                              Material(
-                                color: Colors.white.withValues(alpha: 0.84),
-                                shape: const CircleBorder(),
-                                child: CommunityReportMenu(
-                                  community: community,
-                                  isOwner: false,
-                                ),
-                              ),
-                            if (!isOwner) const SizedBox(width: 10),
-                            Semantics(
-                              button: true,
-                              label: 'Community settings',
-                              child: Material(
-                                color: Colors.white.withValues(alpha: 0.84),
-                                shape: const CircleBorder(),
-                                child: InkWell(
-                                  customBorder: const CircleBorder(),
-                                  onTap: () => Navigator.push(
+                        child: CommunityHomeTopActions(
+                          isKeyboardOpen: isKeyboardOpen,
+                          pendingRequestsAction: canManageJoinRequests
+                              ? CommunityPendingRequestsButton(
+                                  isVisible: canManageJoinRequests,
+                                  countStream: _pendingRequestCountStream,
+                                  onPressed: () => Navigator.push(
                                     context,
                                     MaterialPageRoute(
-                                      builder: (_) => CommunitySettingsScreen(
-                                        community: community,
-                                      ),
+                                      builder: (_) =>
+                                          CommunityJoinRequestsScreen(
+                                            community: community,
+                                          ),
                                     ),
                                   ),
-                                  child: const SizedBox(
-                                    width: 48,
-                                    height: 48,
-                                    child: Icon(
-                                      Icons.settings_rounded,
-                                      color: Color(0xFF0F172A),
+                                )
+                              : null,
+                          reportAction: !isOwner
+                              ? Material(
+                                  color: Colors.white.withValues(alpha: 0.84),
+                                  shape: const CircleBorder(),
+                                  child: CommunityReportMenu(
+                                    community: community,
+                                    isOwner: false,
+                                  ),
+                                )
+                              : null,
+                          settingsAction: Semantics(
+                            button: true,
+                            label: 'Community settings',
+                            child: Material(
+                              color: Colors.white.withValues(alpha: 0.84),
+                              shape: const CircleBorder(),
+                              child: InkWell(
+                                customBorder: const CircleBorder(),
+                                onTap: () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => CommunitySettingsScreen(
+                                      community: community,
                                     ),
+                                  ),
+                                ),
+                                child: const SizedBox(
+                                  width: 48,
+                                  height: 48,
+                                  child: Icon(
+                                    Icons.settings_rounded,
+                                    color: Color(0xFF0F172A),
                                   ),
                                 ),
                               ),
                             ),
-                          ],
+                          ),
                         ),
                       ),
                     ],

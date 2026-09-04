@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gubify/modules/community/models/community_chat_message_model.dart';
 import 'package:gubify/modules/community/restrictions/models/community_restriction_model.dart';
+import 'package:gubify/modules/community/services/community_user_xp_cache.dart';
 import 'package:gubify/modules/community/widgets/community_chat_view.dart';
 
 void main() {
+  final xpCache = CommunityUserXpCache(loadXp: (_) async => const {});
   Widget chat({
     required PlatformRestriction restriction,
     VoidCallback? onSend,
@@ -16,6 +18,7 @@ void main() {
           messagesStream: Stream.value(const <CommunityChatMessageModel>[]),
           restrictionStream: Stream.value(restriction),
           onSend: (_) async => onSend?.call(),
+          membershipXpCache: xpCache,
         ),
       ),
     );

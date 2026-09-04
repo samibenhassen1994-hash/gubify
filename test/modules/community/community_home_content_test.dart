@@ -18,6 +18,30 @@ const _community = CommunityModel(
 );
 
 void main() {
+  testWidgets('Community Home opens Leaderboard from its circular action', (
+    tester,
+  ) async {
+    var opened = false;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: CommunityHomeContent(
+            community: _community,
+            isKeyboardOpen: false,
+            isOwner: false,
+            chatView: const SizedBox(),
+            onOpenLeaderboard: () => opened = true,
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Leaderboard'), findsOneWidget);
+    expect(find.byIcon(Icons.emoji_events_rounded), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('leaderboard-header-action')));
+    expect(opened, isTrue);
+  });
+
   testWidgets('compact Home header has avatar, member count and role only', (
     tester,
   ) async {
@@ -34,8 +58,11 @@ void main() {
       ),
     );
 
-    expect(find.byType(ClipOval), findsOneWidget);
-    expect(find.byIcon(Icons.public_rounded), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('community-header-action')));
+    await tester.pump();
+
+    expect(find.byType(ClipOval), findsNWidgets(2));
+    expect(find.byIcon(Icons.public_rounded), findsNWidgets(2));
     expect(find.text('2 members'), findsOneWidget);
     expect(find.text('Member'), findsOneWidget);
     expect(find.text('Public community'), findsNothing);
@@ -74,6 +101,9 @@ void main() {
       ),
     );
 
+    await tester.tap(find.byKey(const ValueKey('community-header-action')));
+    await tester.pump();
+
     expect(tester.getSize(find.byType(GubContentCard)).height, 84);
     expect(find.byType(Wrap), findsNothing);
     expect(tester.takeException(), isNull);
@@ -110,6 +140,9 @@ void main() {
         ),
       ),
     );
+
+    await tester.tap(find.byKey(const ValueKey('community-header-action')));
+    await tester.pump();
 
     final name = tester.widget<Text>(find.text(longName));
     expect(name.maxLines, 1);

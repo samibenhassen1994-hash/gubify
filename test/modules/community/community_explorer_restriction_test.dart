@@ -31,6 +31,29 @@ const _hidden = CommunityModel(
 );
 
 void main() {
+  testWidgets('Explorer gives Owner precedence when the joined user owns the Community', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CommunityExplorerScreen(
+          pageLoader: (_) async => const CommunityExplorerPage(
+            communities: [_visible],
+            nextCursor: null,
+            hasMore: false,
+          ),
+          discoveryFilter: (communities) async => communities,
+          joinedCommunityIdsStream: Stream.value({_visible.communityId}),
+          isOwner: (community) => community.ownerId == 'owner',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Owner'), findsOneWidget);
+    expect(find.text('Member'), findsNothing);
+  });
+
   testWidgets('Explorer filters hidden Communities before presentation', (
     tester,
   ) async {
@@ -48,6 +71,7 @@ void main() {
               )
               .toList(growable: false),
           joinedCommunityIdsStream: Stream.value(const <String>{}),
+          isOwner: (_) => false,
         ),
       ),
     );

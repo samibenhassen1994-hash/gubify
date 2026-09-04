@@ -384,8 +384,12 @@ class AccountDeletionRepository implements AccountDeletionRepositoryContract {
           .delete();
 
   @override
-  Future<void> deleteProfile(String userId) =>
-      _firestore.collection('users').doc(userId).delete();
+  Future<void> deleteProfile(String userId) {
+    final batch = _firestore.batch();
+    batch.delete(_firestore.collection('communityUserProgress').doc(userId));
+    batch.delete(_firestore.collection('users').doc(userId));
+    return batch.commit();
+  }
 
   String _name(Map<String, dynamic> data, String fallback) {
     final value = data['name'];
