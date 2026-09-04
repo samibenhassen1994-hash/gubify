@@ -185,6 +185,8 @@ class _CommunityProfileAsksSectionState
             const SizedBox(height: 5),
             CommunityAskCard(
               ask: ask,
+              communityName:
+                  section.communityNames[ask.communityId] ?? 'Community',
               authorXp: xpByUserId[ask.authorId],
               onTap: () => _openAsk(
                 ask,

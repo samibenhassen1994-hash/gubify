@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../../widgets/gub_screen_background.dart';
 import '../models/community_ask_model.dart';
+import '../moderation/services/community_moderation_service.dart';
+import '../moderation/widgets/community_report_dialog.dart';
 import '../services/community_ask_service.dart';
 import '../services/community_user_xp_cache.dart';
 import '../widgets/community_ask_card.dart';
@@ -17,6 +19,8 @@ class CommunityAsksScreen extends StatefulWidget {
     this.asksStream,
     this.detailsBuilder,
     this.membershipXpCache,
+    this.currentUserId,
+    this.onReportAsk,
   });
 
   final String communityId;
@@ -25,6 +29,8 @@ class CommunityAsksScreen extends StatefulWidget {
   final Widget Function(BuildContext context, CommunityAskModel ask)?
   detailsBuilder;
   final CommunityUserXpCache? membershipXpCache;
+  final String? currentUserId;
+  final CommunityReportSubmit? onReportAsk;
 
   @override
   State<CommunityAsksScreen> createState() => _CommunityAsksScreenState();
@@ -46,6 +52,21 @@ class _CommunityAsksScreenState extends State<CommunityAsksScreen> {
     } catch (error, stackTrace) {
       return Stream.error(error, stackTrace);
     }
+  }
+
+  Future<void> _reportAsk(CommunityAskModel ask) async {
+    await showCommunityReportDialog(
+      context: context,
+      title: 'Report Ask',
+      onSubmit:
+          widget.onReportAsk ??
+          (reason, details) => CommunityModerationService.instance.reportAsk(
+            ask: ask,
+            communityName: widget.communityName,
+            reason: reason,
+            details: details,
+          ),
+    );
   }
 
   @override
@@ -106,6 +127,9 @@ class _CommunityAsksScreenState extends State<CommunityAsksScreen> {
                             key: ValueKey('ask-card-${ask.askId}'),
                             ask: ask,
                             authorXp: xpByUserId[ask.authorId],
+                            currentUserId: widget.currentUserId,
+                            onReport: () => _reportAsk(ask),
+                            communityName: widget.communityName,
                             onOpenAuthor: () => Navigator.of(context).push(
                               MaterialPageRoute(
                                 builder: (_) => UserProfileScreen.community(

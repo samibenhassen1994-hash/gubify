@@ -190,6 +190,7 @@ class _CommunityMyAsksScreenState extends State<CommunityMyAsksScreen> {
           for (final ask in state.items)
             CommunityAskCard(
               ask: ask,
+              communityName: widget.communityName,
               authorXp: xpByUserId[ask.authorId],
               onTap: () => _openAsk(ask),
             ),

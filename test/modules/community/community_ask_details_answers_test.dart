@@ -60,6 +60,8 @@ Widget _details({
   Future<void> Function(CommunityAskAnswerModel answer)? onSelect,
   Future<void> Function(CommunityAskAnswerModel answer, String text)? onEdit,
   Future<void> Function(String text)? onEditAsk,
+  Future<void> Function(String reason, String details)? onReportAsk,
+  Future<void> Function(String reason, String details)? onReportAnswer,
   void Function(String userId)? onOpenProfile,
   CommunityUserXpCache? membershipXpCache,
   CommunityAskAnswerService? answerService,
@@ -78,6 +80,8 @@ Widget _details({
       onSelectBestAnswer: onSelect,
       onEditAnswer: onEdit,
       onEditAsk: onEditAsk,
+      onReportAsk: onReportAsk,
+      onReportAnswer: onReportAnswer,
       onOpenProfile: onOpenProfile,
       membershipXpCache: membershipXpCache ?? _xpCache,
       answerService: answerService,
@@ -86,6 +90,37 @@ Widget _details({
 }
 
 void main() {
+  testWidgets('long press reports another Answer but not own content', (
+    tester,
+  ) async {
+    var answerReports = 0;
+    await tester.pumpWidget(
+      _details(
+        currentUserId: 'asker',
+        onReportAnswer: (_, _) async => answerReports++,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.longPress(find.text('The winning answer'));
+    await tester.pumpAndSettle();
+    expect(find.text('Report Answer'), findsOneWidget);
+    await tester.tap(find.text('Report Answer'));
+    await tester.pumpAndSettle();
+    expect(find.byType(DropdownButtonFormField<String>), findsOneWidget);
+
+    await tester.tap(find.byType(DropdownButtonFormField<String>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Spam').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Submit report'));
+    await tester.pumpAndSettle();
+    expect(answerReports, 1);
+
+    await tester.longPress(find.text('My own follow-up'));
+    await tester.pumpAndSettle();
+    expect(find.text('Report Answer'), findsNothing);
+  });
+
   testWidgets('Ask and Answer avatars render levels from the shared XP map', (
     tester,
   ) async {

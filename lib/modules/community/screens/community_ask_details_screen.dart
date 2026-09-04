@@ -6,6 +6,8 @@ import '../../../widgets/gub_screen_background.dart';
 import '../../profile/screens/user_profile_screen.dart';
 import '../models/community_ask_answer_model.dart';
 import '../models/community_ask_model.dart';
+import '../moderation/services/community_moderation_service.dart';
+import '../moderation/widgets/community_report_dialog.dart';
 import '../repositories/community_ask_answer_repository.dart';
 import '../repositories/community_ask_repository.dart';
 import '../services/community_ask_answer_service.dart';
@@ -32,6 +34,8 @@ class CommunityAskDetailsScreen extends StatefulWidget {
     this.onOpenProfile,
     this.membershipXpCache,
     this.answerService,
+    this.onReportAsk,
+    this.onReportAnswer,
   });
 
   final CommunityAskModel ask;
@@ -50,6 +54,8 @@ class CommunityAskDetailsScreen extends StatefulWidget {
   final void Function(String userId)? onOpenProfile;
   final CommunityUserXpCache? membershipXpCache;
   final CommunityAskAnswerService? answerService;
+  final CommunityReportSubmit? onReportAsk;
+  final CommunityReportSubmit? onReportAnswer;
 
   @override
   State<CommunityAskDetailsScreen> createState() =>
@@ -317,6 +323,57 @@ class _CommunityAskDetailsScreenState extends State<CommunityAskDetailsScreen> {
     }
   }
 
+  Future<void> _reportAsk(CommunityAskModel ask) => _showReportAction(
+    title: 'Report Ask',
+    onSubmit:
+        widget.onReportAsk ??
+        (reason, details) => CommunityModerationService.instance.reportAsk(
+          ask: ask,
+          communityName: widget.communityName,
+          reason: reason,
+          details: details,
+        ),
+  );
+
+  Future<void> _reportAnswer(
+    CommunityAskModel ask,
+    CommunityAskAnswerModel answer,
+  ) => _showReportAction(
+    title: 'Report Answer',
+    onSubmit:
+        widget.onReportAnswer ??
+        (reason, details) => CommunityModerationService.instance.reportAnswer(
+          ask: ask,
+          answer: answer,
+          communityName: widget.communityName,
+          reason: reason,
+          details: details,
+        ),
+  );
+
+  Future<void> _showReportAction({
+    required String title,
+    required CommunityReportSubmit onSubmit,
+  }) async {
+    final report = await showModalBottomSheet<bool>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: ListTile(
+          leading: const Icon(Icons.flag_outlined),
+          title: Text(title),
+          onTap: () => Navigator.pop(sheetContext, true),
+        ),
+      ),
+    );
+    if (report == true && mounted) {
+      await showCommunityReportDialog(
+        context: context,
+        title: title,
+        onSubmit: onSubmit,
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) => GubScreenBackground(
     variant: GubBackgroundAssignments.board,
@@ -387,6 +444,8 @@ class _CommunityAskDetailsScreenState extends State<CommunityAskDetailsScreen> {
                         onEdit: () => _editAsk(ask),
                         canDelete: uid == ask.authorId && !isSelectingBest,
                         onDelete: () => _deleteAsk(ask),
+                        canReport: uid.isNotEmpty && uid != ask.authorId,
+                        onReport: () => _reportAsk(ask),
                       ),
                       const SizedBox(height: 18),
                       const Align(
@@ -424,6 +483,9 @@ class _CommunityAskDetailsScreenState extends State<CommunityAskDetailsScreen> {
                           onOpenAuthor: () => _openProfile(bestAnswer.authorId),
                           onEdit: null,
                           onDelete: null,
+                          canReport:
+                              uid.isNotEmpty && uid != bestAnswer.authorId,
+                          onReport: () => _reportAnswer(ask, bestAnswer),
                         ),
                         const SizedBox(height: 10),
                       ],
@@ -454,6 +516,8 @@ class _CommunityAskDetailsScreenState extends State<CommunityAskDetailsScreen> {
                           onOpenAuthor: () => _openProfile(answer.authorId),
                           onEdit: () => _editAnswer(ask, answer),
                           onDelete: () => _deleteAnswer(ask, answer),
+                          canReport: uid.isNotEmpty && uid != answer.authorId,
+                          onReport: () => _reportAnswer(ask, answer),
                         ),
                         const SizedBox(height: 10),
                       ],
@@ -599,6 +663,8 @@ class _AskThreadCard extends StatelessWidget {
     required this.onEdit,
     required this.canDelete,
     required this.onDelete,
+    required this.canReport,
+    required this.onReport,
   });
   final CommunityAskModel ask;
   final int? authorXp;
@@ -607,78 +673,85 @@ class _AskThreadCard extends StatelessWidget {
   final VoidCallback onEdit;
   final bool canDelete;
   final VoidCallback onDelete;
+  final bool canReport;
+  final VoidCallback onReport;
 
   @override
-  Widget build(BuildContext context) => Card(
-    child: Padding(
-      padding: const EdgeInsets.all(18),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              CommunityAskTypeBadge(type: ask.type),
-              const Spacer(),
-              Text(
-                ask.status == CommunityAskStatus.active ? 'Active' : 'Resolved',
-                style: const TextStyle(
-                  color: Color(0xFF059669),
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          InkWell(
-            key: ValueKey('ask-detail-author-${ask.askId}'),
-            onTap: onOpenAuthor,
-            child: Row(
+  Widget build(BuildContext context) => GestureDetector(
+    onLongPress: canReport ? onReport : null,
+    child: Card(
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
               children: [
-                CommunityLevelAvatar(
-                  displayName: ask.authorDisplayName,
-                  userId: ask.authorId,
-                  photoUrl: null,
-                  radius: 17,
-                  xp: authorXp,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    ask.authorDisplayName,
-                    style: const TextStyle(fontWeight: FontWeight.w700),
+                CommunityAskTypeBadge(type: ask.type),
+                const Spacer(),
+                Text(
+                  ask.status == CommunityAskStatus.active
+                      ? 'Active'
+                      : 'Resolved',
+                  style: const TextStyle(
+                    color: Color(0xFF059669),
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ],
             ),
-          ),
-          const SizedBox(height: 14),
-          Text(ask.text, style: const TextStyle(fontSize: 16, height: 1.45)),
-          const SizedBox(height: 12),
-          Text(
-            ask.updatedAt == null
-                ? formatCommunityAskDate(ask.createdAt.toDate())
-                : 'Edited ${_formatEditedAt(context, ask.updatedAt!.toDate())}',
-            style: const TextStyle(color: Color(0xFF64748B), fontSize: 12),
-          ),
-          if (canEdit || canDelete)
-            Align(
-              alignment: Alignment.centerRight,
-              child: Wrap(
+            const SizedBox(height: 14),
+            InkWell(
+              key: ValueKey('ask-detail-author-${ask.askId}'),
+              onTap: onOpenAuthor,
+              child: Row(
                 children: [
-                  if (canEdit)
-                    TextButton(
-                      onPressed: onEdit,
-                      child: const Text('Edit Ask'),
+                  CommunityLevelAvatar(
+                    displayName: ask.authorDisplayName,
+                    userId: ask.authorId,
+                    photoUrl: null,
+                    radius: 17,
+                    xp: authorXp,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      ask.authorDisplayName,
+                      style: const TextStyle(fontWeight: FontWeight.w700),
                     ),
-                  if (canDelete)
-                    TextButton(
-                      onPressed: onDelete,
-                      child: const Text('Delete Ask'),
-                    ),
+                  ),
                 ],
               ),
             ),
-        ],
+            const SizedBox(height: 14),
+            Text(ask.text, style: const TextStyle(fontSize: 16, height: 1.45)),
+            const SizedBox(height: 12),
+            Text(
+              ask.updatedAt == null
+                  ? formatCommunityAskDate(ask.createdAt.toDate())
+                  : 'Edited ${_formatEditedAt(context, ask.updatedAt!.toDate())}',
+              style: const TextStyle(color: Color(0xFF64748B), fontSize: 12),
+            ),
+            if (canEdit || canDelete)
+              Align(
+                alignment: Alignment.centerRight,
+                child: Wrap(
+                  children: [
+                    if (canEdit)
+                      TextButton(
+                        onPressed: onEdit,
+                        child: const Text('Edit Ask'),
+                      ),
+                    if (canDelete)
+                      TextButton(
+                        onPressed: onDelete,
+                        child: const Text('Delete Ask'),
+                      ),
+                  ],
+                ),
+              ),
+          ],
+        ),
       ),
     ),
   );
@@ -704,6 +777,8 @@ class _AnswerCard extends StatelessWidget {
     required this.onOpenAuthor,
     required this.onEdit,
     required this.onDelete,
+    required this.canReport,
+    required this.onReport,
   });
   final CommunityAskAnswerModel answer;
   final int? authorXp;
@@ -717,96 +792,101 @@ class _AnswerCard extends StatelessWidget {
   final VoidCallback onOpenAuthor;
   final VoidCallback? onEdit;
   final VoidCallback? onDelete;
+  final bool canReport;
+  final VoidCallback onReport;
 
   @override
-  Widget build(BuildContext context) => Card(
-    color: isBest ? const Color(0xFFECFDF5) : null,
-    child: Padding(
-      padding: const EdgeInsets.all(14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (isBest) ...[
-            const Text(
-              '✓ Best answer',
-              style: TextStyle(
-                color: Color(0xFF047857),
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            const SizedBox(height: 8),
-          ],
-          InkWell(
-            key: ValueKey('answer-author-${answer.answerId}'),
-            onTap: onOpenAuthor,
-            child: Row(
-              children: [
-                CommunityLevelAvatar(
-                  displayName: answer.authorDisplayName,
-                  userId: answer.authorId,
-                  photoUrl: null,
-                  radius: 16,
-                  xp: authorXp,
+  Widget build(BuildContext context) => GestureDetector(
+    onLongPress: canReport ? onReport : null,
+    child: Card(
+      color: isBest ? const Color(0xFFECFDF5) : null,
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (isBest) ...[
+              const Text(
+                '✓ Best answer',
+                style: TextStyle(
+                  color: Color(0xFF047857),
+                  fontWeight: FontWeight.w800,
                 ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    answer.authorDisplayName,
-                    style: const TextStyle(fontWeight: FontWeight.w700),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 7),
-          Text(answer.text),
-          if (answer.updatedAt != null)
-            const Padding(
-              padding: EdgeInsets.only(top: 5),
-              child: Text(
-                'Edited',
-                style: TextStyle(color: Color(0xFF64748B), fontSize: 12),
               ),
-            ),
-          if (canSelect || canEdit || canDelete)
-            Align(
-              alignment: Alignment.centerRight,
-              child: Wrap(
+              const SizedBox(height: 8),
+            ],
+            InkWell(
+              key: ValueKey('answer-author-${answer.answerId}'),
+              onTap: onOpenAuthor,
+              child: Row(
                 children: [
-                  if (isSelecting)
-                    const Padding(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          SizedBox.square(
-                            dimension: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          ),
-                          SizedBox(width: 8),
-                          Text('Selecting...'),
-                        ],
-                      ),
-                    )
-                  else if (canSelect)
-                    TextButton(
-                      onPressed: selectionLocked ? null : onSelect,
-                      child: const Text('Select best'),
+                  CommunityLevelAvatar(
+                    displayName: answer.authorDisplayName,
+                    userId: answer.authorId,
+                    photoUrl: null,
+                    radius: 16,
+                    xp: authorXp,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      answer.authorDisplayName,
+                      style: const TextStyle(fontWeight: FontWeight.w700),
                     ),
-                  if (canEdit)
-                    TextButton(onPressed: onEdit, child: const Text('Edit')),
-                  if (canDelete)
-                    TextButton(
-                      onPressed: onDelete,
-                      child: const Text('Delete'),
-                    ),
+                  ),
                 ],
               ),
             ),
-        ],
+            const SizedBox(height: 7),
+            Text(answer.text),
+            if (answer.updatedAt != null)
+              const Padding(
+                padding: EdgeInsets.only(top: 5),
+                child: Text(
+                  'Edited',
+                  style: TextStyle(color: Color(0xFF64748B), fontSize: 12),
+                ),
+              ),
+            if (canSelect || canEdit || canDelete)
+              Align(
+                alignment: Alignment.centerRight,
+                child: Wrap(
+                  children: [
+                    if (isSelecting)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            SizedBox.square(
+                              dimension: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                            SizedBox(width: 8),
+                            Text('Selecting...'),
+                          ],
+                        ),
+                      )
+                    else if (canSelect)
+                      TextButton(
+                        onPressed: selectionLocked ? null : onSelect,
+                        child: const Text('Select best'),
+                      ),
+                    if (canEdit)
+                      TextButton(onPressed: onEdit, child: const Text('Edit')),
+                    if (canDelete)
+                      TextButton(
+                        onPressed: onDelete,
+                        child: const Text('Delete'),
+                      ),
+                  ],
+                ),
+              ),
+          ],
+        ),
       ),
     ),
   );

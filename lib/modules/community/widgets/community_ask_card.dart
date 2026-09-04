@@ -1,6 +1,9 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../models/community_ask_model.dart';
+import '../moderation/services/community_moderation_service.dart';
+import '../moderation/widgets/community_report_dialog.dart';
 import 'community_level_avatar.dart';
 
 class CommunityAskCard extends StatelessWidget {
@@ -10,12 +13,18 @@ class CommunityAskCard extends StatelessWidget {
     required this.onTap,
     this.onOpenAuthor,
     this.authorXp,
+    this.currentUserId,
+    this.onReport,
+    this.communityName,
   });
 
   final CommunityAskModel ask;
   final VoidCallback onTap;
   final VoidCallback? onOpenAuthor;
   final int? authorXp;
+  final String? currentUserId;
+  final Future<void> Function()? onReport;
+  final String? communityName;
 
   @override
   Widget build(BuildContext context) {
@@ -28,6 +37,9 @@ class CommunityAskCard extends StatelessWidget {
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
         onTap: onTap,
+        onLongPress: onReport != null || communityName != null
+            ? () => _showReportAction(context)
+            : null,
         child: Padding(
           padding: const EdgeInsets.all(14),
           child: Column(
@@ -110,6 +122,35 @@ class CommunityAskCard extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+
+  Future<void> _showReportAction(BuildContext context) async {
+    final reporterId = currentUserId ?? FirebaseAuth.instance.currentUser?.uid;
+    if (reporterId == null || reporterId == ask.authorId) return;
+    final report = await showModalBottomSheet<bool>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: ListTile(
+          leading: const Icon(Icons.flag_outlined),
+          title: const Text('Report Ask'),
+          onTap: () => Navigator.pop(sheetContext, true),
+        ),
+      ),
+    );
+    if (report != true) return;
+    if (onReport != null) return onReport!();
+    if (!context.mounted) return;
+    await showCommunityReportDialog(
+      context: context,
+      title: 'Report Ask',
+      onSubmit: (reason, details) =>
+          CommunityModerationService.instance.reportAsk(
+            ask: ask,
+            communityName: communityName!,
+            reason: reason,
+            details: details,
+          ),
     );
   }
 }

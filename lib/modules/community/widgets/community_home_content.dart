@@ -1,3 +1,4 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../../../widgets/gub_content_card.dart';
@@ -83,6 +84,7 @@ class _CommunityHomeContentState extends State<CommunityHomeContent> {
         builder: (_) => CommunityAsksScreen(
           communityId: widget.community.communityId,
           communityName: widget.community.name,
+          currentUserId: FirebaseAuth.instance.currentUser?.uid,
         ),
       ),
     );
@@ -192,64 +194,64 @@ class _CommunityHomeContentState extends State<CommunityHomeContent> {
               mainAxisSize: MainAxisSize.min,
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-              _HomeHeaderAction(
-                key: const ValueKey('community-header-action'),
-                label: 'Community',
-                selected: _panel == _CommunityHomePanel.community,
-                onTap: _toggleCommunity,
-                child: CommunityImageView(
-                  imageUrl: community.imageUrl,
-                  size: 44,
+                _HomeHeaderAction(
+                  key: const ValueKey('community-header-action'),
+                  label: 'Community',
+                  selected: _panel == _CommunityHomePanel.community,
+                  onTap: _toggleCommunity,
+                  child: CommunityImageView(
+                    imageUrl: community.imageUrl,
+                    size: 44,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 10),
-              _HomeHeaderAction(
-                key: const ValueKey('asks-header-action'),
-                label: 'Asks',
-                selected: _panel == _CommunityHomePanel.asks,
-                onTap: _handleAsks,
-                child: const Icon(
-                  Icons.view_list_rounded,
-                  color: Color(0xFF2563EB),
-                  size: 25,
+                const SizedBox(width: 10),
+                _HomeHeaderAction(
+                  key: const ValueKey('asks-header-action'),
+                  label: 'Asks',
+                  selected: _panel == _CommunityHomePanel.asks,
+                  onTap: _handleAsks,
+                  child: const Icon(
+                    Icons.view_list_rounded,
+                    color: Color(0xFF2563EB),
+                    size: 25,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 10),
-              _HomeHeaderAction(
-                key: const ValueKey('my-asks-header-action'),
-                label: 'My Asks',
-                selected: false,
-                onTap: _openMyAsks,
-                child: const Icon(
-                  Icons.person_search_rounded,
-                  color: Color(0xFF2563EB),
-                  size: 24,
+                const SizedBox(width: 10),
+                _HomeHeaderAction(
+                  key: const ValueKey('my-asks-header-action'),
+                  label: 'My Asks',
+                  selected: false,
+                  onTap: _openMyAsks,
+                  child: const Icon(
+                    Icons.person_search_rounded,
+                    color: Color(0xFF2563EB),
+                    size: 24,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 10),
-              _HomeHeaderAction(
-                key: const ValueKey('create-ask-header-action'),
-                label: 'Create',
-                selected: _panel == _CommunityHomePanel.createAsk,
-                onTap: _toggleCreateAsk,
-                child: const Icon(
-                  Icons.add_rounded,
-                  color: Color(0xFF2563EB),
-                  size: 27,
+                const SizedBox(width: 10),
+                _HomeHeaderAction(
+                  key: const ValueKey('create-ask-header-action'),
+                  label: 'Create',
+                  selected: _panel == _CommunityHomePanel.createAsk,
+                  onTap: _toggleCreateAsk,
+                  child: const Icon(
+                    Icons.add_rounded,
+                    color: Color(0xFF2563EB),
+                    size: 27,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 10),
-              _HomeHeaderAction(
-                key: const ValueKey('leaderboard-header-action'),
-                label: 'Leaderboard',
-                selected: false,
-                onTap: _openLeaderboard,
-                child: const Icon(
-                  Icons.emoji_events_rounded,
-                  color: Color(0xFF2563EB),
-                  size: 24,
+                const SizedBox(width: 10),
+                _HomeHeaderAction(
+                  key: const ValueKey('leaderboard-header-action'),
+                  label: 'Leaderboard',
+                  selected: false,
+                  onTap: _openLeaderboard,
+                  child: const Icon(
+                    Icons.emoji_events_rounded,
+                    color: Color(0xFF2563EB),
+                    size: 24,
+                  ),
                 ),
-              ),
               ],
             ),
           ),

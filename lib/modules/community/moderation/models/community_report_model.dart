@@ -25,7 +25,9 @@ class CommunityModerationReport {
   final String communityId;
   final String targetType;
   final String targetId;
+  final String? askId;
   final String? targetUserId;
+  final String? contentSnapshot;
   final String reason;
   final String details;
   final String communityNameSnapshot;
@@ -41,11 +43,18 @@ class CommunityModerationReport {
     required this.details,
     required this.communityNameSnapshot,
     this.targetUserId,
+    this.askId,
+    this.contentSnapshot,
     this.targetNameSnapshot,
   });
 
-  String get moderationTargetKey =>
-      targetType == 'community' ? 'community__$targetId' : 'user__$targetId';
+  String get moderationTargetKey => switch (targetType) {
+    'community' => 'community__$targetId',
+    'user' => 'user__$targetId',
+    'ask' => 'ask__${communityId}__$targetId',
+    'answer' => 'answer__${communityId}__${askId}__$targetId',
+    _ => throw StateError('Unsupported moderation target type.'),
+  };
 
   String get moderationTargetNameSnapshot =>
       targetType == 'community' ? communityNameSnapshot : targetNameSnapshot!;
@@ -56,7 +65,9 @@ class CommunityModerationReport {
     'communityId': communityId,
     'targetType': targetType,
     'targetId': targetId,
+    if (askId != null) 'askId': askId,
     if (targetUserId != null) 'targetUserId': targetUserId,
+    if (contentSnapshot != null) 'contentSnapshot': contentSnapshot,
     'reason': reason,
     'details': details,
     'createdAt': FieldValue.serverTimestamp(),

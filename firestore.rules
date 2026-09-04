@@ -1171,7 +1171,7 @@ service cloud.firestore {
         && data.reporterId == request.auth.uid
         && data.communityId is string
         && data.communityId.size() >= 1
-        && data.targetType in ['community','user']
+        && data.targetType in ['community','user','ask','answer']
         && data.targetId is string
         && data.targetId.size() >= 1
         && data.reason in [
@@ -1217,12 +1217,60 @@ service cloud.firestore {
         && reportId == 'user__' + data.communityId + '__'
           + data.targetUserId + '__' + request.auth.uid;
     }
+    function validCommunityAskReport(reportId) {
+      let data = request.resource.data;
+      let ask = get(communityAskPath(data.communityId, data.targetId)).data;
+      return data.keys().hasOnly([
+          'reportId','reporterId','communityId','targetType','targetId',
+          'targetUserId','reason','details','createdAt','status',
+          'communityNameSnapshot','targetNameSnapshot','contentSnapshot'
+        ])
+        && validModerationReportCommon(reportId)
+        && linkedCommunityAccount()
+        && isCommunityMember(data.communityId)
+        && data.targetType == 'ask'
+        && data.targetUserId != request.auth.uid
+        && data.targetUserId == ask.authorId
+        && data.targetNameSnapshot == ask.authorDisplayName
+        && data.contentSnapshot == ask.text
+        && reportId == 'ask__' + data.communityId + '__' + data.targetId
+          + '__' + request.auth.uid;
+    }
+    function validCommunityAnswerReport(reportId) {
+      let data = request.resource.data;
+      let answer = get(communityAnswerPath(data.communityId, data.askId, data.targetId)).data;
+      return data.keys().hasOnly([
+          'reportId','reporterId','communityId','askId','targetType','targetId',
+          'targetUserId','reason','details','createdAt','status',
+          'communityNameSnapshot','targetNameSnapshot','contentSnapshot'
+        ])
+        && validModerationReportCommon(reportId)
+        && linkedCommunityAccount()
+        && isCommunityMember(data.communityId)
+        && data.targetType == 'answer'
+        && data.askId is string
+        && exists(communityAskPath(data.communityId, data.askId))
+        && data.targetUserId != request.auth.uid
+        && data.targetUserId == answer.authorId
+        && data.targetNameSnapshot == answer.authorDisplayName
+        && data.contentSnapshot == answer.text
+        && reportId == 'answer__' + data.communityId + '__' + data.askId
+          + '__' + data.targetId + '__' + request.auth.uid;
+    }
     function validModerationReportCreate(reportId) {
       return validCommunityReport(reportId)
-        || validCommunityUserReport(reportId);
+        || validCommunityUserReport(reportId)
+        || validCommunityAskReport(reportId)
+        || validCommunityAnswerReport(reportId);
     }
     function moderationTargetKeyForReport(data) {
-      return data.targetType + '__' + data.targetId;
+      return data.targetType == 'community'
+        ? 'community__' + data.targetId
+        : data.targetType == 'user'
+          ? 'user__' + data.targetId
+          : data.targetType == 'ask'
+            ? 'ask__' + data.communityId + '__' + data.targetId
+            : 'answer__' + data.communityId + '__' + data.askId + '__' + data.targetId;
     }
     function validModerationReportTargetLink(reportId) {
       let report = request.resource.data;
@@ -1235,7 +1283,7 @@ service cloud.firestore {
       return (target.targetType == 'community'
           && target.targetNameSnapshot
             == getAfter(moderationReportPath(reportId)).data.communityNameSnapshot)
-        || (target.targetType == 'user'
+        || (target.targetType in ['user','ask','answer']
           && target.targetNameSnapshot
             == getAfter(moderationReportPath(reportId)).data.targetNameSnapshot);
     }
@@ -1246,10 +1294,10 @@ service cloud.firestore {
           'targetType','targetId','targetNameSnapshot','reportCount',
           'lastReportedAt','lastReportId'
         ])
-        && target.targetType in ['community','user']
+        && target.targetType in ['community','user','ask','answer']
         && target.targetId is string
         && target.targetId.size() >= 1
-        && targetKey == target.targetType + '__' + target.targetId
+        && targetKey == moderationTargetKeyForReport(getAfter(reportPath).data)
         && target.targetNameSnapshot is string
         && target.targetNameSnapshot.size() >= 1
         && target.reportCount is int

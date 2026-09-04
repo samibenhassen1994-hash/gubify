@@ -127,6 +127,7 @@ class _CommunityResolvedAsksScreenState
                     return CommunityAskCard(
                       key: ValueKey('resolved-ask-card-${ask.askId}'),
                       ask: ask,
+                      communityName: widget.communityName,
                       authorXp: xpByUserId[ask.authorId],
                       onOpenAuthor: () => Navigator.of(context).push(
                         MaterialPageRoute(
