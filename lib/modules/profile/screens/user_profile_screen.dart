@@ -11,6 +11,7 @@ import '../../community/widgets/community_level_avatar.dart';
 import '../../community/widgets/community_profile_asks_section.dart';
 import '../../community/services/community_user_xp_cache.dart';
 import '../../community/widgets/community_user_xp_scope.dart';
+import '../../moderation/blocking/services/user_block_service.dart';
 import '../models/user_profile_model.dart';
 import '../services/user_profile_service.dart';
 import 'user_activity_screen.dart';
@@ -23,6 +24,7 @@ class UserProfileScreen extends StatefulWidget {
   final Future<UserProfileModel?>? profileFuture;
   final Stream<List<CommunityAskModel>>? activeAsksStream;
   final CommunityUserXpCache? communityUserXpCache;
+  final UserBlockService? userBlockService;
 
   const UserProfileScreen({
     super.key,
@@ -31,6 +33,7 @@ class UserProfileScreen extends StatefulWidget {
     this.profileFuture,
     this.activeAsksStream,
     this.communityUserXpCache,
+    this.userBlockService,
   }) : communityId = null,
        communityName = null;
 
@@ -42,6 +45,7 @@ class UserProfileScreen extends StatefulWidget {
     this.profileFuture,
     this.activeAsksStream,
     this.communityUserXpCache,
+    this.userBlockService,
   }) : gubId = null;
 
   @override
@@ -65,6 +69,44 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                 communityId: widget.communityId!,
                 userId: widget.userId,
               ));
+  }
+
+  UserBlockService get _userBlockService =>
+      widget.userBlockService ?? UserBlockService.instance;
+
+  Future<void> _blockUser(String targetUserId) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Block User?'),
+        content: const Text(
+          'This user will be added to your blocked users list.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Block'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || confirmed != true) return;
+    try {
+      await _userBlockService.blockUser(targetUserId);
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('User blocked.')));
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Unable to block user.')));
+    }
   }
 
   @override
@@ -109,6 +151,38 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                 padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
                 children: [
                   _ProfileHeader(profile: profile, communityXp: communityXp),
+                  if (!profile.isCurrentUser) ...[
+                    const SizedBox(height: 18),
+                    StreamBuilder<bool>(
+                      stream: _userBlockService.isUserBlockedStream(
+                        profile.userId,
+                      ),
+                      builder: (context, blockSnapshot) {
+                        if (!blockSnapshot.hasData) {
+                          return const Center(
+                            child: SizedBox.square(
+                              dimension: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                          );
+                        }
+                        final blocked = blockSnapshot.data!;
+                        return Center(
+                          child: OutlinedButton.icon(
+                            onPressed: blocked
+                                ? null
+                                : () => _blockUser(profile.userId),
+                            icon: Icon(
+                              blocked
+                                  ? Icons.block_rounded
+                                  : Icons.block_outlined,
+                            ),
+                            label: Text(blocked ? 'Blocked' : 'Block User'),
+                          ),
+                        );
+                      },
+                    ),
+                  ],
                   if (widget.communityId != null && !profile.isCurrentUser) ...[
                     const SizedBox(height: 18),
                     Center(

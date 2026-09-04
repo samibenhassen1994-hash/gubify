@@ -3,6 +3,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:gubify/modules/community/models/community_model.dart';
 import 'package:gubify/modules/community/screens/community_members_screen.dart';
 import 'package:gubify/modules/community/services/community_user_xp_cache.dart';
+import 'package:gubify/modules/moderation/blocking/models/user_block_model.dart';
+import 'package:gubify/modules/moderation/blocking/repositories/user_block_repository.dart';
+import 'package:gubify/modules/moderation/blocking/services/user_block_service.dart';
 import 'package:gubify/modules/profile/models/user_profile_model.dart';
 import 'package:gubify/modules/profile/screens/user_profile_screen.dart';
 
@@ -54,6 +57,7 @@ Widget _screen({
     onRemove: onRemove,
     onBan: onBan,
     profileLoader: profileLoader,
+    userBlockService: _userBlockService,
   ),
 );
 
@@ -169,6 +173,7 @@ void main() {
             ),
           ),
           activeAsksStream: Stream.value(const []),
+          userBlockService: _userBlockService,
         ),
       ),
     );
@@ -196,6 +201,7 @@ void main() {
               isCurrentUser: false,
             ),
           ),
+          userBlockService: _userBlockService,
         ),
       ),
     );
@@ -226,6 +232,7 @@ void main() {
               ),
             ),
             activeAsksStream: Stream.value(const []),
+            userBlockService: _userBlockService,
           ),
         ),
       );
@@ -234,4 +241,34 @@ void main() {
       expect(find.text('Report User'), findsOneWidget);
     },
   );
+}
+
+final _userBlockService = UserBlockService.forTesting(
+  currentUserId: () => 'viewer',
+  repository: _NoopUserBlockRepository(),
+);
+
+class _NoopUserBlockRepository implements UserBlockRepository {
+  @override
+  Future<void> blockUser({
+    required String blockerUserId,
+    required String blockedUserId,
+  }) async {}
+
+  @override
+  Stream<UserBlockModel?> blockStream({
+    required String blockerUserId,
+    required String blockedUserId,
+  }) => Stream.value(null);
+
+  @override
+  Stream<List<UserBlockModel>> blockedUsersStream({
+    required String blockerUserId,
+  }) => Stream.value(const <UserBlockModel>[]);
+
+  @override
+  Future<void> unblockUser({
+    required String blockerUserId,
+    required String blockedUserId,
+  }) async {}
 }

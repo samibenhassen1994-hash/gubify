@@ -8,6 +8,7 @@ import '../services/account_service.dart';
 import '../services/account_deletion_service.dart';
 import '../widgets/delete_account_dialog.dart';
 import '../widgets/google_account_connection_section.dart';
+import '../../moderation/blocking/screens/blocked_users_screen.dart';
 
 class AccountScreen extends StatefulWidget {
   const AccountScreen({
@@ -15,11 +16,13 @@ class AccountScreen extends StatefulWidget {
     required this.authService,
     this.accountService,
     this.accountDeletionService,
+    this.blockedUsersScreenBuilder,
   });
 
   final AuthService authService;
   final AccountService? accountService;
   final AccountDeletionService? accountDeletionService;
+  final Widget Function()? blockedUsersScreenBuilder;
 
   @override
   State<AccountScreen> createState() => _AccountScreenState();
@@ -216,6 +219,20 @@ class _AccountScreenState extends State<AccountScreen> {
                     child: const Text('Secure your account'),
                   ),
           ),
+        _AccountCard(
+          title: 'Blocked users',
+          value: "Manage the people you've blocked.",
+          action: TextButton(
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) =>
+                    widget.blockedUsersScreenBuilder?.call() ??
+                    const BlockedUsersScreen(),
+              ),
+            ),
+            child: const Text('Manage'),
+          ),
+        ),
         _AccountCard(
           title: 'Member since',
           value: details.createdAt == null

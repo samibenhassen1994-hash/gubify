@@ -11,7 +11,7 @@
     "test:rules:community-images": "node --test tests/firestore-rules/community-images.test.mjs",
     "test:rules:community-asks": "node --test tests/firestore-rules/community-asks.test.mjs",
     "test:rules:notification-history": "node --test tests/firestore-rules/private-notification-history-boundary.test.mjs",
-    "test:rules:all": "node --test --test-concurrency=1 tests/firestore-rules/structural-smoke.test.mjs tests/firestore-rules/phase2a.test.mjs tests/firestore-rules/phase3a.test.mjs tests/firestore-rules/phase3b.test.mjs tests/firestore-rules/phase3c.test.mjs tests/firestore-rules/phase3d.test.mjs tests/firestore-rules/phase4a2.test.mjs tests/firestore-rules/private-notification-history-boundary.test.mjs tests/firestore-rules/community-asks.test.mjs tests/firestore-rules/community-moderation.test.mjs"
+    "test:rules:all": "node --test --test-concurrency=1 tests/firestore-rules/structural-smoke.test.mjs tests/firestore-rules/phase2a.test.mjs tests/firestore-rules/phase3a.test.mjs tests/firestore-rules/phase3b.test.mjs tests/firestore-rules/phase3c.test.mjs tests/firestore-rules/phase3d.test.mjs tests/firestore-rules/phase4a2.test.mjs tests/firestore-rules/private-notification-history-boundary.test.mjs tests/firestore-rules/community-asks.test.mjs tests/firestore-rules/community-moderation.test.mjs tests/firestore-rules/user-blocking.test.mjs"
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "^5.0.1",

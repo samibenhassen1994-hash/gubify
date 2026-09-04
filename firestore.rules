@@ -1556,6 +1556,15 @@ service cloud.firestore {
         allow delete: if (linkedCommunityAccount() && own(uid)) || communityDeletingOwner(id)
           || communityOwnerRemovingMember(id, uid);
       }
+      match /blockedUsers/{blockedUid} {
+        allow get, list: if own(uid);
+        allow create: if own(uid)
+          && uid != blockedUid
+          && request.resource.data.keys().hasOnly(['blockedUserId', 'blockedAt'])
+          && request.resource.data.blockedUserId == blockedUid
+          && request.resource.data.blockedAt == request.time;
+        allow delete: if own(uid);
+      }
     }
 
     match /{path=**}/members/{memberId} {

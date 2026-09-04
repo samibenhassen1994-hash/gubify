@@ -8,7 +8,11 @@ import 'package:gubify/modules/profile/services/account_service.dart';
 import 'package:gubify/services/auth_service.dart';
 
 void main() {
-  Widget subject({required bool anonymous, required List<String> providers}) {
+  Widget subject({
+    required bool anonymous,
+    required List<String> providers,
+    Widget Function()? blockedUsersScreenBuilder,
+  }) {
     final auth = AuthService(
       authLinkGateway: _AuthGateway(anonymous, providers),
       authVerificationGateway: _VerificationGateway(),
@@ -20,6 +24,7 @@ void main() {
           authService: auth,
           repository: _AccountRepository(),
         ),
+        blockedUsersScreenBuilder: blockedUsersScreenBuilder,
       ),
     );
   }
@@ -52,6 +57,11 @@ void main() {
     expect(find.text('Password'), findsNothing);
     expect(find.text('Add email & password'), findsNothing);
     expect(find.text('Change password'), findsNothing);
+    await tester.scrollUntilVisible(
+      find.text('Delete account'),
+      200,
+      scrollable: find.byType(Scrollable),
+    );
     expect(find.text('Delete account'), findsOneWidget);
   });
 
@@ -69,6 +79,38 @@ void main() {
       scrollable: find.byType(Scrollable),
     );
     expect(find.text('Delete account'), findsOneWidget);
+  });
+
+  testWidgets('Blocked users opens only when its Account action is tapped', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      subject(
+        anonymous: false,
+        providers: const ['password'],
+        blockedUsersScreenBuilder: () => const Scaffold(
+          body: Center(child: Text('Blocked users destination')),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Blocked users'), findsOneWidget);
+    expect(find.text("Manage the people you've blocked."), findsOneWidget);
+    expect(find.text('Blocked users destination'), findsNothing);
+    final blockedUsersCard = find.ancestor(
+      of: find.text('Blocked users'),
+      matching: find.byType(Card),
+    );
+    final manageBlockedUsers = find.descendant(
+      of: blockedUsersCard,
+      matching: find.widgetWithText(TextButton, 'Manage'),
+    );
+    await tester.ensureVisible(manageBlockedUsers);
+    await tester.pumpAndSettle();
+    await tester.tap(manageBlockedUsers);
+    await tester.pumpAndSettle();
+    expect(find.text('Blocked users destination'), findsOneWidget);
   });
 
   testWidgets(
