@@ -3,26 +3,79 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 import '../../../repositories/user_repository.dart';
 import '../../../services/app_sound_service.dart';
+import '../../moderation/blocking/models/user_block_model.dart';
+import '../../moderation/blocking/services/user_block_service.dart';
+import '../../moderation/blocking/utils/user_block_message_visibility.dart';
 import '../models/chat_message_model.dart';
 import '../repositories/chat_repository.dart';
 
 class ChatService {
-  ChatService._();
+  ChatService._({
+    Future<Timestamp?> Function(String gubId)? membershipBoundary,
+    Stream<List<ChatMessageModel>> Function(String gubId, Timestamp boundary)?
+    messages,
+    Future<ChatMessageModel?> Function(
+      String gubId,
+      String messageId,
+      Timestamp boundary,
+    )?
+    getMessage,
+    Stream<List<UserBlockModel>> Function()? blockedUsers,
+  }) : _membershipBoundaryOverride = membershipBoundary,
+       _messagesOverride = messages,
+       _getMessageOverride = getMessage,
+       _blockedUsersOverride = blockedUsers;
 
   static final ChatService instance = ChatService._();
 
   static const int maxMessageLength = 2000;
 
-  final FirebaseAuth _auth = FirebaseAuth.instance;
+  factory ChatService.forTesting({
+    required Future<Timestamp?> Function(String gubId) membershipBoundary,
+    required Stream<List<ChatMessageModel>> Function(
+      String gubId,
+      Timestamp boundary,
+    )
+    messages,
+    required Future<ChatMessageModel?> Function(
+      String gubId,
+      String messageId,
+      Timestamp boundary,
+    )
+    getMessage,
+    required Stream<List<UserBlockModel>> Function() blockedUsers,
+  }) => ChatService._(
+    membershipBoundary: membershipBoundary,
+    messages: messages,
+    getMessage: getMessage,
+    blockedUsers: blockedUsers,
+  );
 
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final Future<Timestamp?> Function(String gubId)? _membershipBoundaryOverride;
+  final Stream<List<ChatMessageModel>> Function(
+    String gubId,
+    Timestamp boundary,
+  )?
+  _messagesOverride;
+  final Future<ChatMessageModel?> Function(
+    String gubId,
+    String messageId,
+    Timestamp boundary,
+  )?
+  _getMessageOverride;
+  final Stream<List<UserBlockModel>> Function()? _blockedUsersOverride;
+
+  FirebaseAuth get _auth => FirebaseAuth.instance;
+  FirebaseFirestore get _firestore => FirebaseFirestore.instance;
 
   Stream<List<ChatMessageModel>> messagesStream(String gubId) =>
       Stream.fromFuture(_membershipBoundary(gubId)).asyncExpand((boundary) {
         if (boundary == null) return Stream.value(const <ChatMessageModel>[]);
-        return ChatRepository.instance.messagesStream(
-          gubId: gubId,
-          membershipBoundary: boundary,
+        return filterUserBlockedMessages(
+          messagesStream: _messages(gubId, boundary),
+          blocksStream: _blockedUsers(),
+          senderId: (message) => message.senderId,
+          createdAt: (message) => message.createdAt,
         );
       });
 
@@ -32,14 +85,21 @@ class ChatService {
   }) async {
     final boundary = await _membershipBoundary(gubId);
     if (boundary == null) return null;
-    return ChatRepository.instance.getMessage(
-      gubId: gubId,
-      messageId: messageId,
-      membershipBoundary: boundary,
-    );
+    final message = await _getMessage(gubId, messageId, boundary);
+    if (message == null) return null;
+    final blocks = await _blockedUsers().first;
+    return isUserBlockMessageVisible(
+          senderId: message.senderId,
+          createdAt: message.createdAt,
+          blockedAtByUser: blockedAtByUser(blocks),
+        )
+        ? message
+        : null;
   }
 
   Future<Timestamp?> _membershipBoundary(String gubId) async {
+    final override = _membershipBoundaryOverride;
+    if (override != null) return override(gubId);
     final user = _auth.currentUser;
     if (user == null) return null;
     final membership = await _firestore
@@ -51,6 +111,29 @@ class ChatService {
     final joinedAt = membership.data()?['joinedAt'];
     return membership.exists && joinedAt is Timestamp ? joinedAt : null;
   }
+
+  Stream<List<ChatMessageModel>> _messages(String gubId, Timestamp boundary) =>
+      _messagesOverride?.call(gubId, boundary) ??
+      ChatRepository.instance.messagesStream(
+        gubId: gubId,
+        membershipBoundary: boundary,
+      );
+
+  Future<ChatMessageModel?> _getMessage(
+    String gubId,
+    String messageId,
+    Timestamp boundary,
+  ) =>
+      _getMessageOverride?.call(gubId, messageId, boundary) ??
+      ChatRepository.instance.getMessage(
+        gubId: gubId,
+        messageId: messageId,
+        membershipBoundary: boundary,
+      );
+
+  Stream<List<UserBlockModel>> _blockedUsers() =>
+      _blockedUsersOverride?.call() ??
+      UserBlockService.instance.blockedUsersStream();
 
   Future<void> sendMessage({
     required String gubId,
