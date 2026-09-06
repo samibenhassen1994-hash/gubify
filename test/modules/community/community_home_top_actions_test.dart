@@ -7,6 +7,10 @@ Widget _screen({required bool isKeyboardOpen}) => MaterialApp(
     body: CommunityHomeTopActions(
       isKeyboardOpen: isKeyboardOpen,
       pendingRequestsAction: const Icon(Icons.notifications_rounded),
+      accountSettingsAction: const Icon(
+        Icons.manage_accounts,
+        key: ValueKey('account-settings'),
+      ),
       reportAction: const Icon(Icons.more_vert, key: ValueKey('report')),
       settingsAction: const Icon(
         Icons.settings_rounded,
@@ -24,6 +28,7 @@ void main() {
 
     expect(find.byKey(const ValueKey('settings')), findsOneWidget);
     expect(find.byKey(const ValueKey('report')), findsOneWidget);
+    expect(find.byKey(const ValueKey('account-settings')), findsOneWidget);
   });
 
   testWidgets('keyboard open removes Settings and Report actions', (
@@ -33,6 +38,7 @@ void main() {
 
     expect(find.byKey(const ValueKey('settings')), findsNothing);
     expect(find.byKey(const ValueKey('report')), findsNothing);
+    expect(find.byKey(const ValueKey('account-settings')), findsOneWidget);
     expect(find.byIcon(Icons.notifications_rounded), findsOneWidget);
   });
 
@@ -42,12 +48,14 @@ void main() {
     await tester.pumpWidget(_screen(isKeyboardOpen: true));
     expect(find.byKey(const ValueKey('settings')), findsNothing);
     expect(find.byKey(const ValueKey('report')), findsNothing);
+    expect(find.byKey(const ValueKey('account-settings')), findsOneWidget);
 
     await tester.pumpWidget(_screen(isKeyboardOpen: false));
     await tester.pump();
 
     expect(find.byKey(const ValueKey('settings')), findsOneWidget);
     expect(find.byKey(const ValueKey('report')), findsOneWidget);
+    expect(find.byKey(const ValueKey('account-settings')), findsOneWidget);
   });
 
   testWidgets('keyboard visibility applies while Create Ask remains mounted', (
@@ -60,6 +68,10 @@ void main() {
             children: [
               CommunityHomeTopActions(
                 isKeyboardOpen: true,
+                accountSettingsAction: Icon(
+                  Icons.manage_accounts,
+                  key: ValueKey('account-settings'),
+                ),
                 reportAction: Icon(Icons.more_vert, key: ValueKey('report')),
                 settingsAction: Icon(
                   Icons.settings_rounded,
@@ -76,6 +88,7 @@ void main() {
     expect(find.byKey(const ValueKey('create-ask-text')), findsOneWidget);
     expect(find.byKey(const ValueKey('settings')), findsNothing);
     expect(find.byKey(const ValueKey('report')), findsNothing);
+    expect(find.byKey(const ValueKey('account-settings')), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

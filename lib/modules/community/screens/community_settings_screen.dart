@@ -1,3 +1,4 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../../../widgets/gub_content_card.dart';
@@ -5,16 +6,37 @@ import '../../../widgets/banned_users_screen.dart';
 import '../../../widgets/gub_screen_background.dart';
 import '../../../screens/welcome_screen.dart';
 import '../../../screens/gub/my_gubs_screen.dart';
+import '../../chat/widgets/chat_user_avatar.dart';
+import '../../profile/models/user_profile_model.dart';
+import '../../profile/screens/user_profile_screen.dart';
+import '../../profile/services/user_profile_service.dart';
+import '../models/community_ask_model.dart';
 import '../models/community_model.dart';
 import '../images/community_image_settings_card.dart';
 import '../services/community_service.dart';
+import '../services/community_user_xp_cache.dart';
 import 'community_join_requests_screen.dart';
 import 'community_members_screen.dart';
 
 class CommunitySettingsScreen extends StatefulWidget {
   final CommunityModel community;
+  final String? currentUserId;
+  final Future<String>? currentUserRoleFuture;
+  final Future<UserProfileModel?>? currentUserProfileFuture;
+  final bool? isOwner;
+  final CommunityUserXpCache? communityUserXpCache;
+  final Stream<List<CommunityAskModel>>? selfProfileActiveAsksStream;
 
-  const CommunitySettingsScreen({super.key, required this.community});
+  const CommunitySettingsScreen({
+    super.key,
+    required this.community,
+    this.currentUserId,
+    this.currentUserRoleFuture,
+    this.currentUserProfileFuture,
+    this.isOwner,
+    this.communityUserXpCache,
+    this.selfProfileActiveAsksStream,
+  });
 
   @override
   State<CommunitySettingsScreen> createState() =>
@@ -23,15 +45,27 @@ class CommunitySettingsScreen extends StatefulWidget {
 
 class _CommunitySettingsScreenState extends State<CommunitySettingsScreen> {
   late final Future<String> _roleFuture;
+  late final Future<UserProfileModel?> _currentUserProfileFuture;
+  late final String? _currentUserId;
   late CommunityModel _community;
 
   @override
   void initState() {
     super.initState();
     _community = widget.community;
-    _roleFuture = CommunityService.instance.currentUserRole(
-      widget.community.communityId,
-    );
+    _currentUserId =
+        widget.currentUserId ?? FirebaseAuth.instance.currentUser?.uid;
+    _roleFuture =
+        widget.currentUserRoleFuture ??
+        CommunityService.instance.currentUserRole(widget.community.communityId);
+    _currentUserProfileFuture =
+        widget.currentUserProfileFuture ?? _loadCurrentUserProfile();
+  }
+
+  Future<UserProfileModel?> _loadCurrentUserProfile() {
+    final userId = _currentUserId;
+    if (userId == null || userId.isEmpty) return Future.value(null);
+    return UserProfileService.instance.loadPersonalProfile(userId: userId);
   }
 
   Future<void> _showDeleteDialog() async {
@@ -91,9 +125,9 @@ class _CommunitySettingsScreenState extends State<CommunitySettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isOwner = CommunityService.instance.isCurrentUserOwner(
-      widget.community,
-    );
+    final isOwner =
+        widget.isOwner ??
+        CommunityService.instance.isCurrentUserOwner(widget.community);
     final canManageJoinRequests = widget.community.canManageJoinRequests(
       isOwner: isOwner,
     );
@@ -124,25 +158,14 @@ class _CommunitySettingsScreenState extends State<CommunitySettingsScreen> {
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                    const SizedBox(height: 12),
-                    FutureBuilder<String>(
-                      future: _roleFuture,
-                      builder: (context, snapshot) {
-                        if (snapshot.connectionState ==
-                            ConnectionState.waiting) {
-                          return const LinearProgressIndicator();
-                        }
-                        if (snapshot.hasError) {
-                          return const Text(
-                            'Your role is currently unavailable.',
-                            style: TextStyle(color: Color(0xFF475569)),
-                          );
-                        }
-                        return Text(
-                          'Your role: ${snapshot.data ?? 'Member'}',
-                          style: const TextStyle(color: Color(0xFF475569)),
-                        );
-                      },
+                    const SizedBox(height: 10),
+                    const Divider(),
+                    _CurrentUserProfileArea(
+                      community: widget.community,
+                      profileFuture: _currentUserProfileFuture,
+                      roleFuture: _roleFuture,
+                      userXpCache: widget.communityUserXpCache,
+                      activeAsksStream: widget.selfProfileActiveAsksStream,
                     ),
                   ],
                 ),
@@ -304,6 +327,98 @@ class _CommunitySettingsScreenState extends State<CommunitySettingsScreen> {
         ),
       ),
     );
+  }
+}
+
+class _CurrentUserProfileArea extends StatelessWidget {
+  const _CurrentUserProfileArea({
+    required this.community,
+    required this.profileFuture,
+    required this.roleFuture,
+    required this.userXpCache,
+    required this.activeAsksStream,
+  });
+
+  final CommunityModel community;
+  final Future<UserProfileModel?> profileFuture;
+  final Future<String> roleFuture;
+  final CommunityUserXpCache? userXpCache;
+  final Stream<List<CommunityAskModel>>? activeAsksStream;
+
+  @override
+  Widget build(BuildContext context) => FutureBuilder<UserProfileModel?>(
+    future: profileFuture,
+    builder: (context, profileSnapshot) {
+      if (profileSnapshot.connectionState == ConnectionState.waiting) {
+        return const Padding(
+          padding: EdgeInsets.symmetric(vertical: 10),
+          child: LinearProgressIndicator(),
+        );
+      }
+
+      final profile = profileSnapshot.data;
+      if (profileSnapshot.hasError || profile == null) {
+        return const Padding(
+          padding: EdgeInsets.symmetric(vertical: 8),
+          child: Text(
+            'Your profile is currently unavailable.',
+            style: TextStyle(color: Color(0xFF475569)),
+          ),
+        );
+      }
+
+      return FutureBuilder<String>(
+        future: roleFuture,
+        builder: (context, roleSnapshot) {
+          final role = _roleLabel(roleSnapshot.data);
+          return Material(
+            type: MaterialType.transparency,
+            child: ListTile(
+              key: const ValueKey('community-settings-current-user-profile'),
+              contentPadding: const EdgeInsets.symmetric(vertical: 4),
+              leading: ChatUserAvatar(
+                displayName: profile.displayName,
+                userId: profile.userId,
+                photoUrl: profile.photoUrl,
+                radius: 24,
+              ),
+              title: Text(
+                profile.displayName,
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+              subtitle: Text('Community role: $role'),
+              trailing: const Icon(Icons.chevron_right_rounded),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => UserProfileScreen.community(
+                    communityId: community.communityId,
+                    communityName: community.name,
+                    userId: profile.userId,
+                    profileFuture: Future.value(
+                      UserProfileModel(
+                        userId: profile.userId,
+                        displayName: profile.displayName,
+                        photoUrl: profile.photoUrl,
+                        role: role,
+                        isCurrentUser: profile.isCurrentUser,
+                      ),
+                    ),
+                    activeAsksStream: activeAsksStream,
+                    communityUserXpCache: userXpCache,
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
+      );
+    },
+  );
+
+  String _roleLabel(String? role) {
+    final normalized = role?.trim();
+    if (normalized == null || normalized.isEmpty) return 'Member';
+    return '${normalized[0].toUpperCase()}${normalized.substring(1)}';
   }
 }
 
