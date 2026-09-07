@@ -9,6 +9,8 @@ import 'package:gubify/modules/moderation/blocking/models/user_block_model.dart'
 import 'package:gubify/modules/moderation/blocking/repositories/user_block_repository.dart';
 import 'package:gubify/modules/moderation/blocking/screens/blocked_users_screen.dart';
 import 'package:gubify/modules/moderation/blocking/services/user_block_service.dart';
+import 'package:gubify/modules/moderation/gub_reporting/models/gub_user_moderation_report.dart';
+import 'package:gubify/modules/moderation/gub_reporting/services/gub_user_moderation_service.dart';
 import 'package:gubify/modules/profile/models/user_profile_model.dart';
 import 'package:gubify/modules/profile/screens/user_profile_screen.dart';
 
@@ -90,6 +92,82 @@ void main() {
 
     expect(find.text('Block User'), findsNothing);
     expect(find.text('Blocked'), findsNothing);
+  });
+
+  testWidgets('other private Gub profile shows Report User and submits it', (
+    tester,
+  ) async {
+    final submittedReports = <GubUserModerationReport>[];
+    final reportService = GubUserModerationService.forTesting(
+      currentUserId: () => 'user-a',
+      loadGub: (_) async => const {
+        'name': 'Private Gub',
+        'deletionStatus': 'active',
+      },
+      loadMember: (_, _) async => const {'displayName': 'B'},
+      createReport: (report) async {
+        submittedReports.add(report);
+        return true;
+      },
+    );
+    final repository = _FakeRepository();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: UserProfileScreen(
+          gubId: 'gub-a',
+          userId: 'user-b',
+          userBlockService: _service(repository),
+          gubUserModerationService: reportService,
+          profileFuture: Future.value(_otherProfile),
+        ),
+      ),
+    );
+    await tester.pump();
+    repository.emitBlock(null);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Block User'), findsOneWidget);
+    expect(find.text('Report User'), findsOneWidget);
+    await tester.tap(find.text('Report User'));
+    await tester.pumpAndSettle();
+    expect(find.text('Report User'), findsNWidgets(2));
+
+    await tester.tap(find.byType(DropdownButtonFormField<String>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Spam').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Submit report'));
+    await tester.pumpAndSettle();
+
+    expect(submittedReports, hasLength(1));
+    expect(
+      submittedReports.single.reportId,
+      'user__gub__gub-a__user-b__user-a',
+    );
+  });
+
+  testWidgets('own private Gub profile has no Report User control', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: UserProfileScreen(
+          gubId: 'gub-a',
+          userId: 'user-a',
+          userBlockService: _service(_FakeRepository()),
+          profileFuture: Future.value(
+            const UserProfileModel(
+              userId: 'user-a',
+              displayName: 'A',
+              isCurrentUser: true,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Report User'), findsNothing);
   });
 
   testWidgets(

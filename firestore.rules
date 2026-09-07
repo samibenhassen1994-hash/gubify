@@ -1257,11 +1257,49 @@ service cloud.firestore {
         && reportId == 'answer__' + data.communityId + '__' + data.askId
           + '__' + data.targetId + '__' + request.auth.uid;
     }
+    function validGubUserReport(reportId) {
+      let data = request.resource.data;
+      let target = get(gubMemberPath(data.gubId, data.targetUserId)).data;
+      return data.keys().hasOnly([
+          'reportId','reporterId','gubId','targetType','targetId',
+          'targetUserId','reason','details','createdAt','status',
+          'gubNameSnapshot','targetNameSnapshot'
+        ])
+        && data.reportId == reportId
+        && data.reporterId == request.auth.uid
+        && data.gubId is string
+        && data.gubId.size() >= 1
+        && data.targetType == 'user'
+        && data.targetId is string
+        && data.targetId.size() >= 1
+        && data.targetUserId is string
+        && data.targetUserId == data.targetId
+        && data.targetUserId != request.auth.uid
+        && isGubMember(data.gubId)
+        && exists(gubPath(data.gubId))
+        && gubActive(data.gubId)
+        && exists(gubMemberPath(data.gubId, data.targetUserId))
+        && data.gubNameSnapshot == gubDoc(data.gubId).data.name
+        && data.targetNameSnapshot == target.displayName
+        && data.reason in [
+          'spam','harassment_or_bullying','hate_or_abusive_content',
+          'inappropriate_content','scam_or_fraud','impersonation','other'
+        ]
+        && data.details is string
+        && data.details.size() <= 500
+        && data.createdAt == request.time
+        && data.status == 'open'
+        && reportId == 'user__gub__' + data.gubId + '__'
+          + data.targetUserId + '__' + request.auth.uid;
+    }
     function validModerationReportCreate(reportId) {
-      return validCommunityReport(reportId)
-        || validCommunityUserReport(reportId)
-        || validCommunityAskReport(reportId)
-        || validCommunityAnswerReport(reportId);
+      let data = request.resource.data;
+      return data.keys().hasAny(['gubId'])
+        ? validGubUserReport(reportId)
+        : validCommunityReport(reportId)
+          || validCommunityUserReport(reportId)
+          || validCommunityAskReport(reportId)
+          || validCommunityAnswerReport(reportId);
     }
     function moderationTargetKeyForReport(data) {
       return data.targetType == 'community'

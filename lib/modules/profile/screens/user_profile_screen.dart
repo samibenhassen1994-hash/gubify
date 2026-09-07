@@ -12,6 +12,7 @@ import '../../community/widgets/community_profile_asks_section.dart';
 import '../../community/services/community_user_xp_cache.dart';
 import '../../community/widgets/community_user_xp_scope.dart';
 import '../../moderation/blocking/services/user_block_service.dart';
+import '../../moderation/gub_reporting/services/gub_user_moderation_service.dart';
 import '../models/user_profile_model.dart';
 import '../services/user_profile_service.dart';
 import 'user_activity_screen.dart';
@@ -25,6 +26,7 @@ class UserProfileScreen extends StatefulWidget {
   final Stream<List<CommunityAskModel>>? activeAsksStream;
   final CommunityUserXpCache? communityUserXpCache;
   final UserBlockService? userBlockService;
+  final GubUserModerationService? gubUserModerationService;
 
   const UserProfileScreen({
     super.key,
@@ -34,6 +36,7 @@ class UserProfileScreen extends StatefulWidget {
     this.activeAsksStream,
     this.communityUserXpCache,
     this.userBlockService,
+    this.gubUserModerationService,
   }) : communityId = null,
        communityName = null;
 
@@ -46,6 +49,7 @@ class UserProfileScreen extends StatefulWidget {
     this.activeAsksStream,
     this.communityUserXpCache,
     this.userBlockService,
+    this.gubUserModerationService,
   }) : gubId = null;
 
   @override
@@ -73,6 +77,9 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
   UserBlockService get _userBlockService =>
       widget.userBlockService ?? UserBlockService.instance;
+
+  GubUserModerationService get _gubUserModerationService =>
+      widget.gubUserModerationService ?? GubUserModerationService.instance;
 
   Future<void> _blockUser(String targetUserId) async {
     final confirmed = await showDialog<bool>(
@@ -194,6 +201,26 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                               CommunityModerationService.instance.reportUser(
                                 communityId: widget.communityId!,
                                 communityName: widget.communityName!,
+                                user: profile,
+                                reason: reason,
+                                details: details,
+                              ),
+                        ),
+                        icon: const Icon(Icons.flag_outlined),
+                        label: const Text('Report User'),
+                      ),
+                    ),
+                  ],
+                  if (widget.gubId != null && !profile.isCurrentUser) ...[
+                    const SizedBox(height: 18),
+                    Center(
+                      child: OutlinedButton.icon(
+                        onPressed: () => showCommunityReportDialog(
+                          context: context,
+                          title: 'Report User',
+                          onSubmit: (reason, details) =>
+                              _gubUserModerationService.reportUser(
+                                gubId: widget.gubId!,
                                 user: profile,
                                 reason: reason,
                                 details: details,

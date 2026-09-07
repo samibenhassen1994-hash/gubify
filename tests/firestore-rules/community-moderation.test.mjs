@@ -77,6 +77,23 @@ beforeEach(async () => {
       answerId: 'target', authorId: ids.target,
       authorDisplayName: 'Target User', text: 'Answer text', createdAt: joinedAt,
     });
+    await setDoc(doc(firestore, 'gubs', 'g1'), {
+      name: 'Private Gub',
+      ownerId: ids.owner,
+      deletionStatus: 'active',
+    });
+    for (const [uid, displayName] of [
+      [ids.owner, 'Gub Owner'],
+      [ids.member, 'Gub Member'],
+      [ids.target, 'Gub Target'],
+    ]) {
+      await setDoc(doc(firestore, 'gubs', 'g1', 'members', uid), {
+        uid,
+        displayName,
+        role: uid === ids.owner ? 'owner' : 'member',
+        joinedAt,
+      });
+    }
   });
 });
 
@@ -107,6 +124,22 @@ const userReport = (reporterId = ids.member, overrides = {}) => ({
   status: 'open',
   communityNameSnapshot: 'Safe Community',
   targetNameSnapshot: 'Target User',
+  ...overrides,
+});
+
+const gubUserReport = (reporterId = ids.member, overrides = {}) => ({
+  reportId: `user__gub__g1__${ids.target}__${reporterId}`,
+  reporterId,
+  gubId: 'g1',
+  targetType: 'user',
+  targetId: ids.target,
+  targetUserId: ids.target,
+  reason: 'harassment_or_bullying',
+  details: 'Repeated unwanted contact.',
+  createdAt: serverTimestamp(),
+  status: 'open',
+  gubNameSnapshot: 'Private Gub',
+  targetNameSnapshot: 'Gub Target',
   ...overrides,
 });
 
@@ -346,6 +379,68 @@ describe('central Community moderation reports', () => {
 
   test('member can report another Community member', () =>
     assertSucceeds(submitReport(ids.member, userReport())));
+
+  test('private Gub members and owners can report another Gub member', async () => {
+    await assertSucceeds(submitReport(ids.member, gubUserReport()));
+    await assertSucceeds(submitReport(ids.owner, gubUserReport(ids.owner)));
+    const summary = await readTargetSummary(`user__${ids.target}`);
+    assert.strictEqual(summary.data().reportCount, 2);
+    assert.strictEqual(summary.data().lastReportId, `user__gub__g1__${ids.target}__${ids.owner}`);
+  });
+
+  test('Community and private Gub user reports aggregate on one global target', async () => {
+    await assertSucceeds(submitReport(ids.member, userReport()));
+    await assertSucceeds(submitReport(ids.member, gubUserReport()));
+    const summary = await readTargetSummary(`user__${ids.target}`);
+    assert.strictEqual(summary.data().reportCount, 2);
+    assert.strictEqual(summary.data().lastReportId, `user__gub__g1__${ids.target}__${ids.member}`);
+  });
+
+  test('invalid private Gub user reports are denied', async () => {
+    await assertFails(submitReport(ids.outsider, gubUserReport(ids.outsider)));
+    await assertFails(submitReport(ids.member, gubUserReport(ids.member, {
+      reporterId: ids.other,
+    })));
+    await assertFails(submitReport(ids.member, gubUserReport(ids.member, {
+      targetId: ids.other,
+      targetUserId: ids.other,
+      reportId: `user__gub__g1__${ids.other}__${ids.member}`,
+    })));
+    await assertFails(submitReport(ids.target, gubUserReport(ids.target, {
+      targetId: ids.target,
+      targetUserId: ids.target,
+      reportId: `user__gub__g1__${ids.target}__${ids.target}`,
+    })));
+    await assertFails(submitReport(ids.member, gubUserReport(ids.member, {
+      reportId: `user__gub__g1__${ids.target}__wrong`,
+    })));
+    await assertFails(submitReport(ids.member, gubUserReport(ids.member, {
+      gubNameSnapshot: 'Forged Gub',
+    })));
+    await assertFails(submitReport(ids.member, gubUserReport(ids.member, {
+      targetNameSnapshot: 'Forged Target',
+    })));
+    await assertFails(submitReport(ids.member, gubUserReport(ids.member, {
+      reason: 'unsupported',
+    })));
+    await assertFails(submitReport(ids.member, gubUserReport(ids.member, {
+      details: 'x'.repeat(501),
+    })));
+    await assertFails(submitReport(ids.member, gubUserReport(ids.member, {
+      extra: 'field',
+    })));
+  });
+
+  test('private Gub reports retain atomic duplicate and privacy protections', async () => {
+    const report = gubUserReport();
+    await assertFails(setDoc(reportRef(ids.member, report.reportId), report));
+    await assertSucceeds(submitReport(ids.member, report));
+    await assertFails(setDoc(reportRef(ids.member, report.reportId), report));
+    const summary = await readTargetSummary(`user__${ids.target}`);
+    assert.strictEqual(summary.data().reportCount, 1);
+    await assertSucceeds(getDoc(reportRef(ids.member, report.reportId)));
+    await assertFails(getDoc(reportRef(ids.other, report.reportId)));
+  });
 
   test('member can report an Ask with an authoritative content snapshot', () =>
     assertSucceeds(submitReport(ids.member, {

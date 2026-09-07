@@ -185,31 +185,33 @@ void main() {
     expect(find.text('Activity'), findsNothing);
   });
 
-  testWidgets('Private Gub profiles retain their Activity section', (
-    tester,
-  ) async {
-    await tester.pumpWidget(
-      MaterialApp(
-        home: UserProfileScreen(
-          gubId: 'gub',
-          userId: _member.userId,
-          profileFuture: Future.value(
-            const UserProfileModel(
-              userId: 'member',
-              displayName: 'Alex',
-              role: 'member',
-              isCurrentUser: false,
+  testWidgets(
+    'Private Gub profiles retain Activity and expose Report User for another member',
+    (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: UserProfileScreen(
+            gubId: 'gub',
+            userId: _member.userId,
+            profileFuture: Future.value(
+              const UserProfileModel(
+                userId: 'member',
+                displayName: 'Alex',
+                role: 'member',
+                isCurrentUser: false,
+              ),
             ),
+            userBlockService: _userBlockService,
           ),
-          userBlockService: _userBlockService,
         ),
-      ),
-    );
-    await tester.pumpAndSettle();
+      );
+      await tester.pumpAndSettle();
 
-    expect(find.text('Activity'), findsOneWidget);
-    expect(find.text('Report User'), findsNothing);
-  });
+      expect(find.text('Activity'), findsOneWidget);
+      expect(find.text('Block User'), findsOneWidget);
+      expect(find.text('Report User'), findsOneWidget);
+    },
+  );
 
   testWidgets(
     'Report User appears only for another user in Community context',
