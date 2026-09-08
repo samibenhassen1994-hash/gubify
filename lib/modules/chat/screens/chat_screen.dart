@@ -4,6 +4,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../../../widgets/gub_screen_background.dart';
+import '../../community/moderation/widgets/community_report_dialog.dart';
+import '../../moderation/gub_reporting/services/gub_message_moderation_service.dart';
 import '../models/chat_message_model.dart';
 import '../services/chat_service.dart';
 import '../widgets/chat_message_bubble.dart';
@@ -418,100 +420,68 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  Future<void> _showMessageActions(ChatMessageModel message) async {
+  Future<void> _showMessageActions(
+    ChatMessageModel message,
+    String? currentUserId,
+  ) async {
+    final includeReportMessage =
+        currentUserId != null && message.senderId != currentUserId;
     if (_messageActionOpen ||
         (widget.onConvertToTask == null &&
             widget.onConvertToProposal == null &&
             widget.onConvertToSharedBudget == null &&
-            widget.onConvertToEvent == null)) {
+            widget.onConvertToEvent == null &&
+            !includeReportMessage)) {
       return;
     }
     _messageActionOpen = true;
 
-    final conversion = await showModalBottomSheet<_MessageConversion>(
+    final action = await showChatMessageActions(
       context: context,
-      useRootNavigator: true,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (sheetContext) {
-        return Padding(
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.viewInsetsOf(sheetContext).bottom,
-          ),
-          child: SafeArea(
-            top: false,
-            child: Container(
-              margin: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF8FAFC),
-                borderRadius: BorderRadius.circular(24),
-              ),
-              clipBehavior: Clip.antiAlias,
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const Padding(
-                      padding: EdgeInsets.fromLTRB(20, 20, 20, 12),
-                      child: Text(
-                        "Convert to",
-                        style: TextStyle(
-                          color: Color(0xFF0F172A),
-                          fontSize: 21,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                    for (
-                      var index = 0;
-                      index < _conversionOptions.length;
-                      index++
-                    ) ...[
-                      if (index > 0)
-                        const Divider(height: 1, indent: 68, endIndent: 16),
-                      _ConversionOptionTile(
-                        option: _conversionOptions[index],
-                        onTap: () => Navigator.pop(
-                          sheetContext,
-                          _conversionOptions[index].conversion,
-                        ),
-                      ),
-                    ],
-                    const SizedBox(height: 8),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        );
-      },
+      includeReportMessage: includeReportMessage,
     );
 
     if (!mounted) return;
-    if (conversion == null) {
+    if (action == null) {
       _messageActionOpen = false;
       return;
     }
 
-    if (conversion == _MessageConversion.task) {
+    if (action == ChatMessageAction.task) {
       widget.onConvertToTask?.call(message);
       return;
     }
 
-    if (conversion == _MessageConversion.proposal) {
+    if (action == ChatMessageAction.proposal) {
       widget.onConvertToProposal?.call(message);
       return;
     }
 
-    if (conversion == _MessageConversion.sharedBudget) {
+    if (action == ChatMessageAction.sharedBudget) {
       widget.onConvertToSharedBudget?.call(message);
       return;
     }
 
-    if (conversion == _MessageConversion.event) {
+    if (action == ChatMessageAction.event) {
       widget.onConvertToEvent?.call(message);
       return;
+    }
+
+    if (action == ChatMessageAction.reportMessage) {
+      try {
+        await showCommunityReportDialog(
+          context: context,
+          title: 'Report message',
+          onSubmit: (reason, details) => GubMessageModerationService.instance
+              .reportMessage(
+                message: message,
+                reason: reason,
+                details: details,
+              ),
+        );
+      } finally {
+        _messageActionOpen = false;
+      }
     }
   }
 
@@ -631,7 +601,10 @@ class _ChatScreenState extends State<ChatScreen> {
                                   onAvatarTap: () =>
                                       _openUserProfile(message.senderId),
                                   onLongPress: () =>
-                                      _showMessageActions(message),
+                                      _showMessageActions(
+                                        message,
+                                        currentUserId,
+                                      ),
                                 ),
                               ),
                           ],
@@ -700,10 +673,77 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 }
 
-enum _MessageConversion { task, event, proposal, sharedBudget }
+Future<ChatMessageAction?> showChatMessageActions({
+  required BuildContext context,
+  required bool includeReportMessage,
+}) => showModalBottomSheet<ChatMessageAction>(
+  context: context,
+  useRootNavigator: true,
+  isScrollControlled: true,
+  backgroundColor: Colors.transparent,
+  builder: (sheetContext) => Padding(
+    padding: EdgeInsets.only(
+      bottom: MediaQuery.viewInsetsOf(sheetContext).bottom,
+    ),
+    child: SafeArea(
+      top: false,
+      child: Container(
+        margin: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF8FAFC),
+          borderRadius: BorderRadius.circular(24),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Padding(
+                padding: EdgeInsets.fromLTRB(20, 20, 20, 12),
+                child: Text(
+                  'Convert to',
+                  style: TextStyle(
+                    color: Color(0xFF0F172A),
+                    fontSize: 21,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              for (var index = 0; index < _conversionOptions.length; index++) ...[
+                if (index > 0)
+                  const Divider(height: 1, indent: 68, endIndent: 16),
+                _ConversionOptionTile(
+                  option: _conversionOptions[index],
+                  onTap: () => Navigator.pop(
+                    sheetContext,
+                    _conversionOptions[index].conversion,
+                  ),
+                ),
+              ],
+              if (includeReportMessage) ...[
+                const Divider(height: 1, indent: 68, endIndent: 16),
+                _ConversionOptionTile(
+                  option: _reportMessageOption,
+                  onTap: () => Navigator.pop(
+                    sheetContext,
+                    ChatMessageAction.reportMessage,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
+      ),
+    ),
+  ),
+);
+
+enum ChatMessageAction { task, event, proposal, sharedBudget, reportMessage }
 
 class _ConversionOption {
-  final _MessageConversion conversion;
+  final ChatMessageAction conversion;
   final String label;
   final IconData icon;
   final Color color;
@@ -718,30 +758,37 @@ class _ConversionOption {
 
 const List<_ConversionOption> _conversionOptions = [
   _ConversionOption(
-    conversion: _MessageConversion.task,
+    conversion: ChatMessageAction.task,
     label: "Task",
     icon: Icons.task_alt_rounded,
     color: Color(0xFF2563EB),
   ),
   _ConversionOption(
-    conversion: _MessageConversion.proposal,
+    conversion: ChatMessageAction.proposal,
     label: "Proposal",
     icon: Icons.how_to_vote_outlined,
     color: Color(0xFF0891B2),
   ),
   _ConversionOption(
-    conversion: _MessageConversion.sharedBudget,
+    conversion: ChatMessageAction.sharedBudget,
     label: "Shared Budget",
     icon: Icons.euro_outlined,
     color: Color(0xFF059669),
   ),
   _ConversionOption(
-    conversion: _MessageConversion.event,
+    conversion: ChatMessageAction.event,
     label: "Event",
     icon: Icons.calendar_month_outlined,
     color: Color(0xFF7C3AED),
   ),
 ];
+
+const _reportMessageOption = _ConversionOption(
+  conversion: ChatMessageAction.reportMessage,
+  label: 'Report message',
+  icon: Icons.flag_outlined,
+  color: Color(0xFFDC2626),
+);
 
 class _ConversionOptionTile extends StatelessWidget {
   final _ConversionOption option;

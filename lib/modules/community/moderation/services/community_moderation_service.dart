@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../../models/community_model.dart';
 import '../../models/community_ask_answer_model.dart';
 import '../../models/community_ask_model.dart';
+import '../../models/community_chat_message_model.dart';
 import '../../../profile/models/user_profile_model.dart';
 import '../models/community_report_model.dart';
 import '../repositories/community_moderation_repository.dart';
@@ -92,6 +93,39 @@ class CommunityModerationService {
     );
   }
 
+  Future<void> reportMessage({
+    required CommunityChatMessageModel message,
+    required String communityName,
+    required String reason,
+    required String details,
+  }) async {
+    final reporterId = _currentUserId();
+    if (message.senderId == reporterId) {
+      throw ArgumentError.value(
+        message.senderId,
+        'message.senderId',
+        'Cannot report your own message.',
+      );
+    }
+    await _submit(
+      CommunityModerationReport(
+        reportId:
+            'message__community__${message.communityId}__${message.messageId}__$reporterId',
+        reporterId: reporterId,
+        communityId: message.communityId,
+        targetType: 'user',
+        targetId: message.senderId,
+        targetUserId: message.senderId,
+        messageId: message.messageId,
+        reason: reason,
+        details: details,
+        communityNameSnapshot: communityName,
+        targetNameSnapshot: message.senderName,
+        contentSnapshot: message.text,
+      ),
+    );
+  }
+
   Future<void> reportAnswer({
     required CommunityAskModel ask,
     required CommunityAskAnswerModel answer,
@@ -136,6 +170,7 @@ class CommunityModerationService {
       targetType: report.targetType,
       targetId: report.targetId,
       askId: report.askId,
+      messageId: report.messageId,
       targetUserId: report.targetUserId,
       contentSnapshot: report.contentSnapshot,
       reason: report.reason,

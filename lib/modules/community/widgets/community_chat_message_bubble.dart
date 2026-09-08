@@ -12,6 +12,7 @@ class CommunityChatMessageBubble extends StatelessWidget {
   final Stream<UserIdentity>? identity;
   final VoidCallback? onProfileTap;
   final VoidCallback? onCreateAsk;
+  final VoidCallback? onReportMessage;
   final int? xp;
 
   const CommunityChatMessageBubble({
@@ -22,6 +23,7 @@ class CommunityChatMessageBubble extends StatelessWidget {
     this.identity,
     this.onProfileTap,
     this.onCreateAsk,
+    this.onReportMessage,
     this.xp,
   });
 
@@ -128,7 +130,8 @@ class CommunityChatMessageBubble extends StatelessWidget {
           ),
         );
 
-        final interactiveBubble = onCreateAsk == null
+        final interactiveBubble =
+            onCreateAsk == null && onReportMessage == null
             ? bubble
             : GestureDetector(
                 onLongPress: () => _showMessageActions(context),
@@ -176,19 +179,40 @@ class CommunityChatMessageBubble extends StatelessWidget {
   }
 
   Future<void> _showMessageActions(BuildContext context) async {
-    final create = await showModalBottomSheet<bool>(
+    final action = await showModalBottomSheet<_CommunityMessageAction>(
       context: context,
       showDragHandle: true,
       useSafeArea: true,
       builder: (context) => SafeArea(
-        child: ListTile(
-          leading: const Icon(Icons.help_outline_rounded),
-          title: const Text('Create ask'),
-          onTap: () => Navigator.pop(context, true),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (onCreateAsk != null)
+              ListTile(
+                leading: const Icon(Icons.help_outline_rounded),
+                title: const Text('Create ask'),
+                onTap: () => Navigator.pop(
+                  context,
+                  _CommunityMessageAction.createAsk,
+                ),
+              ),
+            if (onReportMessage != null)
+              ListTile(
+                leading: const Icon(Icons.flag_outlined),
+                title: const Text('Report message'),
+                onTap: () => Navigator.pop(
+                  context,
+                  _CommunityMessageAction.reportMessage,
+                ),
+              ),
+          ],
         ),
       ),
     );
-    if (create == true) onCreateAsk?.call();
+    if (action == _CommunityMessageAction.createAsk) onCreateAsk?.call();
+    if (action == _CommunityMessageAction.reportMessage) {
+      onReportMessage?.call();
+    }
   }
 
   String _formatTime(DateTime date) {
@@ -197,3 +221,5 @@ class CommunityChatMessageBubble extends StatelessWidget {
     return "$hours:$minutes";
   }
 }
+
+enum _CommunityMessageAction { createAsk, reportMessage }
