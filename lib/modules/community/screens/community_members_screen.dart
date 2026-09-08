@@ -6,6 +6,7 @@ import '../../../widgets/gub_screen_background.dart';
 import '../../profile/screens/user_profile_screen.dart';
 import '../../profile/models/user_profile_model.dart';
 import '../models/community_model.dart';
+import '../../moderation/blocking/services/user_block_service.dart';
 import '../services/community_service.dart';
 import '../services/community_user_xp_cache.dart';
 import '../widgets/community_level_avatar.dart';
@@ -20,6 +21,7 @@ class CommunityMembersScreen extends StatelessWidget {
   final Future<void> Function(String userId)? onBan;
   final Future<UserProfileModel?> Function(String userId)? profileLoader;
   final CommunityUserXpCache? userXpCache;
+  final UserBlockService? userBlockService;
 
   const CommunityMembersScreen({
     super.key,
@@ -31,6 +33,7 @@ class CommunityMembersScreen extends StatelessWidget {
     this.onBan,
     this.profileLoader,
     this.userXpCache,
+    this.userBlockService,
   });
 
   @override
@@ -85,6 +88,7 @@ class CommunityMembersScreen extends StatelessWidget {
                     onBan: onBan,
                     profileLoader: profileLoader,
                     userXpCache: userXpCache,
+                    userBlockService: userBlockService,
                   ),
                 ),
               );
@@ -106,6 +110,7 @@ class _CommunityMemberTile extends StatelessWidget {
   final Future<void> Function(String userId)? onBan;
   final Future<UserProfileModel?> Function(String userId)? profileLoader;
   final CommunityUserXpCache? userXpCache;
+  final UserBlockService? userBlockService;
 
   const _CommunityMemberTile({
     required this.community,
@@ -117,6 +122,7 @@ class _CommunityMemberTile extends StatelessWidget {
     required this.onBan,
     required this.profileLoader,
     required this.userXpCache,
+    required this.userBlockService,
   });
 
   Future<void> _confirmAction(BuildContext context, String action) async {
@@ -202,6 +208,7 @@ class _CommunityMemberTile extends StatelessWidget {
                       ? null
                       : Stream.value(const []),
                   communityUserXpCache: userXpCache,
+                  userBlockService: userBlockService,
                 ),
               ),
             ),

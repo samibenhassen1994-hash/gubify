@@ -26,6 +26,7 @@ class CommunityModerationReport {
   final String targetType;
   final String targetId;
   final String? askId;
+  final String? messageId;
   final String? targetUserId;
   final String? contentSnapshot;
   final String reason;
@@ -44,6 +45,7 @@ class CommunityModerationReport {
     required this.communityNameSnapshot,
     this.targetUserId,
     this.askId,
+    this.messageId,
     this.contentSnapshot,
     this.targetNameSnapshot,
   });
@@ -66,6 +68,7 @@ class CommunityModerationReport {
     'targetType': targetType,
     'targetId': targetId,
     if (askId != null) 'askId': askId,
+    if (messageId != null) 'messageId': messageId,
     if (targetUserId != null) 'targetUserId': targetUserId,
     if (contentSnapshot != null) 'contentSnapshot': contentSnapshot,
     'reason': reason,

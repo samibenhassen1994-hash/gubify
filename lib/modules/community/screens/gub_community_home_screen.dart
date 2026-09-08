@@ -6,7 +6,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../screens/gub/my_gubs_screen.dart';
 import '../../../services/app_sound_service.dart';
+import '../../../services/auth_service.dart';
 import '../../../widgets/gub_screen_background.dart';
+import '../../profile/screens/account_screen.dart';
 import '../models/community_access_request_model.dart';
 import '../models/community_model.dart';
 import '../moderation/widgets/community_report_menu.dart';
@@ -261,6 +263,36 @@ class _GubCommunityHomeScreenState extends State<GubCommunityHomeScreen> {
                                   ),
                                 )
                               : null,
+                          accountSettingsAction: Tooltip(
+                            message: 'Account settings',
+                            child: Semantics(
+                              button: true,
+                              label: 'Account settings',
+                              child: Material(
+                                color: Colors.white.withValues(alpha: 0.84),
+                                shape: const CircleBorder(),
+                                child: InkWell(
+                                  customBorder: const CircleBorder(),
+                                  onTap: () => Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => AccountScreen(
+                                        authService: AuthService(),
+                                      ),
+                                    ),
+                                  ),
+                                  child: const SizedBox(
+                                    width: 48,
+                                    height: 48,
+                                    child: Icon(
+                                      Icons.manage_accounts,
+                                      color: Color(0xFF0F172A),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
                           settingsAction: Semantics(
                             button: true,
                             label: 'Community settings',

@@ -3,6 +3,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:gubify/modules/community/models/community_model.dart';
 import 'package:gubify/modules/community/screens/community_members_screen.dart';
 import 'package:gubify/modules/community/services/community_user_xp_cache.dart';
+import 'package:gubify/modules/moderation/blocking/models/user_block_model.dart';
+import 'package:gubify/modules/moderation/blocking/repositories/user_block_repository.dart';
+import 'package:gubify/modules/moderation/blocking/services/user_block_service.dart';
 import 'package:gubify/modules/profile/models/user_profile_model.dart';
 import 'package:gubify/modules/profile/screens/user_profile_screen.dart';
 
@@ -54,6 +57,7 @@ Widget _screen({
     onRemove: onRemove,
     onBan: onBan,
     profileLoader: profileLoader,
+    userBlockService: _userBlockService,
   ),
 );
 
@@ -169,6 +173,7 @@ void main() {
             ),
           ),
           activeAsksStream: Stream.value(const []),
+          userBlockService: _userBlockService,
         ),
       ),
     );
@@ -178,32 +183,43 @@ void main() {
     expect(find.text('member'), findsOneWidget);
     expect(find.text('You'), findsOneWidget);
     expect(find.text('Activity'), findsNothing);
+    expect(find.byIcon(Icons.more_vert), findsNothing);
+    expect(find.text('Report User'), findsNothing);
+    expect(find.text('Block User'), findsNothing);
   });
 
-  testWidgets('Private Gub profiles retain their Activity section', (
-    tester,
-  ) async {
-    await tester.pumpWidget(
-      MaterialApp(
-        home: UserProfileScreen(
-          gubId: 'gub',
-          userId: _member.userId,
-          profileFuture: Future.value(
-            const UserProfileModel(
-              userId: 'member',
-              displayName: 'Alex',
-              role: 'member',
-              isCurrentUser: false,
+  testWidgets(
+    'Private Gub profiles retain Activity and expose Report User for another member',
+    (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: UserProfileScreen(
+            gubId: 'gub',
+            userId: _member.userId,
+            profileFuture: Future.value(
+              const UserProfileModel(
+                userId: 'member',
+                displayName: 'Alex',
+                role: 'member',
+                isCurrentUser: false,
+              ),
             ),
+            userBlockService: _userBlockService,
           ),
         ),
-      ),
-    );
-    await tester.pumpAndSettle();
+      );
+      await tester.pumpAndSettle();
 
-    expect(find.text('Activity'), findsOneWidget);
-    expect(find.text('Report User'), findsNothing);
-  });
+      expect(find.text('Activity'), findsOneWidget);
+      expect(find.byIcon(Icons.more_vert), findsOneWidget);
+      expect(find.text('Block User'), findsNothing);
+      expect(find.text('Report User'), findsNothing);
+      await tester.tap(find.byIcon(Icons.more_vert));
+      await tester.pumpAndSettle();
+      expect(find.text('Block User'), findsOneWidget);
+      expect(find.text('Report User'), findsOneWidget);
+    },
+  );
 
   testWidgets(
     'Report User appears only for another user in Community context',
@@ -226,12 +242,46 @@ void main() {
               ),
             ),
             activeAsksStream: Stream.value(const []),
+            userBlockService: _userBlockService,
           ),
         ),
       );
       await tester.pumpAndSettle();
 
+      expect(find.byIcon(Icons.more_vert), findsOneWidget);
+      await tester.tap(find.byIcon(Icons.more_vert));
+      await tester.pumpAndSettle();
       expect(find.text('Report User'), findsOneWidget);
     },
   );
+}
+
+final _userBlockService = UserBlockService.forTesting(
+  currentUserId: () => 'viewer',
+  repository: _NoopUserBlockRepository(),
+);
+
+class _NoopUserBlockRepository implements UserBlockRepository {
+  @override
+  Future<void> blockUser({
+    required String blockerUserId,
+    required String blockedUserId,
+  }) async {}
+
+  @override
+  Stream<UserBlockModel?> blockStream({
+    required String blockerUserId,
+    required String blockedUserId,
+  }) => Stream.value(null);
+
+  @override
+  Stream<List<UserBlockModel>> blockedUsersStream({
+    required String blockerUserId,
+  }) => Stream.value(const <UserBlockModel>[]);
+
+  @override
+  Future<void> unblockUser({
+    required String blockerUserId,
+    required String blockedUserId,
+  }) async {}
 }

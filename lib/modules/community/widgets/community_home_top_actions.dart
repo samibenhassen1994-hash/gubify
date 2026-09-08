@@ -6,12 +6,14 @@ class CommunityHomeTopActions extends StatelessWidget {
     required this.isKeyboardOpen,
     this.pendingRequestsAction,
     this.reportAction,
+    required this.accountSettingsAction,
     required this.settingsAction,
   });
 
   final bool isKeyboardOpen;
   final Widget? pendingRequestsAction;
   final Widget? reportAction;
+  final Widget accountSettingsAction;
   final Widget settingsAction;
 
   @override
@@ -19,6 +21,7 @@ class CommunityHomeTopActions extends StatelessWidget {
     final actions = <Widget>[
       ?pendingRequestsAction,
       if (!isKeyboardOpen) ?reportAction,
+      accountSettingsAction,
       if (!isKeyboardOpen) settingsAction,
     ];
 

@@ -7,6 +7,8 @@ import 'package:flutter/material.dart';
 import '../../chat/widgets/chat_message_composer.dart';
 import '../models/community_chat_message_model.dart';
 import '../models/community_ask_model.dart';
+import '../moderation/services/community_moderation_service.dart';
+import '../moderation/widgets/community_report_dialog.dart';
 import '../restrictions/models/community_restriction_model.dart';
 import '../restrictions/services/community_restriction_service.dart';
 import '../services/community_chat_service.dart';
@@ -161,6 +163,19 @@ class _CommunityChatViewState extends State<CommunityChatView> {
       }
     }
   }
+
+  Future<void> _reportMessage(CommunityChatMessageModel message) =>
+      showCommunityReportDialog(
+        context: context,
+        title: 'Report message',
+        onSubmit: (reason, details) => CommunityModerationService.instance
+            .reportMessage(
+              message: message,
+              communityName: widget.communityName,
+              reason: reason,
+              details: details,
+            ),
+      );
 
   void _openProfile(CommunityChatMessageModel message) {
     final callback = widget.onOpenProfile;
@@ -476,6 +491,11 @@ class _CommunityChatViewState extends State<CommunityChatView> {
                                               message.messageId,
                                             )
                                         ? () => _startAsk(message)
+                                        : null,
+                                    onReportMessage:
+                                        currentUserId != null &&
+                                            message.senderId != currentUserId
+                                        ? () => _reportMessage(message)
                                         : null,
                                   ),
                               ],

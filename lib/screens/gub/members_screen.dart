@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../services/member_service.dart';
 import '../../widgets/gub_content_card.dart';
 import '../../widgets/gub_screen_background.dart';
+import '../../modules/profile/screens/user_profile_screen.dart';
 import 'my_gubs_screen.dart';
 
 class MembersScreen extends StatelessWidget {
@@ -101,10 +102,7 @@ class MembersScreen extends StatelessWidget {
                 return Card(
                   margin: const EdgeInsets.only(bottom: 12),
                   child: ListTile(
-                    leading: CircleAvatar(
-                      backgroundColor: Colors.blue.shade100,
-                      child: const Icon(Icons.person),
-                    ),
+                    leading: GubMemberAvatar(gubId: gubId, userId: uid),
                     title: Text(member["displayName"] ?? "User"),
                     subtitle: Text(isMe ? "You" : (member["role"] ?? "Member")),
 
@@ -219,4 +217,34 @@ class MembersScreen extends StatelessWidget {
       ),
     );
   }
+}
+
+class GubMemberAvatar extends StatelessWidget {
+  const GubMemberAvatar({
+    super.key,
+    required this.gubId,
+    required this.userId,
+    this.profileScreenBuilder,
+  });
+
+  final String gubId;
+  final String userId;
+  final Widget Function(String gubId, String userId)? profileScreenBuilder;
+
+  @override
+  Widget build(BuildContext context) => InkWell(
+    key: ValueKey('gub-member-avatar-$userId'),
+    customBorder: const CircleBorder(),
+    onTap: () => Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) =>
+            profileScreenBuilder?.call(gubId, userId) ??
+            UserProfileScreen(gubId: gubId, userId: userId),
+      ),
+    ),
+    child: CircleAvatar(
+      backgroundColor: Colors.blue.shade100,
+      child: const Icon(Icons.person),
+    ),
+  );
 }

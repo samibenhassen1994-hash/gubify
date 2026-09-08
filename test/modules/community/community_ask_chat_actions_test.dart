@@ -39,11 +39,15 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Create ask'), findsOneWidget);
+    expect(find.text('Report message'), findsNothing);
     await tester.tap(find.text('Create ask'));
     expect(opened, isTrue);
   });
 
-  testWidgets('another user message has no Create ask action', (tester) async {
+  testWidgets('another user message exposes only Report message', (
+    tester,
+  ) async {
+    var reported = false;
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
@@ -51,6 +55,7 @@ void main() {
             message: _message(senderId: 'other'),
             isCurrentUser: false,
             identity: Stream.value(const UserIdentity.existing('Sami')),
+            onReportMessage: () => reported = true,
           ),
         ),
       ),
@@ -60,6 +65,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Create ask'), findsNothing);
+    expect(find.text('Report message'), findsOneWidget);
+    await tester.tap(find.text('Report message'));
+    await tester.pumpAndSettle();
+    expect(reported, isTrue);
   });
 
   testWidgets('Community chat avatar renders the supplied shared XP level', (

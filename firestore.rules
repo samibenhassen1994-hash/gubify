@@ -1217,6 +1217,33 @@ service cloud.firestore {
         && reportId == 'user__' + data.communityId + '__'
           + data.targetUserId + '__' + request.auth.uid;
     }
+    function validCommunityMessageReport(reportId) {
+      let data = request.resource.data;
+      let messagePath = /databases/$(database)/documents/communities/$(data.communityId)/messages/$(data.messageId);
+      let message = get(messagePath).data;
+      return data.keys().hasOnly([
+          'reportId','reporterId','communityId','targetType','targetId',
+          'targetUserId','messageId','reason','details','createdAt','status',
+          'communityNameSnapshot','targetNameSnapshot','contentSnapshot'
+        ])
+        && validModerationReportCommon(reportId)
+        && isCommunityMember(data.communityId)
+        && data.targetType == 'user'
+        && data.messageId is string
+        && data.messageId.size() >= 1
+        && exists(messagePath)
+        && message.messageId == data.messageId
+        && message.communityId == data.communityId
+        && message.createdAt
+          >= get(communityMemberPath(data.communityId, request.auth.uid)).data.joinedAt
+        && data.targetId == message.senderId
+        && data.targetUserId == message.senderId
+        && data.targetUserId != request.auth.uid
+        && data.targetNameSnapshot == message.senderName
+        && data.contentSnapshot == message.text
+        && reportId == 'message__community__' + data.communityId + '__'
+          + data.messageId + '__' + request.auth.uid;
+    }
     function validCommunityAskReport(reportId) {
       let data = request.resource.data;
       let ask = get(communityAskPath(data.communityId, data.targetId)).data;
@@ -1257,11 +1284,96 @@ service cloud.firestore {
         && reportId == 'answer__' + data.communityId + '__' + data.askId
           + '__' + data.targetId + '__' + request.auth.uid;
     }
+    function validGubUserReport(reportId) {
+      let data = request.resource.data;
+      let target = get(gubMemberPath(data.gubId, data.targetUserId)).data;
+      return data.keys().hasOnly([
+          'reportId','reporterId','gubId','targetType','targetId',
+          'targetUserId','reason','details','createdAt','status',
+          'gubNameSnapshot','targetNameSnapshot'
+        ])
+        && data.reportId == reportId
+        && data.reporterId == request.auth.uid
+        && data.gubId is string
+        && data.gubId.size() >= 1
+        && data.targetType == 'user'
+        && data.targetId is string
+        && data.targetId.size() >= 1
+        && data.targetUserId is string
+        && data.targetUserId == data.targetId
+        && data.targetUserId != request.auth.uid
+        && isGubMember(data.gubId)
+        && exists(gubPath(data.gubId))
+        && gubActive(data.gubId)
+        && exists(gubMemberPath(data.gubId, data.targetUserId))
+        && data.gubNameSnapshot == gubDoc(data.gubId).data.name
+        && data.targetNameSnapshot == target.displayName
+        && data.reason in [
+          'spam','harassment_or_bullying','hate_or_abusive_content',
+          'inappropriate_content','scam_or_fraud','impersonation','other'
+        ]
+        && data.details is string
+        && data.details.size() <= 500
+        && data.createdAt == request.time
+        && data.status == 'open'
+        && reportId == 'user__gub__' + data.gubId + '__'
+          + data.targetUserId + '__' + request.auth.uid;
+    }
+    function validGubMessageReport(reportId) {
+      let data = request.resource.data;
+      let message = get(messagePath(data.gubId, data.messageId)).data;
+      return data.keys().hasOnly([
+          'reportId','reporterId','gubId','targetType','targetId',
+          'targetUserId','messageId','reason','details','createdAt','status',
+          'gubNameSnapshot','targetNameSnapshot','contentSnapshot'
+        ])
+        && data.reportId == reportId
+        && data.reporterId == request.auth.uid
+        && data.gubId is string
+        && data.gubId.size() >= 1
+        && data.targetType == 'user'
+        && data.targetId is string
+        && data.targetId.size() >= 1
+        && data.targetUserId is string
+        && data.messageId is string
+        && data.messageId.size() >= 1
+        && exists(gubPath(data.gubId))
+        && gubActive(data.gubId)
+        && isGubMember(data.gubId)
+        && exists(messagePath(data.gubId, data.messageId))
+        && message.messageId == data.messageId
+        && message.gubId == data.gubId
+        && message.createdAt
+          >= get(gubMemberPath(data.gubId, request.auth.uid)).data.joinedAt
+        && data.targetId == message.senderId
+        && data.targetUserId == message.senderId
+        && data.targetUserId != request.auth.uid
+        && data.gubNameSnapshot == gubDoc(data.gubId).data.name
+        && data.targetNameSnapshot == message.senderName
+        && data.contentSnapshot == message.text
+        && data.reason in [
+          'spam','harassment_or_bullying','hate_or_abusive_content',
+          'inappropriate_content','scam_or_fraud','impersonation','other'
+        ]
+        && data.details is string
+        && data.details.size() <= 500
+        && data.createdAt == request.time
+        && data.status == 'open'
+        && reportId == 'message__gub__' + data.gubId + '__'
+          + data.messageId + '__' + request.auth.uid;
+    }
     function validModerationReportCreate(reportId) {
-      return validCommunityReport(reportId)
-        || validCommunityUserReport(reportId)
-        || validCommunityAskReport(reportId)
-        || validCommunityAnswerReport(reportId);
+      let data = request.resource.data;
+      return data.keys().hasAny(['gubId'])
+        ? data.keys().hasAny(['messageId'])
+          ? validGubMessageReport(reportId)
+          : validGubUserReport(reportId)
+        : data.keys().hasAll(['communityId','messageId'])
+          ? validCommunityMessageReport(reportId)
+          : validCommunityReport(reportId)
+            || validCommunityUserReport(reportId)
+            || validCommunityAskReport(reportId)
+            || validCommunityAnswerReport(reportId);
     }
     function moderationTargetKeyForReport(data) {
       return data.targetType == 'community'
@@ -1555,6 +1667,15 @@ service cloud.firestore {
             && validCommunityCopyData(request.resource.data, id, uid, 'member'));
         allow delete: if (linkedCommunityAccount() && own(uid)) || communityDeletingOwner(id)
           || communityOwnerRemovingMember(id, uid);
+      }
+      match /blockedUsers/{blockedUid} {
+        allow get, list: if own(uid);
+        allow create: if own(uid)
+          && uid != blockedUid
+          && request.resource.data.keys().hasOnly(['blockedUserId', 'blockedAt'])
+          && request.resource.data.blockedUserId == blockedUid
+          && request.resource.data.blockedAt == request.time;
+        allow delete: if own(uid);
       }
     }
 

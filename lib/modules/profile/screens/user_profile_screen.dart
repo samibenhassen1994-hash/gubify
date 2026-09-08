@@ -11,6 +11,8 @@ import '../../community/widgets/community_level_avatar.dart';
 import '../../community/widgets/community_profile_asks_section.dart';
 import '../../community/services/community_user_xp_cache.dart';
 import '../../community/widgets/community_user_xp_scope.dart';
+import '../../moderation/blocking/services/user_block_service.dart';
+import '../../moderation/gub_reporting/services/gub_user_moderation_service.dart';
 import '../models/user_profile_model.dart';
 import '../services/user_profile_service.dart';
 import 'user_activity_screen.dart';
@@ -23,6 +25,8 @@ class UserProfileScreen extends StatefulWidget {
   final Future<UserProfileModel?>? profileFuture;
   final Stream<List<CommunityAskModel>>? activeAsksStream;
   final CommunityUserXpCache? communityUserXpCache;
+  final UserBlockService? userBlockService;
+  final GubUserModerationService? gubUserModerationService;
 
   const UserProfileScreen({
     super.key,
@@ -31,6 +35,8 @@ class UserProfileScreen extends StatefulWidget {
     this.profileFuture,
     this.activeAsksStream,
     this.communityUserXpCache,
+    this.userBlockService,
+    this.gubUserModerationService,
   }) : communityId = null,
        communityName = null;
 
@@ -42,6 +48,8 @@ class UserProfileScreen extends StatefulWidget {
     this.profileFuture,
     this.activeAsksStream,
     this.communityUserXpCache,
+    this.userBlockService,
+    this.gubUserModerationService,
   }) : gubId = null;
 
   @override
@@ -65,6 +73,74 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                 communityId: widget.communityId!,
                 userId: widget.userId,
               ));
+  }
+
+  UserBlockService get _userBlockService =>
+      widget.userBlockService ?? UserBlockService.instance;
+
+  GubUserModerationService get _gubUserModerationService =>
+      widget.gubUserModerationService ?? GubUserModerationService.instance;
+
+  Future<void> _blockUser(String targetUserId) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Block User?'),
+        content: const Text(
+          'This user will be added to your blocked users list.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Block'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || confirmed != true) return;
+    try {
+      await _userBlockService.blockUser(targetUserId);
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('User blocked.')));
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Unable to block user.')));
+    }
+  }
+
+  Future<void> _reportUser(UserProfileModel profile) {
+    if (widget.communityId != null) {
+      return showCommunityReportDialog(
+        context: context,
+        title: 'Report User',
+        onSubmit: (reason, details) =>
+            CommunityModerationService.instance.reportUser(
+              communityId: widget.communityId!,
+              communityName: widget.communityName!,
+              user: profile,
+              reason: reason,
+              details: details,
+            ),
+      );
+    }
+    return showCommunityReportDialog(
+      context: context,
+      title: 'Report User',
+      onSubmit: (reason, details) => _gubUserModerationService.reportUser(
+        gubId: widget.gubId!,
+        user: profile,
+        reason: reason,
+        details: details,
+      ),
+    );
   }
 
   @override
@@ -108,28 +184,23 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
               Widget content(int? communityXp) => ListView(
                 padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
                 children: [
-                  _ProfileHeader(profile: profile, communityXp: communityXp),
-                  if (widget.communityId != null && !profile.isCurrentUser) ...[
-                    const SizedBox(height: 18),
-                    Center(
-                      child: OutlinedButton.icon(
-                        onPressed: () => showCommunityReportDialog(
-                          context: context,
-                          title: 'Report User',
-                          onSubmit: (reason, details) =>
-                              CommunityModerationService.instance.reportUser(
-                                communityId: widget.communityId!,
-                                communityName: widget.communityName!,
-                                user: profile,
-                                reason: reason,
-                                details: details,
-                              ),
-                        ),
-                        icon: const Icon(Icons.flag_outlined),
-                        label: const Text('Report User'),
+                  if (profile.isCurrentUser)
+                    _ProfileHeader(profile: profile, communityXp: communityXp)
+                  else
+                    StreamBuilder<bool>(
+                      stream: _userBlockService.isUserBlockedStream(
+                        profile.userId,
+                      ),
+                      builder: (context, blockSnapshot) => _ProfileHeader(
+                        profile: profile,
+                        communityXp: communityXp,
+                        isBlocked: blockSnapshot.data,
+                        onReport: () => _reportUser(profile),
+                        onBlock: blockSnapshot.data == false
+                            ? () => _blockUser(profile.userId)
+                            : null,
                       ),
                     ),
-                  ],
                   if (widget.communityId != null) ...[
                     const SizedBox(height: 30),
                     if (widget.activeAsksStream != null)
@@ -191,66 +262,125 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 class _ProfileHeader extends StatelessWidget {
   final UserProfileModel profile;
   final int? communityXp;
+  final bool? isBlocked;
+  final VoidCallback? onReport;
+  final VoidCallback? onBlock;
 
-  const _ProfileHeader({required this.profile, required this.communityXp});
+  const _ProfileHeader({
+    required this.profile,
+    required this.communityXp,
+    this.isBlocked,
+    this.onReport,
+    this.onBlock,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        if (communityXp == null)
-          ChatUserAvatar(
-            displayName: profile.displayName,
-            userId: profile.userId,
-            photoUrl: profile.photoUrl,
-            radius: 42,
-          )
-        else
-          CommunityLevelAvatar(
-            displayName: profile.displayName,
-            userId: profile.userId,
-            photoUrl: profile.photoUrl,
-            radius: 42,
-            xp: communityXp!,
-          ),
-        const SizedBox(height: 14),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Flexible(
-              child: Text(
-                profile.displayName,
-                textAlign: TextAlign.center,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.w700,
+    final isOtherUser = !profile.isCurrentUser;
+    final blockLabel = isBlocked == true ? 'Blocked' : 'Block User';
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Stack(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
+            child: Column(
+              children: [
+                if (communityXp == null)
+                  ChatUserAvatar(
+                    displayName: profile.displayName,
+                    userId: profile.userId,
+                    photoUrl: profile.photoUrl,
+                    radius: 42,
+                  )
+                else
+                  CommunityLevelAvatar(
+                    displayName: profile.displayName,
+                    userId: profile.userId,
+                    photoUrl: profile.photoUrl,
+                    radius: 42,
+                    xp: communityXp!,
+                  ),
+                const SizedBox(height: 14),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Flexible(
+                      child: Text(
+                        profile.displayName,
+                        textAlign: TextAlign.center,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.headlineSmall
+                            ?.copyWith(fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                    if (profile.isCurrentUser) ...[
+                      const SizedBox(width: 8),
+                      const Chip(
+                        visualDensity: VisualDensity.compact,
+                        label: Text('You'),
+                      ),
+                    ],
+                  ],
                 ),
+                if (profile.role != null) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    profile.role!,
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodyMedium?.copyWith(color: Colors.black54),
+                  ),
+                ],
+                if (communityXp != null) ...[
+                  const SizedBox(height: 18),
+                  _CommunityLevelCard(
+                    level: CommunityLevel.fromXp(communityXp!),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          if (isOtherUser)
+            Positioned(
+              top: 4,
+              right: 4,
+              child: PopupMenuButton<String>(
+                icon: const Icon(Icons.more_vert),
+                onSelected: (action) {
+                  if (action == 'report') {
+                    onReport?.call();
+                  }
+                  if (action == 'block') {
+                    onBlock?.call();
+                  }
+                },
+                itemBuilder: (context) => [
+                  const PopupMenuItem(
+                    value: 'report',
+                    child: ListTile(
+                      leading: Icon(Icons.flag_outlined),
+                      title: Text('Report User'),
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: 'block',
+                    enabled: isBlocked == false,
+                    child: ListTile(
+                      leading: Icon(
+                        isBlocked == true
+                            ? Icons.block_rounded
+                            : Icons.block_outlined,
+                      ),
+                      title: Text(blockLabel),
+                    ),
+                  ),
+                ],
               ),
             ),
-            if (profile.isCurrentUser) ...[
-              const SizedBox(width: 8),
-              const Chip(
-                visualDensity: VisualDensity.compact,
-                label: Text("You"),
-              ),
-            ],
-          ],
-        ),
-        if (profile.role != null) ...[
-          const SizedBox(height: 6),
-          Text(
-            profile.role!,
-            style: Theme.of(
-              context,
-            ).textTheme.bodyMedium?.copyWith(color: Colors.black54),
-          ),
         ],
-        if (communityXp != null) ...[
-          const SizedBox(height: 18),
-          _CommunityLevelCard(level: CommunityLevel.fromXp(communityXp!)),
-        ],
-      ],
+      ),
     );
   }
 }

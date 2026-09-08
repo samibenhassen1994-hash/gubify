@@ -36,7 +36,7 @@ class GubContentCard extends StatelessWidget {
               ),
             ],
       ),
-      child: child,
+      child: Material(type: MaterialType.transparency, child: child),
     );
   }
 }

@@ -4,19 +4,54 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../../../config/app_limits.dart';
 import '../../../repositories/user_repository.dart';
 import '../../../services/app_sound_service.dart';
+import '../../moderation/blocking/models/user_block_model.dart';
+import '../../moderation/blocking/services/user_block_service.dart';
+import '../../moderation/blocking/utils/user_block_message_visibility.dart';
 import '../models/community_chat_message_model.dart';
 import '../repositories/community_chat_repository.dart';
 
 class CommunityChatService {
-  CommunityChatService._();
+  CommunityChatService._({
+    Future<Timestamp?> Function(String communityId)? membershipBoundary,
+    Stream<List<CommunityChatMessageModel>> Function(
+      String communityId,
+      Timestamp boundary,
+    )?
+    messages,
+    Stream<List<UserBlockModel>> Function()? blockedUsers,
+  }) : _membershipBoundaryOverride = membershipBoundary,
+       _messagesOverride = messages,
+       _blockedUsersOverride = blockedUsers;
 
   static final CommunityChatService instance = CommunityChatService._();
 
   static const int maxMessageLength = AppLimits.communityMessageMaxLength;
 
-  final FirebaseAuth _auth = FirebaseAuth.instance;
+  factory CommunityChatService.forTesting({
+    required Future<Timestamp?> Function(String communityId) membershipBoundary,
+    required Stream<List<CommunityChatMessageModel>> Function(
+      String communityId,
+      Timestamp boundary,
+    )
+    messages,
+    required Stream<List<UserBlockModel>> Function() blockedUsers,
+  }) => CommunityChatService._(
+    membershipBoundary: membershipBoundary,
+    messages: messages,
+    blockedUsers: blockedUsers,
+  );
 
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final Future<Timestamp?> Function(String communityId)?
+  _membershipBoundaryOverride;
+  final Stream<List<CommunityChatMessageModel>> Function(
+    String communityId,
+    Timestamp boundary,
+  )?
+  _messagesOverride;
+  final Stream<List<UserBlockModel>> Function()? _blockedUsersOverride;
+
+  FirebaseAuth get _auth => FirebaseAuth.instance;
+  FirebaseFirestore get _firestore => FirebaseFirestore.instance;
 
   Stream<List<CommunityChatMessageModel>> messagesStream(String communityId) =>
       Stream.fromFuture(_membershipBoundary(communityId)).asyncExpand((
@@ -25,13 +60,17 @@ class CommunityChatService {
         if (boundary == null) {
           return Stream.value(const <CommunityChatMessageModel>[]);
         }
-        return CommunityChatRepository.instance.messagesStream(
-          communityId: communityId,
-          membershipBoundary: boundary,
+        return filterUserBlockedMessages(
+          messagesStream: _messages(communityId, boundary),
+          blocksStream: _blockedUsers(),
+          senderId: (message) => message.senderId,
+          createdAt: (message) => message.createdAt,
         );
       });
 
   Future<Timestamp?> _membershipBoundary(String communityId) async {
+    final override = _membershipBoundaryOverride;
+    if (override != null) return override(communityId);
     final user = _auth.currentUser;
     if (user == null) return null;
 
@@ -44,6 +83,20 @@ class CommunityChatService {
     final joinedAt = membership.data()?['joinedAt'];
     return membership.exists && joinedAt is Timestamp ? joinedAt : null;
   }
+
+  Stream<List<CommunityChatMessageModel>> _messages(
+    String communityId,
+    Timestamp boundary,
+  ) =>
+      _messagesOverride?.call(communityId, boundary) ??
+      CommunityChatRepository.instance.messagesStream(
+        communityId: communityId,
+        membershipBoundary: boundary,
+      );
+
+  Stream<List<UserBlockModel>> _blockedUsers() =>
+      _blockedUsersOverride?.call() ??
+      UserBlockService.instance.blockedUsersStream();
 
   Future<void> sendMessage({
     required String communityId,

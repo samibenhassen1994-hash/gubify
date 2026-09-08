@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gubify/modules/community/models/community_ask_model.dart';
 import 'package:gubify/modules/community/models/community_ask_answer_model.dart';
+import 'package:gubify/modules/community/models/community_chat_message_model.dart';
 import 'package:gubify/modules/community/moderation/models/community_report_model.dart';
 import 'package:gubify/modules/community/moderation/services/community_moderation_service.dart';
 import 'package:gubify/modules/community/widgets/community_ask_card.dart';
@@ -113,6 +114,100 @@ void main() {
       expect(reports[1].contentSnapshot, 'Answer content');
     },
   );
+
+  test('report service creates a Community message report for its author', (
+    ) async {
+    final reports = <CommunityModerationReport>[];
+    final service = CommunityModerationService.forTesting(
+      currentUserId: () => 'reporter',
+      createReport: (report) async {
+        reports.add(report);
+        return true;
+      },
+    );
+    final message = CommunityChatMessageModel(
+      messageId: 'message-1',
+      communityId: 'community-1',
+      senderId: 'author-1',
+      senderName: 'Author',
+      text: 'Message content',
+      createdAt: Timestamp(3, 0),
+    );
+
+    await service.reportMessage(
+      message: message,
+      communityName: 'Community',
+      reason: 'spam',
+      details: ' details ',
+    );
+
+    expect(reports, hasLength(1));
+    expect(
+      reports.single.reportId,
+      'message__community__community-1__message-1__reporter',
+    );
+    expect(reports.single.targetType, 'user');
+    expect(reports.single.targetId, 'author-1');
+    expect(reports.single.targetUserId, 'author-1');
+    expect(reports.single.messageId, 'message-1');
+    expect(reports.single.contentSnapshot, 'Message content');
+    expect(reports.single.targetNameSnapshot, 'Author');
+    expect(reports.single.details, 'details');
+    expect(reports.single.moderationTargetKey, 'user__author-1');
+  });
+
+  test('Community message self-report is rejected before writing', () async {
+    var writes = 0;
+    final service = CommunityModerationService.forTesting(
+      currentUserId: () => 'author-1',
+      createReport: (_) async {
+        writes++;
+        return true;
+      },
+    );
+
+    await expectLater(
+      service.reportMessage(
+        message: CommunityChatMessageModel(
+          messageId: 'message-1',
+          communityId: 'community-1',
+          senderId: 'author-1',
+          senderName: 'Author',
+          text: 'Message content',
+          createdAt: Timestamp(3, 0),
+        ),
+        communityName: 'Community',
+        reason: 'spam',
+        details: '',
+      ),
+      throwsArgumentError,
+    );
+    expect(writes, 0);
+  });
+
+  test('duplicate Community message report uses the shared error', () {
+    final service = CommunityModerationService.forTesting(
+      currentUserId: () => 'reporter',
+      createReport: (_) async => false,
+    );
+
+    expect(
+      service.reportMessage(
+        message: CommunityChatMessageModel(
+          messageId: 'message-1',
+          communityId: 'community-1',
+          senderId: 'author-1',
+          senderName: 'Author',
+          text: 'Message content',
+          createdAt: Timestamp(3, 0),
+        ),
+        communityName: 'Community',
+        reason: 'spam',
+        details: '',
+      ),
+      throwsA(isA<CommunityReportAlreadyExistsException>()),
+    );
+  });
 
   testWidgets('long press reports another user Ask without changing tap', (
     tester,
