@@ -183,6 +183,9 @@ void main() {
     expect(find.text('member'), findsOneWidget);
     expect(find.text('You'), findsOneWidget);
     expect(find.text('Activity'), findsNothing);
+    expect(find.byIcon(Icons.more_vert), findsNothing);
+    expect(find.text('Report User'), findsNothing);
+    expect(find.text('Block User'), findsNothing);
   });
 
   testWidgets(
@@ -208,6 +211,11 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Activity'), findsOneWidget);
+      expect(find.byIcon(Icons.more_vert), findsOneWidget);
+      expect(find.text('Block User'), findsNothing);
+      expect(find.text('Report User'), findsNothing);
+      await tester.tap(find.byIcon(Icons.more_vert));
+      await tester.pumpAndSettle();
       expect(find.text('Block User'), findsOneWidget);
       expect(find.text('Report User'), findsOneWidget);
     },
@@ -240,6 +248,9 @@ void main() {
       );
       await tester.pumpAndSettle();
 
+      expect(find.byIcon(Icons.more_vert), findsOneWidget);
+      await tester.tap(find.byIcon(Icons.more_vert));
+      await tester.pumpAndSettle();
       expect(find.text('Report User'), findsOneWidget);
     },
   );

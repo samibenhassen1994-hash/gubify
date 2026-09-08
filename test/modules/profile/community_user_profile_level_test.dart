@@ -42,6 +42,11 @@ void main() {
     expect(find.text('Community Legend'), findsOneWidget);
     expect(find.text('3800+ XP'), findsOneWidget);
     expect(find.textContaining('Max level'), findsOneWidget);
+    expect(find.byIcon(Icons.more_vert), findsOneWidget);
+    await tester.tap(find.byIcon(Icons.more_vert));
+    await tester.pumpAndSettle();
+    expect(find.text('Report User'), findsOneWidget);
+    expect(find.text('Block User'), findsOneWidget);
   });
 
   testWidgets('Community profile shows the XP progress inside a strong bar', (

@@ -15,35 +15,46 @@ import 'package:gubify/modules/profile/models/user_profile_model.dart';
 import 'package:gubify/modules/profile/screens/user_profile_screen.dart';
 
 void main() {
-  testWidgets('other private Gub profile changes from Block User to Blocked', (
-    tester,
-  ) async {
-    final repository = _FakeRepository();
-    final service = _service(repository);
-    await tester.pumpWidget(
-      MaterialApp(
-        home: UserProfileScreen(
-          gubId: 'gub-a',
-          userId: 'user-b',
-          userBlockService: service,
-          profileFuture: Future.value(_otherProfile),
+  testWidgets(
+    'other private Gub profile menu changes from Block User to Blocked',
+    (tester) async {
+      final repository = _FakeRepository();
+      final service = _service(repository);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: UserProfileScreen(
+            gubId: 'gub-a',
+            userId: 'user-b',
+            userBlockService: service,
+            profileFuture: Future.value(_otherProfile),
+          ),
         ),
-      ),
-    );
-    await tester.pump();
-    repository.emitBlock(null);
-    await tester.pump();
+      );
+      await tester.pump();
+      repository.emitBlock(null);
+      await tester.pump();
 
-    expect(find.text('Block User'), findsOneWidget);
-    await tester.tap(find.text('Block User'));
-    await tester.pumpAndSettle();
-    expect(find.text('Block User?'), findsOneWidget);
-    await tester.tap(find.widgetWithText(FilledButton, 'Block'));
-    await tester.pumpAndSettle();
+      expect(find.byIcon(Icons.more_vert), findsOneWidget);
+      expect(find.text('Block User'), findsNothing);
+      await tester.tap(find.byIcon(Icons.more_vert));
+      await tester.pumpAndSettle();
+      expect(find.text('Report User'), findsOneWidget);
+      expect(find.text('Block User'), findsOneWidget);
+      await tester.tap(find.text('Block User'));
+      await tester.pumpAndSettle();
+      expect(find.text('Block User?'), findsOneWidget);
+      await tester.tap(find.widgetWithText(FilledButton, 'Block'));
+      await tester.pumpAndSettle();
 
-    expect(repository.blockCalls, [('user-a', 'user-b')]);
-    expect(find.text('Blocked'), findsOneWidget);
-  });
+      expect(repository.blockCalls, [('user-a', 'user-b')]);
+      await tester.tap(find.byIcon(Icons.more_vert));
+      await tester.pumpAndSettle();
+      final blockedItem = tester.widget<PopupMenuItem<String>>(
+        find.widgetWithText(PopupMenuItem<String>, 'Blocked'),
+      );
+      expect(blockedItem.enabled, isFalse);
+    },
+  );
 
   testWidgets('other Community profile uses the same global block state', (
     tester,
@@ -68,6 +79,10 @@ void main() {
     repository.emitBlock(null);
     await tester.pumpAndSettle();
 
+    expect(find.byIcon(Icons.more_vert), findsOneWidget);
+    await tester.tap(find.byIcon(Icons.more_vert));
+    await tester.pumpAndSettle();
+    expect(find.text('Report User'), findsOneWidget);
     expect(find.text('Block User'), findsOneWidget);
   });
 
@@ -92,6 +107,7 @@ void main() {
 
     expect(find.text('Block User'), findsNothing);
     expect(find.text('Blocked'), findsNothing);
+    expect(find.byIcon(Icons.more_vert), findsNothing);
   });
 
   testWidgets('other private Gub profile shows Report User and submits it', (
@@ -126,11 +142,16 @@ void main() {
     repository.emitBlock(null);
     await tester.pumpAndSettle();
 
+    expect(find.byIcon(Icons.more_vert), findsOneWidget);
+    expect(find.text('Block User'), findsNothing);
+    expect(find.text('Report User'), findsNothing);
+    await tester.tap(find.byIcon(Icons.more_vert));
+    await tester.pumpAndSettle();
     expect(find.text('Block User'), findsOneWidget);
     expect(find.text('Report User'), findsOneWidget);
     await tester.tap(find.text('Report User'));
     await tester.pumpAndSettle();
-    expect(find.text('Report User'), findsNWidgets(2));
+    expect(find.text('Report User'), findsOneWidget);
 
     await tester.tap(find.byType(DropdownButtonFormField<String>));
     await tester.pumpAndSettle();
@@ -168,6 +189,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Report User'), findsNothing);
+    expect(find.byIcon(Icons.more_vert), findsNothing);
   });
 
   testWidgets(
