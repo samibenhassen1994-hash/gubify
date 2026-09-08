@@ -7,8 +7,13 @@ import {
   initializeTestEnvironment,
 } from '@firebase/rules-unit-testing';
 import {
+  collection,
+  deleteDoc,
   doc,
   getDoc,
+  getDocs,
+  limit,
+  query,
   serverTimestamp,
   setDoc,
   updateDoc,
@@ -111,6 +116,34 @@ function createCommunity({
     createdAt: serverTimestamp(),
   });
   return batch.commit();
+}
+
+async function seedPublicCommunities() {
+  await env.withSecurityRulesDisabled(async (context) => {
+    const firestore = context.firestore();
+    await Promise.all([
+      setDoc(doc(firestore, 'communityPublic', 'alpha'), {
+        communityId: 'c-alpha',
+        slug: 'alpha',
+        name: 'Alpha',
+        description: '',
+        language: 'English',
+        accessMode: 'open',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }),
+      setDoc(doc(firestore, 'communityPublic', 'beta'), {
+        communityId: 'c-beta',
+        slug: 'beta',
+        name: 'Beta',
+        description: '',
+        language: 'English',
+        accessMode: 'approval',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }),
+    ]);
+  });
 }
 
 describe('Community slugs and safe public projections', () => {
@@ -246,6 +279,46 @@ describe('Community slugs and safe public projections', () => {
     await assertSucceeds(createCommunity());
     await assertSucceeds(getDoc(doc(anonymousDb(), 'communityPublic', 'football-italia')));
     await assertFails(getDoc(doc(anonymousDb(), 'communities', 'c1')));
+  });
+
+  test('Community SEO listing keeps anonymous single-document get allowed', async () => {
+    await seedPublicCommunities();
+
+    await assertSucceeds(
+      getDoc(doc(anonymousDb(), 'communityPublic', 'alpha')),
+    );
+  });
+
+  test('Community SEO listing requires an anonymous query limit of at most 100', async () => {
+    await seedPublicCommunities();
+    const publicCommunities = collection(anonymousDb(), 'communityPublic');
+
+    await assertSucceeds(getDocs(query(publicCommunities, limit(50))));
+    await assertSucceeds(getDocs(query(publicCommunities, limit(100))));
+    await assertFails(getDocs(query(publicCommunities, limit(101))));
+    await assertFails(getDocs(publicCommunities));
+  });
+
+  test('Community SEO listing applies the same query limits when authenticated', async () => {
+    await seedPublicCommunities();
+    const publicCommunities = collection(db(ids.outsider), 'communityPublic');
+
+    await assertSucceeds(getDocs(query(publicCommunities, limit(100))));
+    await assertFails(getDocs(query(publicCommunities, limit(101))));
+    await assertFails(getDocs(publicCommunities));
+  });
+
+  test('Community SEO listing does not broaden public write permissions', async () => {
+    await seedPublicCommunities();
+    const anonymous = anonymousDb();
+
+    await assertFails(setDoc(doc(anonymous, 'communityPublic', 'gamma'), {
+      slug: 'gamma',
+    }));
+    await assertFails(updateDoc(doc(anonymous, 'communityPublic', 'alpha'), {
+      name: 'Changed',
+    }));
+    await assertFails(deleteDoc(doc(anonymous, 'communityPublic', 'alpha')));
   });
 
   test('a Community slug cannot be changed after creation', async () => {

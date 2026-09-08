@@ -2261,7 +2261,9 @@ service cloud.firestore {
     }
     match /communityPublic/{slug} {
       allow get: if true;
-      allow list: if false;
+      allow list: if request.query.limit != null
+        && request.query.limit > 0
+        && request.query.limit <= 100;
       allow create: if linkedCommunityAccount() && validCommunityPublicCreate(slug);
       allow update: if validCommunityImagePublicMutation(slug);
       allow delete: if communityFinalizingDeletion(resource.data.communityId)
