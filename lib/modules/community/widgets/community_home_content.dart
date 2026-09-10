@@ -1,5 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../widgets/gub_content_card.dart';
 import '../models/community_ask_model.dart';
@@ -26,6 +27,7 @@ class CommunityHomeContent extends StatefulWidget {
   final VoidCallback? onOpenMyAsks;
   final VoidCallback? onOpenLeaderboard;
   final CommunityDirectAskSubmit? onCreateDirectAsk;
+  final Future<bool> Function(Uri uri)? launchExternalUrl;
 
   const CommunityHomeContent({
     super.key,
@@ -38,6 +40,7 @@ class CommunityHomeContent extends StatefulWidget {
     this.onOpenMyAsks,
     this.onOpenLeaderboard,
     this.onCreateDirectAsk,
+    this.launchExternalUrl,
   });
 
   @override
@@ -45,7 +48,16 @@ class CommunityHomeContent extends StatefulWidget {
 }
 
 class _CommunityHomeContentState extends State<CommunityHomeContent> {
+  static final RegExp _communitySlugPattern = RegExp(
+    r'^[a-z0-9]+(?:-[a-z0-9]+)*$',
+  );
+
   _CommunityHomePanel _panel = _CommunityHomePanel.none;
+
+  String? get _webSlug {
+    final slug = widget.community.slug?.trim();
+    return slug != null && _communitySlugPattern.hasMatch(slug) ? slug : null;
+  }
 
   @override
   void didUpdateWidget(CommunityHomeContent oldWidget) {
@@ -138,6 +150,28 @@ class _CommunityHomeContentState extends State<CommunityHomeContent> {
     );
   }
 
+  Future<void> _openWeb() async {
+    final slug = _webSlug;
+    if (slug == null) return;
+
+    final uri = Uri.https('gubify.com', '/community/$slug');
+    try {
+      final opened =
+          await (widget.launchExternalUrl?.call(uri) ??
+              launchUrl(uri, mode: LaunchMode.externalApplication));
+      if (!opened) _showWebError();
+    } catch (_) {
+      _showWebError();
+    }
+  }
+
+  void _showWebError() {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Unable to open Community page.')),
+    );
+  }
+
   void _toggleCreateAsk() {
     setState(() {
       _panel = _panel == _CommunityHomePanel.createAsk
@@ -174,6 +208,7 @@ class _CommunityHomeContentState extends State<CommunityHomeContent> {
   Widget build(BuildContext context) {
     final community = widget.community;
     final memberLabel = community.memberCount == 1 ? 'member' : 'members';
+    final webSlug = _webSlug;
     final isOwner =
         widget.isOwner ??
         CommunityService.instance.isCurrentUserOwner(community);
@@ -252,6 +287,20 @@ class _CommunityHomeContentState extends State<CommunityHomeContent> {
                     size: 24,
                   ),
                 ),
+                if (webSlug != null) ...[
+                  const SizedBox(width: 10),
+                  _HomeHeaderAction(
+                    key: const ValueKey('web-header-action'),
+                    label: 'Web',
+                    selected: false,
+                    onTap: _openWeb,
+                    child: const Icon(
+                      Icons.language_rounded,
+                      color: Color(0xFF2563EB),
+                      size: 25,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),

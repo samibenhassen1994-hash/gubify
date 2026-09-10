@@ -17,7 +17,154 @@ const _community = CommunityModel(
   accessMode: CommunityModel.openAccessMode,
 );
 
+const _communityWithSlug = CommunityModel(
+  communityId: 'community-1',
+  name: 'Cafe Test',
+  ownerId: 'owner',
+  memberCount: 2,
+  visibility: CommunityModel.publicVisibility,
+  createdAt: null,
+  type: CommunityModel.defaultType,
+  language: CommunityModel.defaultLanguage,
+  description: '',
+  accessMode: CommunityModel.openAccessMode,
+  slug: 'cafe-test',
+);
+
 void main() {
+  testWidgets('Community Home shows Web for a Community with a valid slug', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: CommunityHomeContent(
+            community: _communityWithSlug,
+            isKeyboardOpen: false,
+            isOwner: false,
+            chatView: SizedBox(),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byKey(const ValueKey('web-header-action')), findsOneWidget);
+    expect(find.text('Web'), findsOneWidget);
+    expect(find.byIcon(Icons.language_rounded), findsOneWidget);
+  });
+
+  testWidgets('Web opens the canonical public Community URL externally', (
+    tester,
+  ) async {
+    Uri? launchedUri;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: CommunityHomeContent(
+            community: _communityWithSlug,
+            isKeyboardOpen: false,
+            isOwner: false,
+            launchExternalUrl: (uri) async {
+              launchedUri = uri;
+              return true;
+            },
+            chatView: const SizedBox(),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('web-header-action')));
+    await tester.pump();
+
+    expect(launchedUri, Uri.parse('https://gubify.com/community/cafe-test'));
+  });
+
+  testWidgets('Web is absent for a Community without a valid slug', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: CommunityHomeContent(
+            community: CommunityModel(
+              communityId: 'legacy-community',
+              name: 'Legacy Community',
+              ownerId: 'owner',
+              memberCount: 2,
+              visibility: CommunityModel.publicVisibility,
+              createdAt: null,
+              type: CommunityModel.defaultType,
+              language: CommunityModel.defaultLanguage,
+              description: '',
+              accessMode: CommunityModel.openAccessMode,
+              slug: 'not a valid slug',
+            ),
+            isKeyboardOpen: false,
+            isOwner: false,
+            chatView: SizedBox(),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byKey(const ValueKey('web-header-action')), findsNothing);
+  });
+
+  testWidgets('Web failure shows feedback without crashing', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: CommunityHomeContent(
+            community: _communityWithSlug,
+            isKeyboardOpen: false,
+            isOwner: false,
+            launchExternalUrl: (_) async => false,
+            chatView: const SizedBox(),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('web-header-action')));
+    await tester.pump();
+
+    expect(find.text('Unable to open Community page.'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('six Home actions fit a narrow phone viewport', (tester) async {
+    tester.view.physicalSize = const Size(320, 568);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: CommunityHomeContent(
+            community: _communityWithSlug,
+            isKeyboardOpen: false,
+            isOwner: false,
+            chatView: SizedBox(),
+          ),
+        ),
+      ),
+    );
+
+    for (final key in const [
+      'community-header-action',
+      'asks-header-action',
+      'my-asks-header-action',
+      'create-ask-header-action',
+      'leaderboard-header-action',
+      'web-header-action',
+    ]) {
+      expect(find.byKey(ValueKey(key)), findsOneWidget);
+    }
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('Community Home opens Leaderboard from its circular action', (
     tester,
   ) async {
