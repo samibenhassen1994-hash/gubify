@@ -1616,6 +1616,19 @@ service cloud.firestore {
         && member.data.displayName == get(communityJoinRequestPath(id, uid)).data.displayName
         && member.data.joinedAt == request.time;
     }
+    function validCommunityGuidelinesAcceptanceUpdate(id, uid) {
+      return linkedCommunityAccount()
+        && own(uid)
+        && communityActive(id)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'antiSpamRulesAccepted',
+          'antiSpamRulesAcceptedAt',
+          'antiSpamRulesVersion'
+        ])
+        && request.resource.data.antiSpamRulesAccepted == true
+        && request.resource.data.antiSpamRulesAcceptedAt == request.time
+        && request.resource.data.antiSpamRulesVersion == 1;
+    }
     function validCommunityApprovalMutation(id, uid) {
       let root = communityDoc(id);
       let rootAfter = communityAfter(id);
@@ -2053,7 +2066,8 @@ service cloud.firestore {
           && validCommunityMemberAndCopy(id,uid,request.resource.data.role))
           || (validCommunityApprovalSignal(id, uid)
             && validCommunityApprovalMember(id, uid));
-        allow update: if (linkedCommunityAccount() && own(uid) && communityActive(id)
+        allow update: if validCommunityGuidelinesAcceptanceUpdate(id, uid)
+          || (linkedCommunityAccount() && own(uid) && communityActive(id)
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['displayName'])
             && validText(request.resource.data.displayName, 1, 25)
             && request.resource.data.displayName

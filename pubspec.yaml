@@ -46,6 +46,7 @@ flutter:
     - assets/illustrations/sofa.png
     - assets/backgrounds/
     - assets/images/
+    - assets/images/onboarding/community/
     - assets/images/backgrounds/
     - assets/sounds/
 
