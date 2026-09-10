@@ -325,34 +325,34 @@ class _GubCommunityHomeScreenState extends State<GubCommunityHomeScreen> {
                             ),
                           ),
                         ),
+                        Positioned(
+                          top: 12,
+                          left: 20,
+                          child: Semantics(
+                            button: true,
+                            label: 'Back',
+                            child: Material(
+                              color: Colors.white.withValues(alpha: 0.84),
+                              shape: const CircleBorder(),
+                              child: InkWell(
+                                customBorder: const CircleBorder(),
+                                onTap: () => Navigator.maybePop(context),
+                                child: const SizedBox(
+                                  width: 48,
+                                  height: 48,
+                                  child: Icon(
+                                    Icons.arrow_back_rounded,
+                                    color: Color(0xFF0F172A),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
                       ],
                     ),
                   );
                 },
-              ),
-              Positioned(
-                top: 12,
-                left: 20,
-                child: Semantics(
-                  button: true,
-                  label: 'Back',
-                  child: Material(
-                    color: Colors.white.withValues(alpha: 0.84),
-                    shape: const CircleBorder(),
-                    child: InkWell(
-                      customBorder: const CircleBorder(),
-                      onTap: () => Navigator.maybePop(context),
-                      child: const SizedBox(
-                        width: 48,
-                        height: 48,
-                        child: Icon(
-                          Icons.arrow_back_rounded,
-                          color: Color(0xFF0F172A),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
               ),
             ],
           ),

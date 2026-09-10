@@ -200,122 +200,91 @@ class _CommunityGuidelinesScreenState extends State<CommunityGuidelinesScreen>
                   ),
                 ),
                 Expanded(
-                  child: Stack(
-                    fit: StackFit.expand,
+                  child: PageView(
+                    key: const Key('community-guidelines-pages'),
+                    controller: _pageController,
+                    physics: _saving
+                        ? const NeverScrollableScrollPhysics()
+                        : const PageScrollPhysics(),
+                    onPageChanged: _handlePageChanged,
                     children: [
-                      PageView(
-                        key: const Key('community-guidelines-pages'),
-                        controller: _pageController,
-                        physics: _saving
-                            ? const NeverScrollableScrollPhysics()
-                            : const PageScrollPhysics(),
-                        onPageChanged: _handlePageChanged,
-                        children: [
-                          for (
-                            var index = 0;
-                            index <
-                                CommunityGuidelinesScreen.imageAssets.length;
-                            index++
-                          )
-                            Image.asset(
-                              CommunityGuidelinesScreen.imageAssets[index],
-                              key: Key('community-guidelines-page-$index'),
-                              fit: BoxFit.contain,
-                            ),
-                        ],
-                      ),
-                      if (_currentPage ==
-                          CommunityGuidelinesScreen.imageAssets.length - 1)
-                        Align(
-                          alignment: Alignment.bottomCenter,
-                          child: Container(
-                            padding: const EdgeInsets.fromLTRB(16, 24, 16, 14),
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                begin: Alignment.topCenter,
-                                end: Alignment.bottomCenter,
-                                colors: [
-                                  const Color(0xFF08065F).withValues(alpha: 0),
-                                  const Color(
-                                    0xFF08065F,
-                                  ).withValues(alpha: 0.92),
-                                  const Color(0xFF08065F),
-                                ],
-                              ),
-                            ),
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Row(
-                                  children: [
-                                    Checkbox(
-                                      key: const Key(
-                                        'community-guidelines-checkbox',
-                                      ),
-                                      value: _agreed,
-                                      onChanged: _saving
-                                          ? null
-                                          : (value) => setState(
-                                              () => _agreed = value == true,
-                                            ),
-                                      fillColor:
-                                          WidgetStateProperty.resolveWith(
-                                            (states) =>
-                                                states.contains(
-                                                  WidgetState.selected,
-                                                )
-                                                ? const Color(0xFF6D28D9)
-                                                : Colors.white,
-                                          ),
-                                    ),
-                                    const Expanded(
-                                      child: Text(
-                                        'I have read the Community Guidelines',
-                                        style: TextStyle(
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                if (_error != null) ...[
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    _error!,
-                                    textAlign: TextAlign.center,
-                                    style: const TextStyle(
-                                      color: Color(0xFFFFB4AB),
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ],
-                                const SizedBox(height: 8),
-                                SizedBox(
-                                  width: double.infinity,
-                                  child: FilledButton(
-                                    onPressed: !_agreed || _saving
-                                        ? null
-                                        : _accept,
-                                    child: _saving
-                                        ? const SizedBox.square(
-                                            dimension: 20,
-                                            child: CircularProgressIndicator(
-                                              strokeWidth: 2,
-                                            ),
-                                          )
-                                        : const Text(
-                                            'I understand and continue',
-                                          ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
+                      for (
+                        var index = 0;
+                        index < CommunityGuidelinesScreen.imageAssets.length;
+                        index++
+                      )
+                        Image.asset(
+                          CommunityGuidelinesScreen.imageAssets[index],
+                          key: Key('community-guidelines-page-$index'),
+                          fit: BoxFit.contain,
                         ),
                     ],
                   ),
                 ),
+                if (_currentPage ==
+                    CommunityGuidelinesScreen.imageAssets.length - 1)
+                  Container(
+                    padding: const EdgeInsets.fromLTRB(16, 10, 16, 14),
+                    color: const Color(0xFF08065F),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Row(
+                          children: [
+                            Checkbox(
+                              key: const Key('community-guidelines-checkbox'),
+                              value: _agreed,
+                              onChanged: _saving
+                                  ? null
+                                  : (value) =>
+                                        setState(() => _agreed = value == true),
+                              fillColor: WidgetStateProperty.resolveWith(
+                                (states) =>
+                                    states.contains(WidgetState.selected)
+                                    ? const Color(0xFF6D28D9)
+                                    : Colors.white,
+                              ),
+                            ),
+                            const Expanded(
+                              child: Text(
+                                'I have read the Community Guidelines',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (_error != null) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            _error!,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              color: Color(0xFFFFB4AB),
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                        const SizedBox(height: 8),
+                        SizedBox(
+                          width: double.infinity,
+                          child: FilledButton(
+                            onPressed: !_agreed || _saving ? null : _accept,
+                            child: _saving
+                                ? const SizedBox.square(
+                                    dimension: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : const Text('I understand and continue'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
               ],
             ),
           ),

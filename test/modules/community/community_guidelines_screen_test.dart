@@ -181,6 +181,44 @@ void main() {
     );
   });
 
+  testWidgets('final acceptance controls are laid out below the artwork', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_app());
+    await _showFinalPage(tester);
+
+    final artwork = tester.getRect(
+      find.byKey(const Key('community-guidelines-page-4')),
+    );
+    final checkbox = tester.getRect(
+      find.byKey(const Key('community-guidelines-checkbox')),
+    );
+
+    expect(artwork.bottom, lessThanOrEqualTo(checkbox.top));
+  });
+
+  testWidgets('saving blocks Back and swipe navigation', (tester) async {
+    final pending = Completer<void>();
+    await tester.pumpWidget(_app(onAccept: () => pending.future));
+    await _showFinalPage(tester);
+    await tester.tap(find.byKey(const Key('community-guidelines-checkbox')));
+    await tester.pump();
+    await tester.tap(find.text('I understand and continue'));
+    await tester.pump();
+
+    await tester.binding.handlePopRoute();
+    await tester.pump(CommunityGuidelinesScreen.pageTransitionDuration);
+    await tester.drag(
+      find.byKey(const Key('community-guidelines-pages')),
+      const Offset(500, 0),
+    );
+    await tester.pump(const Duration(milliseconds: 500));
+
+    expect(_currentPage(tester), closeTo(4, 0.01));
+    pending.complete();
+    await tester.pump();
+  });
+
   testWidgets('system Back moves through pages then exits from the first', (
     tester,
   ) async {

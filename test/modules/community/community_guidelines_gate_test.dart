@@ -64,6 +64,39 @@ void main() {
     expect(find.byKey(const Key('community-guidelines-pages')), findsNothing);
   });
 
+  testWidgets('Community Home Back control is inside the accepted boundary', (
+    tester,
+  ) async {
+    var accepted = false;
+    final service = CommunityGuidelinesService.forTesting(
+      currentUserId: () => 'member-1',
+      hasAccepted: ({required communityId, required userId}) async => accepted,
+      accept: ({required communityId, required userId}) async {},
+    );
+
+    Widget app() => MaterialApp(
+      home: CommunityGuidelinesGate(
+        communityId: 'community-1',
+        service: service,
+        child: Semantics(
+          button: true,
+          label: 'Back',
+          child: const Icon(Icons.arrow_back_rounded),
+        ),
+      ),
+    );
+
+    await tester.pumpWidget(app());
+    await tester.pump();
+    expect(find.bySemanticsLabel('Back'), findsNothing);
+
+    accepted = true;
+    await tester.pumpWidget(const SizedBox());
+    await tester.pumpWidget(app());
+    await tester.pump();
+    expect(find.bySemanticsLabel('Back'), findsOneWidget);
+  });
+
   testWidgets('successful acceptance reveals content on the same route', (
     tester,
   ) async {
