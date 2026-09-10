@@ -1165,6 +1165,31 @@ service cloud.firestore {
       return validCommunityImagePublicUpdate(slug)
         || validCommunityImagePublicRemoval(slug);
     }
+    function validCommunityRootMemberCountProjection(id) {
+      return !resource.data.keys().hasAny(['slug'])
+        || (getAfter(communityPublicPath(resource.data.slug)).data.communityId == id
+          && getAfter(communityPublicPath(resource.data.slug)).data.slug == resource.data.slug
+          && getAfter(communityPublicPath(resource.data.slug)).data.memberCount
+            == request.resource.data.memberCount
+          && getAfter(communityPublicPath(resource.data.slug)).data.updatedAt == request.time);
+    }
+    function validCommunityMemberCountPublicMutation(slug) {
+      let data = request.resource.data;
+      let rootBefore = communityDoc(resource.data.communityId).data;
+      let rootAfter = communityAfter(resource.data.communityId).data;
+      return signedIn()
+        && rootBefore.get('deletionStatus', 'active') != 'deleting'
+        && data.diff(resource.data).affectedKeys().hasOnly(['memberCount','updatedAt'])
+        && data.communityId == rootAfter.communityId
+        && data.slug == slug
+        && rootAfter.slug == slug
+        && rootAfter.diff(rootBefore).affectedKeys().hasOnly(['memberCount'])
+        && rootAfter.memberCount != rootBefore.memberCount
+        && rootAfter.memberCount is int
+        && data.memberCount != resource.data.memberCount
+        && data.memberCount == rootAfter.memberCount
+        && data.updatedAt == request.time;
+    }
     function validModerationReportCommon(reportId) {
       let data = request.resource.data;
       return data.reportId == reportId
@@ -1472,7 +1497,7 @@ service cloud.firestore {
       let root = communityAfter(request.resource.data.communityId).data;
       let registry = getAfter(communitySlugPath(slug)).data;
       return request.resource.data.keys().hasOnly([
-          'communityId','slug','name','description','language','accessMode',
+          'communityId','slug','name','description','type','language','accessMode','memberCount',
           'createdAt','updatedAt'
         ])
         && validCommunitySlug(slug)
@@ -1482,8 +1507,10 @@ service cloud.firestore {
         && root.slug == slug
         && root.name == request.resource.data.name
         && root.description == request.resource.data.description
+        && root.type == request.resource.data.type
         && root.language == request.resource.data.language
         && root.accessMode == request.resource.data.accessMode
+        && root.memberCount == request.resource.data.memberCount
         && root.createdAt == request.resource.data.createdAt
         && request.resource.data.updatedAt == request.time
         && registry.slug == slug
@@ -1989,11 +2016,13 @@ service cloud.firestore {
           communityActive(id)
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memberCount'])
           && request.resource.data.memberCount == resource.data.memberCount + 1
+          && validCommunityRootMemberCountProjection(id)
           && (validCommunityMemberAndCopy(id, request.auth.uid, 'member')
             || validCommunityApprovalSignal(id, getAfter(communityMembershipMutationPath(id)).data.userId))
         || (communityActive(id)
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memberCount'])
           && request.resource.data.memberCount == resource.data.memberCount - 1
+          && validCommunityRootMemberCountProjection(id)
           && (isCommunityOwner(id)
             || (request.auth.uid != resource.data.ownerId
               && exists(communityMemberPath(id, request.auth.uid))
@@ -2265,7 +2294,8 @@ service cloud.firestore {
         && request.query.limit > 0
         && request.query.limit <= 100;
       allow create: if linkedCommunityAccount() && validCommunityPublicCreate(slug);
-      allow update: if validCommunityImagePublicMutation(slug);
+      allow update: if validCommunityImagePublicMutation(slug)
+        || validCommunityMemberCountPublicMutation(slug);
       allow delete: if communityFinalizingDeletion(resource.data.communityId)
         && resource.data.slug == slug;
     }

@@ -87,8 +87,10 @@ function createCommunity({
       slug,
       name,
       description: 'Italian football fans.',
+      type: 'Sport',
       language: 'Italian',
       accessMode: 'open',
+      memberCount: 1,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
       ...publicOverrides,
@@ -110,6 +112,17 @@ function createCommunity({
     role: 'owner',
     joinedAt: serverTimestamp(),
   });
+  batch.set(
+    doc(firestore, 'communityUserProgress', actor),
+    {
+      xp: 0,
+      communityIds: [communityId],
+      membershipProjectionCommunityId: communityId,
+      membershipProjectionAction: 'join',
+      membershipProjectionUpdatedAt: serverTimestamp(),
+    },
+    { merge: true },
+  );
   batch.set(doc(firestore, 'communityOwnership', actor), {
     ownerId: actor,
     communityId,
@@ -149,6 +162,61 @@ async function seedPublicCommunities() {
 describe('Community slugs and safe public projections', () => {
   test('owner creates the matching Community, slug registry and projection', () =>
     assertSucceeds(createCommunity()));
+
+  test('a public projection keeps the root type and memberCount', async () => {
+    await assertSucceeds(createCommunity());
+    await env.withSecurityRulesDisabled(async (context) => {
+      const firestore = context.firestore();
+      const [root, projection] = await Promise.all([
+        getDoc(doc(firestore, 'communities', 'c1')),
+        getDoc(doc(firestore, 'communityPublic', 'football-italia')),
+      ]);
+      assert.equal(projection.data().type, root.data().type);
+      assert.equal(projection.data().memberCount, root.data().memberCount);
+      assert.equal(projection.data().ownerId, undefined);
+    });
+  });
+
+  test('a public projection rejects a type or memberCount that differs from the root', async () => {
+    await assertFails(createCommunity({ publicOverrides: { type: 'Music' } }));
+    await assertFails(createCommunity({ publicOverrides: { memberCount: 2 } }));
+  });
+
+  test('memberCount changes require the matching root transaction', async () => {
+    await assertSucceeds(createCommunity());
+    const firestore = db(ids.owner);
+
+    await assertFails(updateDoc(
+      doc(firestore, 'communityPublic', 'football-italia'),
+      { memberCount: 2, updatedAt: serverTimestamp() },
+    ));
+
+    const batch = writeBatch(firestore);
+    batch.update(doc(firestore, 'communities', 'c1'), { memberCount: 2 });
+    batch.update(doc(firestore, 'communityPublic', 'football-italia'), {
+      memberCount: 3,
+      updatedAt: serverTimestamp(),
+    });
+    await assertFails(batch.commit());
+  });
+
+  test('a public projection rejects an updatedAt-only memberCount mutation', async () => {
+    await assertSucceeds(createCommunity());
+
+    await assertFails(updateDoc(
+      doc(db(ids.owner), 'communityPublic', 'football-italia'),
+      { updatedAt: serverTimestamp() },
+    ));
+  });
+
+  test('a public projection rejects an unchanged memberCount mutation without a root update', async () => {
+    await assertSucceeds(createCommunity());
+
+    await assertFails(updateDoc(
+      doc(db(ids.owner), 'communityPublic', 'football-italia'),
+      { memberCount: 1, updatedAt: serverTimestamp() },
+    ));
+  });
 
   test('a duplicate slug registry cannot be overwritten', async () => {
     await env.withSecurityRulesDisabled(async (context) => {

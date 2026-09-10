@@ -83,6 +83,7 @@ const joinOpenCommunity = (uid, communityId) => {
   const root = doc(clientDb, 'communities', communityId);
   const member = doc(clientDb, 'communities', communityId, 'members', uid);
   const copy = doc(clientDb, 'users', uid, 'communities', communityId);
+  const progress = doc(clientDb, 'communityUserProgress', uid);
   return runTransaction(clientDb, async (transaction) => {
     const rootSnapshot = await transaction.get(root);
     await transaction.get(member);
@@ -106,6 +107,13 @@ const joinOpenCommunity = (uid, communityId) => {
       role: 'member',
       joinedAt: serverTimestamp(),
     });
+    transaction.set(progress, {
+      xp: 0,
+      communityIds: [communityId],
+      membershipProjectionCommunityId: communityId,
+      membershipProjectionAction: 'join',
+      membershipProjectionUpdatedAt: serverTimestamp(),
+    }, { merge: true });
   });
 };
 
@@ -113,11 +121,18 @@ const leaveCommunity = (uid, communityId) => {
   const clientDb = db(uid);
   const root = doc(clientDb, 'communities', communityId);
   const member = doc(clientDb, 'communities', communityId, 'members', uid);
+  const progress = doc(clientDb, 'communityUserProgress', uid);
   return runTransaction(clientDb, async (transaction) => {
     const rootSnapshot = await transaction.get(root);
     await transaction.get(member);
     transaction.update(root, { memberCount: rootSnapshot.data().memberCount - 1 });
     transaction.delete(member);
+    transaction.set(progress, {
+      communityIds: [],
+      membershipProjectionCommunityId: communityId,
+      membershipProjectionAction: 'leave',
+      membershipProjectionUpdatedAt: serverTimestamp(),
+    }, { merge: true });
   });
 };
 
@@ -190,8 +205,10 @@ const createCommunityWithRestriction = () => {
     slug,
     name,
     description: '',
+    type: 'General',
     language: 'English',
     accessMode: 'open',
+    memberCount: 1,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });
@@ -208,6 +225,13 @@ const createCommunityWithRestriction = () => {
     role: 'owner',
     joinedAt: serverTimestamp(),
   });
+  batch.set(doc(clientDb, 'communityUserProgress', ids.owner), {
+    xp: 0,
+    communityIds: [communityId],
+    membershipProjectionCommunityId: communityId,
+    membershipProjectionAction: 'join',
+    membershipProjectionUpdatedAt: serverTimestamp(),
+  }, { merge: true });
   batch.set(doc(clientDb, 'communityOwnership', ids.owner), {
     ownerId: ids.owner,
     communityId,
@@ -356,6 +380,10 @@ beforeEach(async () => {
     await setDoc(doc(firestore, 'communities', 'open', 'members', ids.owner), memberData(ids.owner, 'Owner', 'owner'));
     await setDoc(doc(firestore, 'communities', 'open', 'members', ids.member), memberData(ids.member, 'Member'));
     await setDoc(doc(firestore, 'communities', 'approval', 'members', ids.owner), memberData(ids.owner, 'Owner', 'owner'));
+    await setDoc(doc(firestore, 'communityUserProgress', ids.member), {
+      xp: 0,
+      communityIds: ['open'],
+    });
     await setDoc(doc(firestore, 'gubs', 'private-gub'), {
       gubId: 'private-gub',
       ownerId: ids.owner,

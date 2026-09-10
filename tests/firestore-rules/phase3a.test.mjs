@@ -205,20 +205,36 @@ async function seedCommunity({
   await env.withSecurityRulesDisabled(async (context) => {
     const seedDb = context.firestore();
     const batch = writeBatch(seedDb);
+    const rootData = communityRoot(id, ids.ownerCommunity, {
+      memberCount: members.length,
+      visibility,
+      ...(status === 'deleting'
+        ? {
+            deletionStatus: 'deleting',
+            deletionRequestedBy: ids.ownerCommunity,
+            deletionStartedBy: ids.ownerCommunity,
+            deletionStartedAt: new Date('2026-01-02T00:00:00Z'),
+          }
+        : {}),
+    });
     batch.set(
       doc(seedDb, 'communities', id),
-      communityRoot(id, ids.ownerCommunity, {
-        memberCount: members.length,
-        visibility,
-        ...(status === 'deleting'
-          ? {
-              deletionStatus: 'deleting',
-              deletionRequestedBy: ids.ownerCommunity,
-              deletionStartedBy: ids.ownerCommunity,
-              deletionStartedAt: new Date('2026-01-02T00:00:00Z'),
-            }
-          : {}),
-      }),
+      rootData,
+    );
+    batch.set(
+      doc(seedDb, 'communityPublic', rootData.slug),
+      {
+        communityId: rootData.communityId,
+        slug: rootData.slug,
+        name: rootData.name,
+        description: rootData.description,
+        type: rootData.type,
+        language: rootData.language,
+        accessMode: rootData.accessMode,
+        memberCount: rootData.memberCount,
+        createdAt: rootData.createdAt,
+        updatedAt: rootData.createdAt,
+      },
     );
     for (const uid of members) {
       const role = uid === ids.ownerCommunity ? 'owner' : 'member';
@@ -379,8 +395,10 @@ function createCommunityBatch({
       slug: rootData.slug,
       name: rootData.name,
       description: rootData.description,
+      type: rootData.type,
       language: rootData.language,
       accessMode: rootData.accessMode,
+      memberCount: rootData.memberCount,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
@@ -440,6 +458,10 @@ function joinCommunityBatch({
   const batch = writeBatch(clientDb);
   if (includeRoot) {
     batch.update(doc(clientDb, 'communities', id), { memberCount: 2 + increment });
+    batch.update(doc(clientDb, 'communityPublic', 'test-community'), {
+      memberCount: 2 + increment,
+      updatedAt: serverTimestamp(),
+    });
   }
   if (includeMember) {
     batch.set(

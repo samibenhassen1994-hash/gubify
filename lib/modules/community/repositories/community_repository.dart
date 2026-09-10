@@ -86,6 +86,17 @@ class CommunityRepository {
     }, SetOptions(merge: true));
   }
 
+  void _updatePublicMemberCount({
+    required Transaction transaction,
+    required String slug,
+    required int memberCount,
+  }) {
+    transaction.update(_communityPublic.doc(slug), {
+      'memberCount': memberCount,
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
   Future<CommunityModel?> createCommunity({
     required String name,
     required String ownerId,
@@ -242,8 +253,10 @@ class CommunityRepository {
         'slug': slug,
         'name': name,
         'description': description,
+        'type': type,
         'language': language,
         'accessMode': accessMode,
+        'memberCount': community.memberCount,
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       });
@@ -718,11 +731,21 @@ class CommunityRepository {
       }
       final memberCount =
           (community.data()?['memberCount'] as num?)?.toInt() ?? 1;
+      final slug = _nonEmptyString(community.data()?['slug']);
+      final updatedMemberCount =
+          (memberCount - 1).clamp(1, memberCount).toInt();
       transaction.delete(memberReference);
       transaction.delete(userCommunityReference);
       transaction.update(communityReference, {
-        'memberCount': (memberCount - 1).clamp(1, memberCount),
+        'memberCount': updatedMemberCount,
       });
+      if (slug != null) {
+        _updatePublicMemberCount(
+          transaction: transaction,
+          slug: slug,
+          memberCount: updatedMemberCount,
+        );
+      }
       _removeCommunityProjection(
         transaction: transaction,
         reference: progressReference,
@@ -763,6 +786,8 @@ class CommunityRepository {
         return 'This member cannot be banned.';
       }
       final count = (community.data()?['memberCount'] as num?)?.toInt() ?? 1;
+      final slug = _nonEmptyString(community.data()?['slug']);
+      final updatedMemberCount = (count - 1).clamp(1, count).toInt();
       transaction.set(banReference, {
         'userId': userId,
         'displayName': member.data()?['displayName'] ?? 'User',
@@ -773,8 +798,15 @@ class CommunityRepository {
       transaction.delete(memberReference);
       transaction.delete(copyReference);
       transaction.update(communityReference, {
-        'memberCount': (count - 1).clamp(1, count),
+        'memberCount': updatedMemberCount,
       });
+      if (slug != null) {
+        _updatePublicMemberCount(
+          transaction: transaction,
+          slug: slug,
+          memberCount: updatedMemberCount,
+        );
+      }
       _removeCommunityProjection(
         transaction: transaction,
         reference: progressReference,
@@ -1438,6 +1470,7 @@ class CommunityRepository {
       }
 
       final updatedMemberCount = community.memberCount + 1;
+      final slug = community.slug;
       transaction.set(memberReference, {
         "uid": userId,
         "displayName": displayName,
@@ -1448,6 +1481,13 @@ class CommunityRepository {
       transaction.update(communityReference, {
         "memberCount": updatedMemberCount,
       });
+      if (slug != null) {
+        _updatePublicMemberCount(
+          transaction: transaction,
+          slug: slug,
+          memberCount: updatedMemberCount,
+        );
+      }
       transaction.set(userCommunityReference, {
         "communityId": community.communityId,
         "name": community.name,
@@ -1664,9 +1704,17 @@ class CommunityRepository {
       final requestData = requestSnapshot.data()!;
       final displayName = requestData["displayName"] as String? ?? "User";
       final updatedMemberCount = community.memberCount + 1;
+      final slug = community.slug;
       transaction.update(communityReference, {
         "memberCount": updatedMemberCount,
       });
+      if (slug != null) {
+        _updatePublicMemberCount(
+          transaction: transaction,
+          slug: slug,
+          memberCount: updatedMemberCount,
+        );
+      }
       transaction.set(memberReference, {
         "uid": userId,
         "displayName": displayName,

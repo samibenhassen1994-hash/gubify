@@ -262,6 +262,12 @@ async function seedCommunityMembership() {
       communityId: 'c1', name: 'Community', ownerId: ids.communityOwner,
       memberCount: 2, visibility: 'public', createdAt: now(),
       type: 'General', language: 'English', description: '', accessMode: 'open',
+      nameKey: 'community', slug: 'community', slugAssignedAt: now(),
+    });
+    batch.set(doc(seedDb, 'communityPublic', 'community'), {
+      communityId: 'c1', slug: 'community', name: 'Community', description: '',
+      type: 'General', language: 'English', accessMode: 'open', memberCount: 2,
+      createdAt: now(), updatedAt: now(),
     });
     batch.set(doc(seedDb, 'communities', 'c1', 'members', ids.communityOwner), {
       uid: ids.communityOwner, displayName: ids.communityOwner, photoUrl: null,
@@ -352,6 +358,9 @@ function leaveCommunity(actor, target = actor) {
   const clientDb = db(actor);
   const batch = writeBatch(clientDb);
   batch.update(doc(clientDb, 'communities', 'c1'), { memberCount: 1 });
+  batch.update(doc(clientDb, 'communityPublic', 'community'), {
+    memberCount: 1, updatedAt: serverTimestamp(),
+  });
   batch.delete(doc(clientDb, 'communities', 'c1', 'members', target));
   batch.delete(doc(clientDb, 'users', target, 'communities', 'c1'));
   batch.set(doc(clientDb, 'communityUserProgress', target), {
@@ -378,6 +387,9 @@ function banCommunity(actor, target = ids.communityMember) {
   const clientDb = db(actor);
   const batch = writeBatch(clientDb);
   batch.update(doc(clientDb, 'communities', 'c1'), { memberCount: 1 });
+  batch.update(doc(clientDb, 'communityPublic', 'community'), {
+    memberCount: 1, updatedAt: serverTimestamp(),
+  });
   batch.set(doc(clientDb, 'communities', 'c1', 'bans', target), {
     userId: target, displayName: target, photoUrl: null, bannedBy: actor, bannedAt: serverTimestamp(),
   });
@@ -391,17 +403,20 @@ function banCommunity(actor, target = ids.communityMember) {
   return batch.commit();
 }
 
-function joinOpenCommunity(actor = ids.communityMember) {
+function joinOpenCommunity(actor = ids.communityMember, memberCount = 2) {
   const clientDb = db(actor);
   const batch = writeBatch(clientDb);
-  batch.update(doc(clientDb, 'communities', 'c1'), { memberCount: 2 });
+  batch.update(doc(clientDb, 'communities', 'c1'), { memberCount });
+  batch.update(doc(clientDb, 'communityPublic', 'community'), {
+    memberCount, updatedAt: serverTimestamp(),
+  });
   batch.set(doc(clientDb, 'communities', 'c1', 'members', actor), {
     uid: actor, displayName: actor, photoUrl: null, role: 'member',
     joinedAt: serverTimestamp(),
   });
   batch.set(doc(clientDb, 'users', actor, 'communities', 'c1'), {
     communityId: 'c1', name: 'Community', ownerId: ids.communityOwner,
-    memberCount: 2, visibility: 'public', role: 'member',
+    memberCount, visibility: 'public', role: 'member',
     joinedAt: serverTimestamp(),
   });
   batch.set(doc(clientDb, 'communityUserProgress', actor), {
@@ -410,6 +425,18 @@ function joinOpenCommunity(actor = ids.communityMember) {
     membershipProjectionUpdatedAt: serverTimestamp(),
   }, { merge: true });
   return batch.commit();
+}
+
+async function assertCommunityPublicMemberCount(memberCount) {
+  await env.withSecurityRulesDisabled(async (context) => {
+    const firestore = context.firestore();
+    const [root, projection] = await Promise.all([
+      getDoc(doc(firestore, 'communities', 'c1')),
+      getDoc(doc(firestore, 'communityPublic', 'community')),
+    ]);
+    assert.equal(root.data().memberCount, memberCount);
+    assert.equal(projection.data().memberCount, memberCount);
+  });
 }
 
 function createCommunityRequest(actor = ids.communityMember) {
@@ -423,6 +450,9 @@ function approveCommunityRequest(target = ids.communityMember) {
   const clientDb = db(ids.communityOwner);
   const batch = writeBatch(clientDb);
   batch.update(doc(clientDb, 'communities', 'c1'), { memberCount: 2 });
+  batch.update(doc(clientDb, 'communityPublic', 'community'), {
+    memberCount: 2, updatedAt: serverTimestamp(),
+  });
   batch.update(doc(clientDb, 'communities', 'c1', 'joinRequests', target), {
     status: 'approved',
     resolvedAt: serverTimestamp(),
@@ -463,6 +493,9 @@ function approveCommunityRequestTransaction(target = ids.communityMember) {
     await transaction.get(memberReference);
     await transaction.get(progressReference);
     transaction.update(communityReference, { memberCount: 3 });
+    transaction.update(doc(clientDb, 'communityPublic', 'community'), {
+      memberCount: 3, updatedAt: serverTimestamp(),
+    });
     transaction.set(memberReference, {
       uid: target, displayName: target, photoUrl: null, role: 'member',
       joinedAt: serverTimestamp(),
@@ -615,7 +648,7 @@ describe('revocation, deletion, retry, and Community isolation', () => {
     batch.set(doc(clientDb, 'communities', 'c1'), { communityId: 'c1', name: 'Community', ownerId: ids.communityOwner, memberCount: 1, visibility: 'public', createdAt: serverTimestamp(), type: 'General', language: 'English', description: '', accessMode: 'open', nameKey: 'community', slug: 'community', slugAssignedAt: serverTimestamp() });
     batch.set(doc(clientDb, 'communityNames', 'community'), { nameKey: 'community', communityId: 'c1', ownerId: ids.communityOwner, createdAt: serverTimestamp() });
     batch.set(doc(clientDb, 'communitySlugs', 'community'), { slug: 'community', communityId: 'c1', ownerId: ids.communityOwner, createdAt: serverTimestamp() });
-    batch.set(doc(clientDb, 'communityPublic', 'community'), { communityId: 'c1', slug: 'community', name: 'Community', description: '', language: 'English', accessMode: 'open', createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
+    batch.set(doc(clientDb, 'communityPublic', 'community'), { communityId: 'c1', slug: 'community', name: 'Community', description: '', type: 'General', language: 'English', accessMode: 'open', memberCount: 1, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
     batch.set(doc(clientDb, 'communities', 'c1', 'members', ids.communityOwner), { uid: ids.communityOwner, displayName: ids.communityOwner, photoUrl: null, role: 'owner', joinedAt: serverTimestamp() });
     batch.set(doc(clientDb, 'users', ids.communityOwner, 'communities', 'c1'), { communityId: 'c1', name: 'Community', ownerId: ids.communityOwner, memberCount: 1, visibility: 'public', role: 'owner', joinedAt: serverTimestamp() });
     batch.set(doc(clientDb, 'communityOwnership', ids.communityOwner), { ownerId: ids.communityOwner, communityId: 'c1', createdAt: serverTimestamp() });
@@ -710,6 +743,7 @@ describe('Step 1A membership leave and removal', () => {
   test('62 community member can leave atomically', async () => {
     await seedCommunityMembership();
     await assertSucceeds(leaveCommunity(ids.communityMember));
+    await assertCommunityPublicMemberCount(1);
   });
   test('63 community owner cannot self-leave', async () => {
     await seedCommunityMembership();
@@ -718,6 +752,12 @@ describe('Step 1A membership leave and removal', () => {
   test('64 community owner can remove a member', async () => {
     await seedCommunityMembership();
     await assertSucceeds(leaveCommunity(ids.communityOwner, ids.communityMember));
+    await assertCommunityPublicMemberCount(1);
+  });
+  test('open Community join keeps the root and public member counts synchronized', async () => {
+    await seedCommunityMembership();
+    await assertSucceeds(joinOpenCommunity(ids.outsider, 3));
+    await assertCommunityPublicMemberCount(3);
   });
   test('65 outsider cannot change private or community membership', async () => {
     await seedPrivateMembership();
@@ -752,6 +792,7 @@ describe('Step 1B persistent bans', () => {
   test('70 Community owner can ban a normal member atomically', async () => {
     await seedCommunityMembership();
     await assertSucceeds(banCommunity(ids.communityOwner));
+    await assertCommunityPublicMemberCount(1);
   });
   test('71 Community member cannot ban another member', async () => {
     await seedCommunityMembership();
@@ -806,6 +847,7 @@ describe('Step 1B persistent bans', () => {
       });
     });
     await assertSucceeds(approveCommunityRequestTransaction(ids.outsider));
+    await assertCommunityPublicMemberCount(3);
     await assertSucceeds(getDoc(doc(db(ids.outsider), 'communities', 'c1')));
     await assertSucceeds(getDoc(
       doc(db(ids.outsider), 'users', ids.outsider, 'communities', 'c1'),
