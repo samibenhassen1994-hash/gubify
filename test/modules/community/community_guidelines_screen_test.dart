@@ -26,6 +26,76 @@ void main() {
     expect(find.text('I have read the Community Guidelines'), findsNothing);
   });
 
+  testWidgets('visible Back sits below progress and above the artwork', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_app());
+
+    final progress = tester.getRect(
+      find.byKey(const Key('community-guidelines-progress-0')),
+    );
+    final back = tester.getRect(
+      find.byKey(const Key('community-guidelines-back')),
+    );
+    final artwork = tester.getRect(
+      find.byKey(const Key('community-guidelines-page-0')),
+    );
+
+    expect(back.top, greaterThanOrEqualTo(progress.bottom));
+    expect(back.bottom, lessThanOrEqualTo(artwork.top));
+    expect(find.byIcon(Icons.arrow_back_rounded), findsOneWidget);
+  });
+
+  testWidgets('visible Back returns to the previous onboarding page', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_app());
+    final pageView = tester.widget<PageView>(
+      find.byKey(const Key('community-guidelines-pages')),
+    );
+    pageView.controller!.jumpToPage(2);
+    await tester.pump();
+
+    await tester.tap(find.byKey(const Key('community-guidelines-back')));
+    await tester.pump();
+    await tester.pump(CommunityGuidelinesScreen.pageTransitionDuration);
+
+    expect(_currentPage(tester), closeTo(1, 0.01));
+    expect(_progress(tester, 1), lessThan(0.1));
+  });
+
+  testWidgets('visible Back exits naturally from the first page', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => FilledButton(
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => CommunityGuidelinesScreen(
+                  onAccept: () async {},
+                  onAccepted: () {},
+                ),
+              ),
+            ),
+            child: const Text('Open'),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('Open'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(_currentPage(tester), closeTo(0, 0.01));
+
+    await tester.tap(find.byKey(const Key('community-guidelines-back')));
+    await tester.pump();
+    await tester.pumpAndSettle();
+
+    expect(find.text('Open'), findsOneWidget);
+  });
+
   testWidgets('auto advances pages 1 to 4 after ten seconds', (tester) async {
     await tester.pumpWidget(_app());
     await tester.pump();
@@ -205,6 +275,15 @@ void main() {
     await tester.pump();
     await tester.tap(find.text('I understand and continue'));
     await tester.pump();
+
+    expect(
+      tester
+          .widget<IconButton>(
+            find.byKey(const Key('community-guidelines-back')),
+          )
+          .onPressed,
+      isNull,
+    );
 
     await tester.binding.handlePopRoute();
     await tester.pump(CommunityGuidelinesScreen.pageTransitionDuration);

@@ -112,13 +112,22 @@ class _CommunityGuidelinesScreenState extends State<CommunityGuidelinesScreen>
     }
   }
 
-  void _handleBack(bool didPop, Object? result) {
-    if (didPop || _saving || _currentPage == 0) return;
+  void _goBack() {
+    if (_saving) return;
+    if (_currentPage == 0) {
+      Navigator.maybePop(context);
+      return;
+    }
     _pageController.animateToPage(
       _currentPage - 1,
       duration: CommunityGuidelinesScreen.pageTransitionDuration,
       curve: Curves.easeInOut,
     );
+  }
+
+  void _handleBack(bool didPop, Object? result) {
+    if (didPop || _saving || _currentPage == 0) return;
+    _goBack();
   }
 
   @override
@@ -196,6 +205,24 @@ class _CommunityGuidelinesScreenState extends State<CommunityGuidelinesScreen>
                             ),
                           ),
                       ],
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(8, 0, 8, 4),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Material(
+                      color: Colors.white.withValues(alpha: 0.16),
+                      shape: const CircleBorder(),
+                      child: IconButton(
+                        key: const Key('community-guidelines-back'),
+                        tooltip: 'Back',
+                        onPressed: _saving ? null : _goBack,
+                        icon: const Icon(Icons.arrow_back_rounded),
+                        color: Colors.white,
+                        disabledColor: Colors.white38,
+                      ),
                     ),
                   ),
                 ),

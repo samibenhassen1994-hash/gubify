@@ -6,7 +6,10 @@ service cloud.firestore {
     function own(uid) { return signedIn() && request.auth.uid == uid; }
     function linkedCommunityAccount() {
       return signedIn()
-        && request.auth.token.firebase.sign_in_provider != 'anonymous';
+        && (request.auth.token.firebase.sign_in_provider != 'anonymous'
+          || (request.auth.token.firebase.get('identities', {}) is map
+            && request.auth.token.firebase.get('identities', {}).keys()
+              .hasAny(['email', 'google.com'])));
     }
     function validText(value, minLength, maxLength) {
       return value is string

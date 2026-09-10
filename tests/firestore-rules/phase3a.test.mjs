@@ -35,6 +35,12 @@ const db = (uid) => env.authenticatedContext(uid).firestore();
 const providerDb = (uid, provider) => env.authenticatedContext(uid, {
   firebase: { sign_in_provider: provider },
 }).firestore();
+const upgradedProviderDb = (uid, identityProvider) => env.authenticatedContext(uid, {
+  firebase: {
+    sign_in_provider: 'anonymous',
+    identities: { [identityProvider]: ['linked-identity'] },
+  },
+}).firestore();
 const anonymousDb = () => env.unauthenticatedContext().firestore();
 const inviteTokenId = 'TES3A2Q7';
 
@@ -714,6 +720,26 @@ describe('Community creation, join, reads, and membership', () => {
     test('Firebase Anonymous cannot join an open Community', () => assertFails(
       joinCommunityBatch({
         clientDb: providerDb(ids.communityOutsider, 'anonymous'),
+      }),
+    ));
+    test('direct Google account can join an open Community', () => assertSucceeds(
+      joinCommunityBatch({
+        clientDb: providerDb(ids.communityOutsider, 'google.com'),
+      }),
+    ));
+    test('direct email/password account can join an open Community', () => assertSucceeds(
+      joinCommunityBatch({
+        clientDb: providerDb(ids.communityOutsider, 'password'),
+      }),
+    ));
+    test('anonymous-upgraded Google account can join an open Community', () => assertSucceeds(
+      joinCommunityBatch({
+        clientDb: upgradedProviderDb(ids.communityOutsider, 'google.com'),
+      }),
+    ));
+    test('anonymous-upgraded email account can join an open Community', () => assertSucceeds(
+      joinCommunityBatch({
+        clientDb: upgradedProviderDb(ids.communityOutsider, 'email'),
       }),
     ));
     test('Firebase Anonymous cannot create an approval join request', async () => {
