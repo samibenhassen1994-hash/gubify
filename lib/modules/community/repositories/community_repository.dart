@@ -732,8 +732,9 @@ class CommunityRepository {
       final memberCount =
           (community.data()?['memberCount'] as num?)?.toInt() ?? 1;
       final slug = _nonEmptyString(community.data()?['slug']);
-      final updatedMemberCount =
-          (memberCount - 1).clamp(1, memberCount).toInt();
+      final updatedMemberCount = (memberCount - 1)
+          .clamp(1, memberCount)
+          .toInt();
       transaction.delete(memberReference);
       transaction.delete(userCommunityReference);
       transaction.update(communityReference, {
@@ -1090,16 +1091,12 @@ class CommunityRepository {
               .doc(communityId),
         );
         if (progressSnapshots[index].exists) {
-          batch.set(
-            progressSnapshots[index].reference,
-            {
-              'communityIds': FieldValue.arrayRemove([communityId]),
-              'membershipProjectionCommunityId': communityId,
-              'membershipProjectionAction': 'delete',
-              'membershipProjectionUpdatedAt': FieldValue.serverTimestamp(),
-            },
-            SetOptions(merge: true),
-          );
+          batch.set(progressSnapshots[index].reference, {
+            'communityIds': FieldValue.arrayRemove([communityId]),
+            'membershipProjectionCommunityId': communityId,
+            'membershipProjectionAction': 'delete',
+            'membershipProjectionUpdatedAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
         }
         batch.delete(marker.reference);
       }
@@ -1415,6 +1412,9 @@ class CommunityRepository {
         .collection("communities")
         .doc(communityId);
     final progressReference = _progressReference(userId);
+    final requestReference = communityReference
+        .collection('joinRequests')
+        .doc(userId);
     final result = await _firestore.runTransaction<_CommunityJoinResult>((
       transaction,
     ) async {
@@ -1434,9 +1434,14 @@ class CommunityRepository {
           "This community is not public.",
         );
       }
-      if (community.accessMode != CommunityModel.openAccessMode) {
+      final requestSnapshot = await transaction.get(requestReference);
+      final requiresApproval =
+          community.accessMode == CommunityModel.approvalAccessMode;
+      if (requiresApproval &&
+          requestSnapshot.data()?['status'] !=
+              CommunityAccessRequestModel.approvedStatus) {
         return const _CommunityJoinResult.failure(
-          "This Community requires owner approval.",
+          'An approved request is required to join this Community.',
         );
       }
       final userCommunitySnapshot = await transaction.get(
@@ -1503,6 +1508,7 @@ class CommunityRepository {
         snapshot: progressSnapshot,
         communityId: communityId,
       );
+      if (requiresApproval) transaction.delete(requestReference);
 
       return _CommunityJoinResult.success(
         community.copyWith(memberCount: updatedMemberCount),
@@ -1666,25 +1672,11 @@ class CommunityRepository {
     final requestReference = communityReference
         .collection("joinRequests")
         .doc(userId);
-    final memberReference = communityReference
-        .collection("members")
-        .doc(userId);
-    final userCommunityReference = _firestore
-        .collection("users")
-        .doc(userId)
-        .collection("communities")
-        .doc(communityId);
-    final mutationReference = communityReference
-        .collection("membershipMutations")
-        .doc("current");
-    final progressReference = _progressReference(userId);
     final failure = await _firestore.runTransaction<String?>((
       transaction,
     ) async {
       final communitySnapshot = await transaction.get(communityReference);
       final requestSnapshot = await transaction.get(requestReference);
-      final memberSnapshot = await transaction.get(memberReference);
-      final progressSnapshot = await transaction.get(progressReference);
       if (!communitySnapshot.exists) return "Community not found.";
       final community = CommunityModel.fromFirestore(communitySnapshot);
       if (community.ownerId != ownerId) {
@@ -1698,56 +1690,11 @@ class CommunityRepository {
               CommunityAccessRequestModel.pendingStatus) {
         return "This request is no longer pending.";
       }
-      if (memberSnapshot.exists) {
-        return "This user is already a member.";
-      }
-      final requestData = requestSnapshot.data()!;
-      final displayName = requestData["displayName"] as String? ?? "User";
-      final updatedMemberCount = community.memberCount + 1;
-      final slug = community.slug;
-      transaction.update(communityReference, {
-        "memberCount": updatedMemberCount,
-      });
-      if (slug != null) {
-        _updatePublicMemberCount(
-          transaction: transaction,
-          slug: slug,
-          memberCount: updatedMemberCount,
-        );
-      }
-      transaction.set(memberReference, {
-        "uid": userId,
-        "displayName": displayName,
-        "photoUrl": null,
-        "role": "member",
-        "joinedAt": FieldValue.serverTimestamp(),
-      });
-      transaction.set(userCommunityReference, {
-        "communityId": communityId,
-        "name": community.name,
-        "ownerId": community.ownerId,
-        "memberCount": updatedMemberCount,
-        "visibility": community.visibility,
-        "role": "member",
-        "joinedAt": FieldValue.serverTimestamp(),
-      });
       transaction.update(requestReference, {
         "status": CommunityAccessRequestModel.approvedStatus,
         "resolvedAt": FieldValue.serverTimestamp(),
         "resolvedBy": ownerId,
       });
-      transaction.set(mutationReference, {
-        "action": "approve",
-        "userId": userId,
-        "ownerId": ownerId,
-        "createdAt": FieldValue.serverTimestamp(),
-      });
-      _addCommunityProjection(
-        transaction: transaction,
-        reference: progressReference,
-        snapshot: progressSnapshot,
-        communityId: communityId,
-      );
       return null;
     });
     if (failure != null) throw StateError(failure);

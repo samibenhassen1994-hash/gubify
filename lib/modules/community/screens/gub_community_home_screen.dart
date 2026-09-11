@@ -9,6 +9,7 @@ import '../../../services/app_sound_service.dart';
 import '../../../services/auth_service.dart';
 import '../../../widgets/gub_screen_background.dart';
 import '../../profile/screens/account_screen.dart';
+import '../guidelines/community_guidelines_gate.dart';
 import '../models/community_access_request_model.dart';
 import '../models/community_model.dart';
 import '../moderation/widgets/community_report_menu.dart';
@@ -168,9 +169,10 @@ class _GubCommunityHomeScreenState extends State<GubCommunityHomeScreen> {
   Widget build(BuildContext context) {
     final isKeyboardOpen = MediaQuery.viewInsetsOf(context).bottom > 0;
 
-    return GubScreenBackground(
-      variant: GubBackgroundAssignments.createGub,
-      child: Scaffold(
+    return CommunityGuidelinesGate(
+      child: GubScreenBackground(
+        variant: GubBackgroundAssignments.createGub,
+        child: Scaffold(
         resizeToAvoidBottomInset: true,
         backgroundColor: Colors.transparent,
         body: SafeArea(
@@ -228,46 +230,74 @@ class _GubCommunityHomeScreenState extends State<GubCommunityHomeScreen> {
                   );
 
                   return Stack(
-                    children: [
-                      CommunityHomeContent(
-                        community: community,
-                        isKeyboardOpen: isKeyboardOpen,
-                      ),
-                      Positioned(
-                        top: 12,
-                        right: 20,
-                        child: CommunityHomeTopActions(
+                      children: [
+                        CommunityHomeContent(
+                          community: community,
                           isKeyboardOpen: isKeyboardOpen,
-                          pendingRequestsAction: canManageJoinRequests
-                              ? CommunityPendingRequestsButton(
-                                  isVisible: canManageJoinRequests,
-                                  countStream: _pendingRequestCountStream,
-                                  onPressed: () => Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) =>
-                                          CommunityJoinRequestsScreen(
-                                            community: community,
-                                          ),
+                        ),
+                        Positioned(
+                          top: 12,
+                          right: 20,
+                          child: CommunityHomeTopActions(
+                            isKeyboardOpen: isKeyboardOpen,
+                            pendingRequestsAction: canManageJoinRequests
+                                ? CommunityPendingRequestsButton(
+                                    isVisible: canManageJoinRequests,
+                                    countStream: _pendingRequestCountStream,
+                                    onPressed: () => Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) =>
+                                            CommunityJoinRequestsScreen(
+                                              community: community,
+                                            ),
+                                      ),
                                     ),
-                                  ),
-                                )
-                              : null,
-                          reportAction: !isOwner
-                              ? Material(
+                                  )
+                                : null,
+                            reportAction: !isOwner
+                                ? Material(
+                                    color: Colors.white.withValues(alpha: 0.84),
+                                    shape: const CircleBorder(),
+                                    child: CommunityReportMenu(
+                                      community: community,
+                                      isOwner: false,
+                                    ),
+                                  )
+                                : null,
+                            accountSettingsAction: Tooltip(
+                              message: 'Account settings',
+                              child: Semantics(
+                                button: true,
+                                label: 'Account settings',
+                                child: Material(
                                   color: Colors.white.withValues(alpha: 0.84),
                                   shape: const CircleBorder(),
-                                  child: CommunityReportMenu(
-                                    community: community,
-                                    isOwner: false,
+                                  child: InkWell(
+                                    customBorder: const CircleBorder(),
+                                    onTap: () => Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => AccountScreen(
+                                          authService: AuthService(),
+                                        ),
+                                      ),
+                                    ),
+                                    child: const SizedBox(
+                                      width: 48,
+                                      height: 48,
+                                      child: Icon(
+                                        Icons.manage_accounts,
+                                        color: Color(0xFF0F172A),
+                                      ),
+                                    ),
                                   ),
-                                )
-                              : null,
-                          accountSettingsAction: Tooltip(
-                            message: 'Account settings',
-                            child: Semantics(
+                                ),
+                              ),
+                            ),
+                            settingsAction: Semantics(
                               button: true,
-                              label: 'Account settings',
+                              label: 'Community settings',
                               child: Material(
                                 color: Colors.white.withValues(alpha: 0.84),
                                 shape: const CircleBorder(),
@@ -276,8 +306,8 @@ class _GubCommunityHomeScreenState extends State<GubCommunityHomeScreen> {
                                   onTap: () => Navigator.push(
                                     context,
                                     MaterialPageRoute(
-                                      builder: (_) => AccountScreen(
-                                        authService: AuthService(),
+                                      builder: (_) => CommunitySettingsScreen(
+                                        community: community,
                                       ),
                                     ),
                                   ),
@@ -285,7 +315,7 @@ class _GubCommunityHomeScreenState extends State<GubCommunityHomeScreen> {
                                     width: 48,
                                     height: 48,
                                     child: Icon(
-                                      Icons.manage_accounts,
+                                      Icons.settings_rounded,
                                       color: Color(0xFF0F172A),
                                     ),
                                   ),
@@ -293,27 +323,24 @@ class _GubCommunityHomeScreenState extends State<GubCommunityHomeScreen> {
                               ),
                             ),
                           ),
-                          settingsAction: Semantics(
+                        ),
+                        Positioned(
+                          top: 12,
+                          left: 20,
+                          child: Semantics(
                             button: true,
-                            label: 'Community settings',
+                            label: 'Back',
                             child: Material(
                               color: Colors.white.withValues(alpha: 0.84),
                               shape: const CircleBorder(),
                               child: InkWell(
                                 customBorder: const CircleBorder(),
-                                onTap: () => Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => CommunitySettingsScreen(
-                                      community: community,
-                                    ),
-                                  ),
-                                ),
+                                onTap: () => Navigator.maybePop(context),
                                 child: const SizedBox(
                                   width: 48,
                                   height: 48,
                                   child: Icon(
-                                    Icons.settings_rounded,
+                                    Icons.arrow_back_rounded,
                                     color: Color(0xFF0F172A),
                                   ),
                                 ),
@@ -321,39 +348,15 @@ class _GubCommunityHomeScreenState extends State<GubCommunityHomeScreen> {
                             ),
                           ),
                         ),
-                      ),
-                    ],
-                  );
+                      ],
+                    );
                 },
-              ),
-              Positioned(
-                top: 12,
-                left: 20,
-                child: Semantics(
-                  button: true,
-                  label: 'Back',
-                  child: Material(
-                    color: Colors.white.withValues(alpha: 0.84),
-                    shape: const CircleBorder(),
-                    child: InkWell(
-                      customBorder: const CircleBorder(),
-                      onTap: () => Navigator.maybePop(context),
-                      child: const SizedBox(
-                        width: 48,
-                        height: 48,
-                        child: Icon(
-                          Icons.arrow_back_rounded,
-                          color: Color(0xFF0F172A),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
               ),
             ],
           ),
         ),
       ),
+    ),
     );
   }
 }

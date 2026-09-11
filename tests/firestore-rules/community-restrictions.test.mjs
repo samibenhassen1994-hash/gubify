@@ -375,6 +375,13 @@ beforeEach(async () => {
   await env.clearFirestore();
   await env.withSecurityRulesDisabled(async (context) => {
     const firestore = context.firestore();
+    for (const uid of [ids.owner, ids.joiner]) {
+      await setDoc(doc(firestore, 'communityGuidelinesAcceptances', uid), {
+        accepted: true,
+        version: 1,
+        acceptedAt: new Date('2026-01-01T00:00:00Z'),
+      });
+    }
     await setDoc(doc(firestore, 'communities', 'open'), communityData('open', 'open', 2));
     await setDoc(doc(firestore, 'communities', 'approval'), communityData('approval', 'approval'));
     await setDoc(doc(firestore, 'communities', 'open', 'members', ids.owner), memberData(ids.owner, 'Owner', 'owner'));

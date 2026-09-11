@@ -33,7 +33,28 @@ before(async () => {
   });
 });
 after(async () => env.cleanup());
-beforeEach(async () => env.clearFirestore());
+beforeEach(async () => {
+  await env.clearFirestore();
+  await env.withSecurityRulesDisabled(async (context) => {
+    const firestore = context.firestore();
+    await setDoc(
+      doc(firestore, 'communityGuidelinesAcceptances', ids.owner),
+      {
+        accepted: true,
+        version: 1,
+        acceptedAt: new Date('2026-01-01T00:00:00Z'),
+      },
+    );
+    await setDoc(
+      doc(firestore, 'communityGuidelinesAcceptances', ids.outsider),
+      {
+        accepted: true,
+        version: 1,
+        acceptedAt: new Date('2026-01-01T00:00:00Z'),
+      },
+    );
+  });
+});
 
 function createCommunity({
   actor = ids.owner,

@@ -27,6 +27,13 @@ class AccountDeletionRepository implements AccountDeletionRepositoryContract {
   static const deletedUserName = 'Deleted user';
 
   @visibleForTesting
+  static const profileDocumentCollections = <String>[
+    'communityGuidelinesAcceptances',
+    'communityUserProgress',
+    'users',
+  ];
+
+  @visibleForTesting
   static AccountDeletionMemberships mergeMembershipIds({
     required String userId,
     required Iterable<String> privateCopyIds,
@@ -361,7 +368,7 @@ class AccountDeletionRepository implements AccountDeletionRepositoryContract {
     final snapshot = await reference.get(
       const GetOptions(source: Source.server),
     );
-    if (snapshot.exists && snapshot.data()?['status'] == 'pending') {
+    if (snapshot.exists) {
       await reference.delete();
     }
   }
@@ -386,8 +393,9 @@ class AccountDeletionRepository implements AccountDeletionRepositoryContract {
   @override
   Future<void> deleteProfile(String userId) {
     final batch = _firestore.batch();
-    batch.delete(_firestore.collection('communityUserProgress').doc(userId));
-    batch.delete(_firestore.collection('users').doc(userId));
+    for (final collection in profileDocumentCollections) {
+      batch.delete(_firestore.collection(collection).doc(userId));
+    }
     return batch.commit();
   }
 

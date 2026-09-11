@@ -95,6 +95,9 @@ beforeEach(async () => {
     const batch = writeBatch(context.firestore());
     for (const uid of Object.values(ids)) {
       batch.set(doc(context.firestore(), 'users', uid), profile(uid));
+      batch.set(doc(context.firestore(), 'communityGuidelinesAcceptances', uid), {
+        accepted: true, acceptedAt: now(), version: 1,
+      });
     }
     await batch.commit();
   });
@@ -448,15 +451,30 @@ function createCommunityRequest(actor = ids.communityMember) {
 
 function approveCommunityRequest(target = ids.communityMember) {
   const clientDb = db(ids.communityOwner);
-  const batch = writeBatch(clientDb);
-  batch.update(doc(clientDb, 'communities', 'c1'), { memberCount: 2 });
-  batch.update(doc(clientDb, 'communityPublic', 'community'), {
-    memberCount: 2, updatedAt: serverTimestamp(),
-  });
-  batch.update(doc(clientDb, 'communities', 'c1', 'joinRequests', target), {
+  return updateDoc(doc(clientDb, 'communities', 'c1', 'joinRequests', target), {
     status: 'approved',
     resolvedAt: serverTimestamp(),
     resolvedBy: ids.communityOwner,
+  });
+}
+
+function approveCommunityRequestTransaction(target = ids.communityMember) {
+  const clientDb = db(ids.communityOwner);
+  const requestReference = doc(clientDb, 'communities', 'c1', 'joinRequests', target);
+  return runTransaction(clientDb, async (transaction) => {
+    await transaction.get(requestReference);
+    transaction.update(requestReference, {
+      status: 'approved', resolvedAt: serverTimestamp(), resolvedBy: ids.communityOwner,
+    });
+  });
+}
+
+function finalizeApprovedCommunityRequest(target = ids.outsider, memberCount = 3) {
+  const clientDb = db(target);
+  const batch = writeBatch(clientDb);
+  batch.update(doc(clientDb, 'communities', 'c1'), { memberCount });
+  batch.update(doc(clientDb, 'communityPublic', 'community'), {
+    memberCount, updatedAt: serverTimestamp(),
   });
   batch.set(doc(clientDb, 'communities', 'c1', 'members', target), {
     uid: target, displayName: target, photoUrl: null, role: 'member',
@@ -464,60 +482,16 @@ function approveCommunityRequest(target = ids.communityMember) {
   });
   batch.set(doc(clientDb, 'users', target, 'communities', 'c1'), {
     communityId: 'c1', name: 'Community', ownerId: ids.communityOwner,
-    memberCount: 2, visibility: 'public', role: 'member',
+    memberCount, visibility: 'public', role: 'member',
     joinedAt: serverTimestamp(),
-  });
-  batch.set(doc(clientDb, 'communities', 'c1', 'membershipMutations', 'current'), {
-    action: 'approve', userId: target, ownerId: ids.communityOwner,
-    createdAt: serverTimestamp(),
   });
   batch.set(doc(clientDb, 'communityUserProgress', target), {
     xp: 0, communityIds: ['c1'], membershipProjectionCommunityId: 'c1',
     membershipProjectionAction: 'join',
     membershipProjectionUpdatedAt: serverTimestamp(),
   }, { merge: true });
+  batch.delete(doc(clientDb, 'communities', 'c1', 'joinRequests', target));
   return batch.commit();
-}
-
-function approveCommunityRequestTransaction(target = ids.communityMember) {
-  const clientDb = db(ids.communityOwner);
-  const communityReference = doc(clientDb, 'communities', 'c1');
-  const requestReference = doc(clientDb, 'communities', 'c1', 'joinRequests', target);
-  const memberReference = doc(clientDb, 'communities', 'c1', 'members', target);
-  const copyReference = doc(clientDb, 'users', target, 'communities', 'c1');
-  const mutationReference = doc(clientDb, 'communities', 'c1', 'membershipMutations', 'current');
-  const progressReference = doc(clientDb, 'communityUserProgress', target);
-  return runTransaction(clientDb, async (transaction) => {
-    await transaction.get(communityReference);
-    await transaction.get(requestReference);
-    await transaction.get(memberReference);
-    await transaction.get(progressReference);
-    transaction.update(communityReference, { memberCount: 3 });
-    transaction.update(doc(clientDb, 'communityPublic', 'community'), {
-      memberCount: 3, updatedAt: serverTimestamp(),
-    });
-    transaction.set(memberReference, {
-      uid: target, displayName: target, photoUrl: null, role: 'member',
-      joinedAt: serverTimestamp(),
-    });
-    transaction.set(copyReference, {
-      communityId: 'c1', name: 'Community', ownerId: ids.communityOwner,
-      memberCount: 3, visibility: 'public', role: 'member',
-      joinedAt: serverTimestamp(),
-    });
-    transaction.update(requestReference, {
-      status: 'approved', resolvedAt: serverTimestamp(), resolvedBy: ids.communityOwner,
-    });
-    transaction.set(mutationReference, {
-      action: 'approve', userId: target, ownerId: ids.communityOwner,
-      createdAt: serverTimestamp(),
-    });
-    transaction.set(progressReference, {
-      xp: 0, communityIds: ['c1'], membershipProjectionCommunityId: 'c1',
-      membershipProjectionAction: 'join',
-      membershipProjectionUpdatedAt: serverTimestamp(),
-    }, { merge: true });
-  });
 }
 
 describe('invite token reads and isolation', () => {
@@ -759,6 +733,12 @@ describe('Step 1A membership leave and removal', () => {
     await assertSucceeds(joinOpenCommunity(ids.outsider, 3));
     await assertCommunityPublicMemberCount(3);
   });
+  test('open Community join requires current Guidelines acceptance', async () => {
+    await seedCommunityMembership();
+    await env.withSecurityRulesDisabled((context) =>
+      deleteDoc(doc(context.firestore(), 'communityGuidelinesAcceptances', ids.outsider)));
+    await assertFails(joinOpenCommunity(ids.outsider, 3));
+  });
   test('65 outsider cannot change private or community membership', async () => {
     await seedPrivateMembership();
     await seedCommunityMembership();
@@ -836,7 +816,7 @@ describe('Step 1B persistent bans', () => {
     });
     await assertFails(approveCommunityRequest(ids.outsider));
   });
-  test('Community owner can approve with the repository transaction and grant access', async () => {
+  test('Community owner approval changes only the pending request', async () => {
     await seedCommunityMembership();
     await env.withSecurityRulesDisabled(async (context) => {
       const seedDb = context.firestore();
@@ -847,11 +827,37 @@ describe('Step 1B persistent bans', () => {
       });
     });
     await assertSucceeds(approveCommunityRequestTransaction(ids.outsider));
+    await assertCommunityPublicMemberCount(2);
+    const memberSnapshot = await getDoc(doc(db(ids.outsider), 'communities', 'c1', 'members', ids.outsider));
+    assert.equal(memberSnapshot.exists(), false);
+  });
+  test('approved target with current acceptance finalizes and consumes request', async () => {
+    await seedCommunityMembership();
+    await env.withSecurityRulesDisabled(async (context) => {
+      const seedDb = context.firestore();
+      await updateDoc(doc(seedDb, 'communities', 'c1'), { accessMode: 'approval' });
+      await setDoc(doc(seedDb, 'communities', 'c1', 'joinRequests', ids.outsider), {
+        userId: ids.outsider, displayName: ids.outsider, status: 'approved',
+        createdAt: now(), resolvedAt: now(), resolvedBy: ids.communityOwner,
+      });
+    });
+    await assertSucceeds(finalizeApprovedCommunityRequest());
     await assertCommunityPublicMemberCount(3);
-    await assertSucceeds(getDoc(doc(db(ids.outsider), 'communities', 'c1')));
-    await assertSucceeds(getDoc(
-      doc(db(ids.outsider), 'users', ids.outsider, 'communities', 'c1'),
-    ));
+    const request = await getDoc(doc(db(ids.outsider), 'communities', 'c1', 'joinRequests', ids.outsider));
+    assert.equal(request.exists(), false);
+  });
+  test('approved target cannot finalize without current acceptance', async () => {
+    await seedCommunityMembership();
+    await env.withSecurityRulesDisabled(async (context) => {
+      const seedDb = context.firestore();
+      await updateDoc(doc(seedDb, 'communities', 'c1'), { accessMode: 'approval' });
+      await setDoc(doc(seedDb, 'communities', 'c1', 'joinRequests', ids.outsider), {
+        userId: ids.outsider, displayName: ids.outsider, status: 'approved',
+        createdAt: now(), resolvedAt: now(), resolvedBy: ids.communityOwner,
+      });
+      await deleteDoc(doc(seedDb, 'communityGuidelinesAcceptances', ids.outsider));
+    });
+    await assertFails(finalizeApprovedCommunityRequest());
   });
   test('77 rejecting a request does not create a ban', async () => {
     await seedCommunityMembership();

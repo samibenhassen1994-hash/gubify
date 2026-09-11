@@ -5,6 +5,7 @@ import '../../../widgets/gub_screen_background.dart';
 import '../models/community_access_request_model.dart';
 import '../models/community_model.dart';
 import '../images/community_image_view.dart';
+import '../guidelines/community_guidelines_pre_action.dart';
 import '../moderation/widgets/community_report_dialog.dart';
 import '../moderation/widgets/community_report_menu.dart';
 import '../restrictions/models/community_restriction_model.dart';
@@ -17,6 +18,9 @@ class CommunityPublicDetailsScreen extends StatefulWidget {
   final Stream<CommunityPublicAccessState?>? stateStream;
   final Stream<CommunityRestriction>? restrictionStream;
   final CommunityReportSubmit? reportSubmit;
+  final CommunityGuidelinesPreAction? guidelinesPreAction;
+  final Future<CommunityModel> Function(String communityId)? joinCommunity;
+  final Widget Function(String communityId)? communityHomeBuilder;
 
   const CommunityPublicDetailsScreen({
     super.key,
@@ -24,6 +28,9 @@ class CommunityPublicDetailsScreen extends StatefulWidget {
     this.stateStream,
     this.restrictionStream,
     this.reportSubmit,
+    this.guidelinesPreAction,
+    this.joinCommunity,
+    this.communityHomeBuilder,
   });
 
   @override
@@ -65,11 +72,7 @@ class _CommunityPublicDetailsScreenState
 
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(
-        SnackBar(
-          content: Text(error.toString()),
-        ),
-      );
+      ).showSnackBar(SnackBar(content: Text(error.toString())));
     } finally {
       if (mounted) {
         setState(() => _operationInProgress = false);
@@ -83,9 +86,15 @@ class _CommunityPublicDetailsScreenState
     setState(() => _operationInProgress = true);
 
     try {
-      final community = await CommunityService.instance.joinCommunity(
-        communityId: widget.communityId,
-      );
+      final accepted =
+          await (widget.guidelinesPreAction?.call(context) ??
+              ensureCommunityGuidelinesAccepted(context));
+      if (!mounted || !accepted) return;
+      final community =
+          await (widget.joinCommunity?.call(widget.communityId) ??
+              CommunityService.instance.joinCommunity(
+                communityId: widget.communityId,
+              ));
 
       if (!mounted || _navigationInProgress) return;
 
@@ -94,9 +103,9 @@ class _CommunityPublicDetailsScreenState
       await Navigator.pushReplacement(
         context,
         MaterialPageRoute(
-          builder: (_) => GubCommunityHomeScreen(
-            communityId: community.communityId,
-          ),
+          builder: (_) =>
+              widget.communityHomeBuilder?.call(community.communityId) ??
+              GubCommunityHomeScreen(communityId: community.communityId),
         ),
       );
     } catch (error) {
@@ -104,11 +113,7 @@ class _CommunityPublicDetailsScreenState
 
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(
-        SnackBar(
-          content: Text(error.toString()),
-        ),
-      );
+      ).showSnackBar(SnackBar(content: Text(error.toString())));
     } finally {
       if (mounted) {
         setState(() => _operationInProgress = false);
@@ -124,9 +129,9 @@ class _CommunityPublicDetailsScreenState
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
-        builder: (_) => GubCommunityHomeScreen(
-          communityId: widget.communityId,
-        ),
+        builder: (_) =>
+            widget.communityHomeBuilder?.call(widget.communityId) ??
+            GubCommunityHomeScreen(communityId: widget.communityId),
       ),
     );
   }
@@ -150,9 +155,7 @@ class _CommunityPublicDetailsScreenState
             stream: _stateStream,
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(
-                  child: CircularProgressIndicator(),
-                );
+                return const Center(child: CircularProgressIndicator());
               }
 
               if (snapshot.hasError) {
@@ -211,10 +214,7 @@ class _CommunityPublicDetailsScreenState
                   ),
                 ),
 
-              CommunityImageView(
-                imageUrl: community.imageUrl,
-                size: 96,
-              ),
+              CommunityImageView(imageUrl: community.imageUrl, size: 96),
 
               const SizedBox(height: 16),
 
@@ -258,10 +258,9 @@ class _CommunityPublicDetailsScreenState
                   ),
                   _DetailChip(
                     icon: Icons.lock_open_rounded,
-                    label:
-                        community.accessMode == CommunityModel.openAccessMode
-                            ? "Open"
-                            : "Approval required",
+                    label: community.accessMode == CommunityModel.openAccessMode
+                        ? "Open"
+                        : "Approval required",
                   ),
                   _DetailChip(
                     icon: Icons.category_outlined,
@@ -353,10 +352,7 @@ class _CommunityPublicDetailsScreenState
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const FilledButton(
-            onPressed: null,
-            child: Text("Request Pending"),
-          ),
+          const FilledButton(onPressed: null, child: Text("Request Pending")),
           const SizedBox(height: 8),
           TextButton(
             onPressed: _operationInProgress
@@ -369,6 +365,17 @@ class _CommunityPublicDetailsScreenState
             child: const Text("Cancel Request"),
           ),
         ],
+      );
+    }
+
+    if (request?.status == CommunityAccessRequestModel.approvedStatus) {
+      return SizedBox(
+        width: double.infinity,
+        child: FilledButton.icon(
+          onPressed: _operationInProgress ? null : _joinOpenCommunity,
+          icon: const Icon(Icons.group_add_rounded),
+          label: const Text('Join Community'),
+        ),
       );
     }
 
@@ -393,18 +400,12 @@ class _DetailChip extends StatelessWidget {
   final IconData icon;
   final String label;
 
-  const _DetailChip({
-    required this.icon,
-    required this.label,
-  });
+  const _DetailChip({required this.icon, required this.label});
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 10,
-        vertical: 7,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
       decoration: BoxDecoration(
         color: const Color(0xFFEFF6FF),
         borderRadius: BorderRadius.circular(999),
@@ -412,11 +413,7 @@ class _DetailChip extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            icon,
-            size: 17,
-            color: const Color(0xFF2563EB),
-          ),
+          Icon(icon, size: 17, color: const Color(0xFF2563EB)),
           const SizedBox(width: 5),
           Text(label),
         ],
@@ -428,9 +425,7 @@ class _DetailChip extends StatelessWidget {
 class _DetailsState extends StatelessWidget {
   final String message;
 
-  const _DetailsState({
-    required this.message,
-  });
+  const _DetailsState({required this.message});
 
   @override
   Widget build(BuildContext context) {
@@ -439,12 +434,7 @@ class _DetailsState extends StatelessWidget {
         padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              message,
-              textAlign: TextAlign.center,
-            ),
-          ],
+          children: [Text(message, textAlign: TextAlign.center)],
         ),
       ),
     );

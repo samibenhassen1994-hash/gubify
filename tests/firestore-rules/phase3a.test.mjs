@@ -35,6 +35,12 @@ const db = (uid) => env.authenticatedContext(uid).firestore();
 const providerDb = (uid, provider) => env.authenticatedContext(uid, {
   firebase: { sign_in_provider: provider },
 }).firestore();
+const upgradedProviderDb = (uid, identityProvider) => env.authenticatedContext(uid, {
+  firebase: {
+    sign_in_provider: 'anonymous',
+    identities: { [identityProvider]: ['linked-identity'] },
+  },
+}).firestore();
 const anonymousDb = () => env.unauthenticatedContext().firestore();
 const inviteTokenId = 'TES3A2Q7';
 
@@ -153,6 +159,21 @@ async function seedProfiles(uids = Object.values(ids)) {
     const seedDb = context.firestore();
     const batch = writeBatch(seedDb);
     for (const uid of uids) batch.set(doc(seedDb, 'users', uid), profile(uid));
+    await batch.commit();
+  });
+}
+
+async function seedCurrentCommunityGuidelinesAcceptances(uids) {
+  await env.withSecurityRulesDisabled(async (context) => {
+    const seedDb = context.firestore();
+    const batch = writeBatch(seedDb);
+    for (const uid of uids) {
+      batch.set(doc(seedDb, 'communityGuidelinesAcceptances', uid), {
+        accepted: true,
+        version: 1,
+        acceptedAt: new Date('2026-01-01T00:00:00Z'),
+      });
+    }
     await batch.commit();
   });
 }
@@ -650,6 +671,11 @@ describe('join Gub batch and membership', () => {
 });
 
 describe('Community creation, join, reads, and membership', () => {
+  beforeEach(() => seedCurrentCommunityGuidelinesAcceptances([
+    ids.ownerCommunity,
+    ids.communityOutsider,
+  ]));
+
   test('Firebase Anonymous cannot create a Community', () => assertFails(
     createCommunityBatch({
       clientDb: providerDb(ids.ownerCommunity, 'anonymous'),
@@ -714,6 +740,26 @@ describe('Community creation, join, reads, and membership', () => {
     test('Firebase Anonymous cannot join an open Community', () => assertFails(
       joinCommunityBatch({
         clientDb: providerDb(ids.communityOutsider, 'anonymous'),
+      }),
+    ));
+    test('direct Google account can join an open Community', () => assertSucceeds(
+      joinCommunityBatch({
+        clientDb: providerDb(ids.communityOutsider, 'google.com'),
+      }),
+    ));
+    test('direct email/password account can join an open Community', () => assertSucceeds(
+      joinCommunityBatch({
+        clientDb: providerDb(ids.communityOutsider, 'password'),
+      }),
+    ));
+    test('anonymous-upgraded Google account can join an open Community', () => assertSucceeds(
+      joinCommunityBatch({
+        clientDb: upgradedProviderDb(ids.communityOutsider, 'google.com'),
+      }),
+    ));
+    test('anonymous-upgraded email account can join an open Community', () => assertSucceeds(
+      joinCommunityBatch({
+        clientDb: upgradedProviderDb(ids.communityOutsider, 'email'),
       }),
     ));
     test('Firebase Anonymous cannot create an approval join request', async () => {

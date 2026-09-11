@@ -188,4 +188,117 @@ void main() {
       findsNothing,
     );
   });
+
+  testWidgets('open join waits for Guidelines acceptance', (tester) async {
+    var joins = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CommunityPublicDetailsScreen(
+          communityId: community.communityId,
+          stateStream: Stream.value(
+            const CommunityPublicAccessState(
+              community: community,
+              isMember: false,
+              isOwner: false,
+              request: null,
+            ),
+          ),
+          restrictionStream: Stream.value(CommunityRestriction.unrestricted),
+          guidelinesPreAction: (_) async => false,
+          joinCommunity: (_) async {
+            joins++;
+            return community;
+          },
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Join Community'));
+    await tester.pumpAndSettle();
+
+    expect(joins, 0);
+  });
+
+  testWidgets('accepted open join executes after Guidelines check', (
+    tester,
+  ) async {
+    final events = <String>[];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CommunityPublicDetailsScreen(
+          communityId: community.communityId,
+          stateStream: Stream.value(
+            const CommunityPublicAccessState(
+              community: community,
+              isMember: false,
+              isOwner: false,
+              request: null,
+            ),
+          ),
+          restrictionStream: Stream.value(CommunityRestriction.unrestricted),
+          guidelinesPreAction: (_) async {
+            events.add('accepted');
+            return true;
+          },
+          joinCommunity: (_) async {
+            events.add('joined');
+            return community;
+          },
+          communityHomeBuilder: (_) => const Scaffold(body: Text('Home')),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Join Community'));
+    await tester.pumpAndSettle();
+
+    expect(events, ['accepted', 'joined']);
+    expect(find.text('Home'), findsOneWidget);
+  });
+
+  testWidgets('approved non-member can finalize with Join Community', (
+    tester,
+  ) async {
+    const approvalCommunity = CommunityModel(
+      communityId: 'community',
+      name: 'Public Community',
+      ownerId: 'owner',
+      memberCount: 2,
+      visibility: 'public',
+      createdAt: null,
+      type: 'General',
+      language: 'English',
+      description: 'Description',
+      accessMode: CommunityModel.approvalAccessMode,
+    );
+    const approved = CommunityAccessRequestModel(
+      userId: 'member',
+      displayName: 'Member',
+      status: CommunityAccessRequestModel.approvedStatus,
+      createdAt: null,
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CommunityPublicDetailsScreen(
+          communityId: community.communityId,
+          stateStream: Stream.value(
+            CommunityPublicAccessState(
+              community: approvalCommunity,
+              isMember: false,
+              isOwner: false,
+              request: approved,
+            ),
+          ),
+          restrictionStream: Stream.value(CommunityRestriction.unrestricted),
+          guidelinesPreAction: (_) async => false,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Join Community'), findsOneWidget);
+    expect(find.text('Request to Join'), findsNothing);
+  });
 }

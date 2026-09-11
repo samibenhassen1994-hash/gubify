@@ -2,6 +2,14 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:gubify/modules/profile/repositories/account_deletion_repository.dart';
 
 void main() {
+  test('profile cleanup includes Guidelines acceptance and existing data', () {
+    expect(AccountDeletionRepository.profileDocumentCollections, [
+      'communityGuidelinesAcceptances',
+      'communityUserProgress',
+      'users',
+    ]);
+  });
+
   test('canonical memberships are merged with personal membership copies', () {
     final memberships = AccountDeletionRepository.mergeMembershipIds(
       userId: 'user-a',
