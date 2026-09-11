@@ -368,7 +368,7 @@ class AccountDeletionRepository implements AccountDeletionRepositoryContract {
     final snapshot = await reference.get(
       const GetOptions(source: Source.server),
     );
-    if (snapshot.exists && snapshot.data()?['status'] == 'pending') {
+    if (snapshot.exists) {
       await reference.delete();
     }
   }

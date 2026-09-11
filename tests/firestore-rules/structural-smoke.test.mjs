@@ -15,7 +15,7 @@ const token = (ownerId='owner', active=true) => ({gubId:'g1',ownerId,gubName:'Te
 
 before(async()=>{ env=await initializeTestEnvironment({projectId,firestore:{rules:readFileSync('firestore.rules','utf8')}}); });
 after(async()=>env.cleanup());
-beforeEach(async()=>env.clearFirestore());
+beforeEach(async()=>{await env.clearFirestore();await env.withSecurityRulesDisabled(async c=>{await setDoc(doc(c.firestore(),'communityGuidelinesAcceptances','cowner'),{accepted:true,version:1,acceptedAt:new Date('2026-01-01T00:00:00Z')});});});
 
 async function createGub(uid='owner', ownerId='owner') {
  const d=db(uid), b=writeBatch(d), id='g1';

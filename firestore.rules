@@ -720,6 +720,7 @@ service cloud.firestore {
     function communityBanPath(id, uid) { return /databases/$(database)/documents/communities/$(id)/bans/$(uid); }
     function userCommunityPath(uid, id) { return /databases/$(database)/documents/users/$(uid)/communities/$(id); }
     function communityJoinRequestPath(id, uid) { return /databases/$(database)/documents/communities/$(id)/joinRequests/$(uid); }
+    function communityGuidelinesAcceptancePath(uid) { return /databases/$(database)/documents/communityGuidelinesAcceptances/$(uid); }
     function moderationReportPath(reportId) { return /databases/$(database)/documents/moderationReports/$(reportId); }
     function moderationTargetPath(targetKey) { return /databases/$(database)/documents/moderationTargets/$(targetKey); }
     function platformRestrictionPath(uid) { return /databases/$(database)/documents/platformRestrictions/$(uid); }
@@ -767,6 +768,12 @@ service cloud.firestore {
     function communityActive(id) {
       return communityExists(id)
         && communityDoc(id).data.get('deletionStatus', 'active') != 'deleting';
+    }
+    function currentCommunityGuidelinesAccepted(uid) {
+      return linkedCommunityAccount()
+        && exists(communityGuidelinesAcceptancePath(uid))
+        && get(communityGuidelinesAcceptancePath(uid)).data.accepted == true
+        && get(communityGuidelinesAcceptancePath(uid)).data.version == 1;
     }
     function validCommunityRewardMemberUpdate(id, uid) {
       let afterMember = request.resource.data;
@@ -1557,7 +1564,11 @@ service cloud.firestore {
         && communityJoiningAllowed(id)
         && communityActive(id)
         && communityDoc(id).data.visibility == 'public'
-        && communityDoc(id).data.get('accessMode','approval') == 'open'
+        && (communityDoc(id).data.get('accessMode','approval') == 'open'
+          || (communityDoc(id).data.get('accessMode','approval') == 'approval'
+            && exists(communityJoinRequestPath(id, uid))
+            && get(communityJoinRequestPath(id, uid)).data.status == 'approved'
+            && !existsAfter(communityJoinRequestPath(id, uid))))
         && communityDoc(id).data.memberCount is int
         && communityDoc(id).data.memberCount >= 1
         && communityAfter(id).data.diff(communityDoc(id).data).affectedKeys().hasOnly(['memberCount'])
@@ -1568,6 +1579,7 @@ service cloud.firestore {
       let copy = getAfter(userCommunityPath(uid, id));
       let root = communityAfter(id);
       return validCommunityMemberData(member.data, uid, role)
+        && currentCommunityGuidelinesAccepted(uid)
         && validCommunityCopyData(copy.data, id, uid, role)
         && communityProjectionContains(id, uid)
         && ((role == 'owner' && exists(communityPath(id)))
@@ -1597,7 +1609,10 @@ service cloud.firestore {
     function validCommunityApprovalRequest(id, uid) {
       let before = get(communityJoinRequestPath(id, uid));
       let after = getAfter(communityJoinRequestPath(id, uid));
-      return exists(communityJoinRequestPath(id, uid))
+      return isCommunityOwner(id)
+        && exists(communityJoinRequestPath(id, uid))
+        && !exists(communityBanPath(id, uid))
+        && !exists(communityMemberPath(id, uid))
         && before.data.userId == uid
         && before.data.status == 'pending'
         && after.data.keys().hasOnly([
@@ -2034,7 +2049,7 @@ service cloud.firestore {
           && request.resource.data.memberCount == resource.data.memberCount + 1
           && validCommunityRootMemberCountProjection(id)
           && (validCommunityMemberAndCopy(id, request.auth.uid, 'member')
-            || validCommunityApprovalSignal(id, getAfter(communityMembershipMutationPath(id)).data.userId))
+            )
         || (communityActive(id)
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memberCount'])
           && request.resource.data.memberCount == resource.data.memberCount - 1
@@ -2067,8 +2082,7 @@ service cloud.firestore {
           && communityAfter(id).data.get('deletionStatus','active') != 'deleting'
           && request.resource.data.role == (communityAfter(id).data.ownerId == uid ? 'owner' : 'member')
           && validCommunityMemberAndCopy(id,uid,request.resource.data.role))
-          || (validCommunityApprovalSignal(id, uid)
-            && validCommunityApprovalMember(id, uid));
+          ;
         allow update: if (linkedCommunityAccount() && own(uid) && communityActive(id)
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['displayName'])
             && validText(request.resource.data.displayName, 1, 25)
@@ -2241,8 +2255,7 @@ service cloud.firestore {
           && validText(request.resource.data.displayName, 1, 25)
           && request.resource.data.status == 'pending'
           && request.resource.data.createdAt == request.time;
-        allow update: if (validCommunityApprovalSignal(id, uid)
-            && validCommunityApprovalRequest(id, uid))
+        allow update: if validCommunityApprovalRequest(id, uid)
           || (isCommunityOwner(id)
             && resource.data.status == 'pending'
             && request.resource.data.keys().hasOnly([
@@ -2268,12 +2281,17 @@ service cloud.firestore {
             && request.resource.data.createdAt == resource.data.createdAt
             && request.resource.data.status == 'pending');
         allow delete: if (linkedCommunityAccount() && own(uid)
-          && resource.data.status == 'pending')
+          && (resource.data.status == 'pending'
+            || (resource.data.status == 'approved'
+              && !exists(communityMemberPath(id, uid))
+              && existsAfter(communityMemberPath(id, uid))
+              && currentCommunityGuidelinesAccepted(uid))
+            || (!existsAfter(/databases/$(database)/documents/users/$(uid))
+              && resource.data.status in ['approved','rejected'])))
           || communityDeletingOwner(id);
       }
       match /membershipMutations/{mutationId} {
-        allow create, update: if mutationId == 'current'
-          && validCommunityApprovalMutation(id, request.resource.data.userId);
+        allow create, update: if false;
         allow read, delete: if communityDeletingOwner(id);
       }
     }

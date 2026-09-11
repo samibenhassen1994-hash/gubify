@@ -163,6 +163,21 @@ async function seedProfiles(uids = Object.values(ids)) {
   });
 }
 
+async function seedCurrentCommunityGuidelinesAcceptances(uids) {
+  await env.withSecurityRulesDisabled(async (context) => {
+    const seedDb = context.firestore();
+    const batch = writeBatch(seedDb);
+    for (const uid of uids) {
+      batch.set(doc(seedDb, 'communityGuidelinesAcceptances', uid), {
+        accepted: true,
+        version: 1,
+        acceptedAt: new Date('2026-01-01T00:00:00Z'),
+      });
+    }
+    await batch.commit();
+  });
+}
+
 async function seedGub({
   id = 'g1',
   status = 'active',
@@ -656,6 +671,11 @@ describe('join Gub batch and membership', () => {
 });
 
 describe('Community creation, join, reads, and membership', () => {
+  beforeEach(() => seedCurrentCommunityGuidelinesAcceptances([
+    ids.ownerCommunity,
+    ids.communityOutsider,
+  ]));
+
   test('Firebase Anonymous cannot create a Community', () => assertFails(
     createCommunityBatch({
       clientDb: providerDb(ids.ownerCommunity, 'anonymous'),

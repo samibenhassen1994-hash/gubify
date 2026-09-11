@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../../config/app_limits.dart';
 import '../../modules/community/models/community_model.dart';
+import '../../modules/community/guidelines/community_guidelines_pre_action.dart';
 import '../../modules/community/models/community_name_conflict.dart';
 import '../../modules/community/screens/gub_community_home_screen.dart';
 import '../../modules/community/widgets/community_linked_account_gate.dart';
@@ -16,14 +17,29 @@ import '../../widgets/user_header.dart';
 import 'gub_screen.dart';
 import 'widgets/gub_type_selector.dart';
 
+typedef CommunityCreator =
+    Future<CommunityModel> Function({
+      required String name,
+      required String description,
+      required String type,
+      required String language,
+      required String accessMode,
+    });
+
 class CreateGubScreen extends StatefulWidget {
   const CreateGubScreen({
     super.key,
     this.communityLinkedAccountGate,
+    this.currentUserOwnsCommunity,
+    this.communityGuidelinesPreAction,
+    this.communityCreator,
     this.userHeader,
   });
 
   final CommunityLinkedAccountGate? communityLinkedAccountGate;
+  final Future<bool> Function()? currentUserOwnsCommunity;
+  final CommunityGuidelinesPreAction? communityGuidelinesPreAction;
+  final CommunityCreator? communityCreator;
   final Widget? userHeader;
 
   @override
@@ -129,8 +145,9 @@ class _CreateGubScreenState extends State<CreateGubScreen> {
       return;
     }
     try {
-      final ownsCommunity = await CommunityService.instance
-          .currentUserOwnsCommunity();
+      final ownsCommunity =
+          await (widget.currentUserOwnsCommunity?.call() ??
+              CommunityService.instance.currentUserOwnsCommunity());
       if (!mounted || request != _typeSelectionRequest) return;
 
       if (ownsCommunity) {
@@ -303,13 +320,25 @@ class _CreateGubScreenState extends State<CreateGubScreen> {
             await (widget.communityLinkedAccountGate?.call(context) ??
                 showCommunityLinkedAccountGate(context));
         if (!mounted || !canUseCommunities) return;
-        final community = await CommunityService.instance.createCommunity(
-          name: gubName,
-          description: _descriptionController.text,
-          type: _selectedCommunityType,
-          language: _selectedCommunityLanguage,
-          accessMode: _selectedCommunityAccessMode,
-        );
+        final accepted =
+            await (widget.communityGuidelinesPreAction?.call(context) ??
+                ensureCommunityGuidelinesAccepted(context));
+        if (!mounted || !accepted) return;
+        final community =
+            await (widget.communityCreator?.call(
+                  name: gubName,
+                  description: _descriptionController.text,
+                  type: _selectedCommunityType,
+                  language: _selectedCommunityLanguage,
+                  accessMode: _selectedCommunityAccessMode,
+                ) ??
+                CommunityService.instance.createCommunity(
+                  name: gubName,
+                  description: _descriptionController.text,
+                  type: _selectedCommunityType,
+                  language: _selectedCommunityLanguage,
+                  accessMode: _selectedCommunityAccessMode,
+                ));
 
         if (!mounted) return;
 

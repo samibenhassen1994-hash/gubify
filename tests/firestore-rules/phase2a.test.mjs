@@ -1,4 +1,5 @@
 import { after, before, beforeEach, describe, test } from 'node:test';
+import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
   assertFails,
@@ -44,6 +45,9 @@ const root = (accessMode = 'approval', overrides = {}) => ({
   language: 'English',
   description: '',
   accessMode,
+  nameKey: 'community',
+  slug: 'community',
+  slugAssignedAt: now(),
   ...overrides,
 });
 const member = (userId, role = 'member', overrides = {}) => ({
@@ -94,6 +98,22 @@ beforeEach(async () => {
       });
     }
     batch.set(doc(seedDb, 'communities', 'c1'), root());
+    batch.set(doc(seedDb, 'communityPublic', 'community'), {
+      communityId: 'c1',
+      slug: 'community',
+      name: 'Community',
+      description: '',
+      type: 'General',
+      language: 'English',
+      accessMode: 'approval',
+      memberCount: 1,
+      createdAt: now(),
+      updatedAt: now(),
+    });
+    batch.set(
+      doc(seedDb, 'communityGuidelinesAcceptances', uid.requester),
+      { accepted: true, version: 1, acceptedAt: now() },
+    );
     batch.set(
       doc(seedDb, 'communities', 'c1', 'members', uid.owner),
       member(uid.owner, 'owner'),
@@ -131,6 +151,10 @@ async function seedMember(userId = uid.member) {
     const seedDb = context.firestore();
     const batch = writeBatch(seedDb);
     batch.update(doc(seedDb, 'communities', 'c1'), { memberCount: 2 });
+    batch.update(doc(seedDb, 'communityPublic', 'community'), {
+      memberCount: 2,
+      updatedAt: now(),
+    });
     batch.set(
       doc(seedDb, 'communities', 'c1', 'members', userId),
       member(userId),
@@ -153,6 +177,10 @@ function openJoinBatch({
   const clientDb = db(actor);
   const batch = writeBatch(clientDb);
   batch.update(doc(clientDb, 'communities', 'c1'), { memberCount: count });
+  batch.update(doc(clientDb, 'communityPublic', 'community'), {
+    memberCount: count,
+    updatedAt: serverTimestamp(),
+  });
   if (includeMember) {
     batch.set(doc(clientDb, 'communities', 'c1', 'members', actor), {
       ...member(actor, role),
@@ -175,19 +203,12 @@ function openJoinBatch({
   return batch.commit();
 }
 
-function approvalBatch({
+function approveRequest({
   actor = uid.owner,
   target = uid.requester,
-  count = 2,
-  includeMember = true,
-  includeCopy = true,
-  includeMutation = true,
-  role = 'member',
 } = {}) {
   const clientDb = db(actor);
-  const batch = writeBatch(clientDb);
-  batch.update(doc(clientDb, 'communities', 'c1'), { memberCount: count });
-  batch.update(
+  return updateDoc(
     doc(clientDb, 'communities', 'c1', 'joinRequests', target),
     {
       status: 'approved',
@@ -195,30 +216,28 @@ function approvalBatch({
       resolvedBy: actor,
     },
   );
-  if (includeMember) {
-    batch.set(doc(clientDb, 'communities', 'c1', 'members', target), {
-      ...member(target, role),
-      displayName: target,
-      joinedAt: serverTimestamp(),
-    });
-  }
-  if (includeCopy) {
-    batch.set(doc(clientDb, 'users', target, 'communities', 'c1'), {
-      ...copy(target, count, { role }),
-      joinedAt: serverTimestamp(),
-    });
-  }
-  if (includeMutation) {
-    batch.set(
-      doc(clientDb, 'communities', 'c1', 'membershipMutations', 'current'),
-      {
-        action: 'approve',
-        userId: target,
-        ownerId: actor,
-        createdAt: serverTimestamp(),
-      },
-    );
-  }
+}
+
+function finalizeApprovedJoin({
+  actor = uid.requester,
+  target = uid.requester,
+  count = 2,
+} = {}) {
+  const clientDb = db(actor);
+  const batch = writeBatch(clientDb);
+  batch.update(doc(clientDb, 'communities', 'c1'), { memberCount: count });
+  batch.update(doc(clientDb, 'communityPublic', 'community'), {
+    memberCount: count,
+    updatedAt: serverTimestamp(),
+  });
+  batch.set(doc(clientDb, 'communities', 'c1', 'members', target), {
+    ...member(target),
+    joinedAt: serverTimestamp(),
+  });
+  batch.set(doc(clientDb, 'users', target, 'communities', 'c1'), {
+    ...copy(target, count),
+    joinedAt: serverTimestamp(),
+  });
   batch.set(doc(clientDb, 'communityUserProgress', target), {
     xp: 0,
     communityIds: ['c1'],
@@ -226,7 +245,29 @@ function approvalBatch({
     membershipProjectionAction: 'join',
     membershipProjectionUpdatedAt: serverTimestamp(),
   }, { merge: true });
+  batch.delete(doc(clientDb, 'communities', 'c1', 'joinRequests', target));
   return batch.commit();
+}
+
+async function assertApprovalOnly(target = uid.requester) {
+  await env.withSecurityRulesDisabled(async (context) => {
+    const seedDb = context.firestore();
+    const [rootSnapshot, publicSnapshot, memberSnapshot, copySnapshot,
+      projectionSnapshot, requestSnapshot] = await Promise.all([
+      getDoc(doc(seedDb, 'communities', 'c1')),
+      getDoc(doc(seedDb, 'communityPublic', 'community')),
+      getDoc(doc(seedDb, 'communities', 'c1', 'members', target)),
+      getDoc(doc(seedDb, 'users', target, 'communities', 'c1')),
+      getDoc(doc(seedDb, 'communityUserProgress', target)),
+      getDoc(doc(seedDb, 'communities', 'c1', 'joinRequests', target)),
+    ]);
+    assert.equal(rootSnapshot.data().memberCount, 1);
+    assert.equal(publicSnapshot.data().memberCount, 1);
+    assert.equal(memberSnapshot.exists(), false);
+    assert.equal(copySnapshot.exists(), false);
+    assert.equal(projectionSnapshot.exists(), false);
+    assert.equal(requestSnapshot.data().status, 'approved');
+  });
 }
 
 describe('Community Explorer and public access', () => {
@@ -444,22 +485,90 @@ describe('Approval requests', () => {
 
 describe('Owner request resolution', () => {
   beforeEach(() => seedRequest());
-  test('valid approval atomically creates membership, copy and count', () =>
-    assertSucceeds(approvalBatch()));
+  test('owner approval changes only the pending request', async () => {
+    await assertSucceeds(approveRequest());
+    await assertApprovalOnly();
+  });
   test('non-owner approval fails', () =>
-    assertFails(approvalBatch({ actor: uid.outsider })));
-  test('approval with owner role or wrong count fails', async () => {
-    await assertFails(approvalBatch({ role: 'owner' }));
-    await assertFails(approvalBatch({ count: 3 }));
+    assertFails(approveRequest({ actor: uid.outsider })));
+  test('owner cannot approve a banned requester', async () => {
+    await env.withSecurityRulesDisabled((context) =>
+      setDoc(doc(context.firestore(), 'communities', 'c1', 'bans', uid.requester), {
+        userId: uid.requester,
+        displayName: uid.requester,
+        photoUrl: null,
+        bannedBy: uid.owner,
+        bannedAt: now(),
+      }),
+    );
+    await assertFails(approveRequest());
   });
-  test('approval without membership, copy, or mutation fails', async () => {
-    await assertFails(approvalBatch({ includeMember: false }));
-    await assertFails(approvalBatch({ includeCopy: false }));
-    await assertFails(approvalBatch({ includeMutation: false }));
+  test('approved requester finalizes member, copy, projection and counts', async () => {
+    await assertSucceeds(approveRequest());
+    await assertSucceeds(finalizeApprovedJoin());
+    await env.withSecurityRulesDisabled(async (context) => {
+      const seedDb = context.firestore();
+      const [rootSnapshot, publicSnapshot, memberSnapshot, copySnapshot,
+        projectionSnapshot, requestSnapshot] = await Promise.all([
+        getDoc(doc(seedDb, 'communities', 'c1')),
+        getDoc(doc(seedDb, 'communityPublic', 'community')),
+        getDoc(doc(seedDb, 'communities', 'c1', 'members', uid.requester)),
+        getDoc(doc(seedDb, 'users', uid.requester, 'communities', 'c1')),
+        getDoc(doc(seedDb, 'communityUserProgress', uid.requester)),
+        getDoc(doc(seedDb, 'communities', 'c1', 'joinRequests', uid.requester)),
+      ]);
+      assert.equal(rootSnapshot.data().memberCount, 2);
+      assert.equal(publicSnapshot.data().memberCount, 2);
+      assert.equal(memberSnapshot.exists(), true);
+      assert.equal(copySnapshot.exists(), true);
+      assert.equal(projectionSnapshot.data().communityIds.includes('c1'), true);
+      assert.equal(requestSnapshot.exists(), false);
+    });
   });
-  test('approval cannot be replayed or approve an existing member', async () => {
-    await assertSucceeds(approvalBatch());
-    await assertFails(approvalBatch());
+  test('finalization is denied while request is pending, rejected, missing, or owned by another user', async () => {
+    await assertFails(finalizeApprovedJoin());
+    await env.withSecurityRulesDisabled((context) =>
+      setDoc(
+        doc(context.firestore(), 'communities', 'c1', 'joinRequests', uid.requester),
+        accessRequest(uid.requester, {
+          status: 'rejected',
+          resolvedAt: now(),
+          resolvedBy: uid.owner,
+        }),
+      ),
+    );
+    await assertFails(finalizeApprovedJoin());
+    await env.withSecurityRulesDisabled((context) =>
+      deleteDoc(doc(context.firestore(), 'communities', 'c1', 'joinRequests', uid.requester)),
+    );
+    await assertFails(finalizeApprovedJoin());
+    await seedRequest();
+    await assertSucceeds(approveRequest());
+    await assertFails(finalizeApprovedJoin({ actor: uid.outsider }));
+  });
+  test('finalization requires current acceptance and cannot be replayed or target an existing member', async () => {
+    await assertSucceeds(approveRequest());
+    await env.withSecurityRulesDisabled((context) =>
+      deleteDoc(doc(context.firestore(), 'communityGuidelinesAcceptances', uid.requester)),
+    );
+    await assertFails(finalizeApprovedJoin());
+    await env.withSecurityRulesDisabled((context) =>
+      setDoc(doc(context.firestore(), 'communityGuidelinesAcceptances', uid.requester), {
+        accepted: true,
+        version: 1,
+        acceptedAt: now(),
+      }),
+    );
+    await assertSucceeds(finalizeApprovedJoin());
+    await assertFails(finalizeApprovedJoin());
+    await env.withSecurityRulesDisabled(async (context) => {
+      const seedDb = context.firestore();
+      await setDoc(
+        doc(seedDb, 'communities', 'c1', 'joinRequests', uid.requester),
+        accessRequest(uid.requester),
+      );
+    });
+    await assertFails(approveRequest());
   });
   test('owner can reject pending request without changing membership', () =>
     assertSucceeds(
