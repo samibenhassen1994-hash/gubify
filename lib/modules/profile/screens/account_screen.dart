@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../services/auth_service.dart';
 import '../../../pages/startup_screen.dart';
+import '../../legal/legal_links.dart';
 import '../models/account_details_model.dart';
 import '../models/account_deletion_model.dart';
 import '../services/account_service.dart';
@@ -17,12 +18,14 @@ class AccountScreen extends StatefulWidget {
     this.accountService,
     this.accountDeletionService,
     this.blockedUsersScreenBuilder,
+    this.legalUrlLauncher,
   });
 
   final AuthService authService;
   final AccountService? accountService;
   final AccountDeletionService? accountDeletionService;
   final Widget Function()? blockedUsersScreenBuilder;
+  final LegalUrlLauncher? legalUrlLauncher;
 
   @override
   State<AccountScreen> createState() => _AccountScreenState();
@@ -138,6 +141,22 @@ class _AccountScreenState extends State<AccountScreen> {
     ).showSnackBar(SnackBar(content: Text(message)));
   }
 
+  Future<void> _openPrivacyPolicy() async {
+    final opened = await LegalLinks.openPrivacyPolicy(
+      launcher: widget.legalUrlLauncher,
+    );
+    if (!mounted || opened) return;
+    _showMessage('Unable to open Privacy Policy.');
+  }
+
+  Future<void> _openTermsOfService() async {
+    final opened = await LegalLinks.openTermsOfService(
+      launcher: widget.legalUrlLauncher,
+    );
+    if (!mounted || opened) return;
+    _showMessage('Unable to open Terms of Service.');
+  }
+
   String _nameChangeMessage(NameChangeResult result) {
     return switch (result.status) {
       NameChangeStatus.cooldown || NameChangeStatus.permissionDenied
@@ -238,6 +257,37 @@ class _AccountScreenState extends State<AccountScreen> {
           value: details.createdAt == null
               ? 'Not available'
               : _formatDate(details.createdAt!.toDate()),
+        ),
+        Card(
+          margin: const EdgeInsets.only(bottom: 12),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Legal & Privacy',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 8),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.shield_outlined),
+                  title: const Text('Privacy Policy'),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: _openPrivacyPolicy,
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.description_outlined),
+                  title: const Text('Terms of Service'),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: _openTermsOfService,
+                ),
+              ],
+            ),
+          ),
         ),
         Card(
           margin: const EdgeInsets.only(top: 12),

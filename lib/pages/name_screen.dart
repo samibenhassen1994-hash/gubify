@@ -2,8 +2,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../modules/legal/privacy_policy_screen.dart';
-import '../modules/legal/terms_screen.dart';
+import '../modules/legal/legal_links.dart';
 import '../screens/welcome_screen.dart';
 import '../services/auth_service.dart';
 import '../widgets/startup_artwork_background.dart';
@@ -12,12 +11,14 @@ class NameScreen extends StatefulWidget {
   final VoidCallback? onNavigationReady;
   final AuthService? authService;
   final Future<void> Function()? onBackToSignIn;
+  final LegalUrlLauncher? legalUrlLauncher;
 
   const NameScreen({
     super.key,
     this.onNavigationReady,
     this.authService,
     this.onBackToSignIn,
+    this.legalUrlLauncher,
   });
 
   @override
@@ -63,6 +64,26 @@ class _NameScreenState extends State<NameScreen> {
         : 'Unable to return to sign in. Please try again.';
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message)),
+    );
+  }
+
+  Future<void> _openPrivacyPolicy() async {
+    final opened = await LegalLinks.openPrivacyPolicy(
+      launcher: widget.legalUrlLauncher,
+    );
+    if (!mounted || opened) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Unable to open Privacy Policy.')),
+    );
+  }
+
+  Future<void> _openTermsOfService() async {
+    final opened = await LegalLinks.openTermsOfService(
+      launcher: widget.legalUrlLauncher,
+    );
+    if (!mounted || opened) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Unable to open Terms of Service.')),
     );
   }
 
@@ -184,13 +205,7 @@ class _NameScreenState extends State<NameScreen> {
                                       ),
                                       recognizer: TapGestureRecognizer()
                                         ..onTap = () {
-                                          Navigator.push(
-                                            context,
-                                            MaterialPageRoute(
-                                              builder: (_) =>
-                                                  const TermsScreen(),
-                                            ),
-                                          );
+                                          _openTermsOfService();
                                         },
                                     ),
                                     const TextSpan(
@@ -205,13 +220,7 @@ class _NameScreenState extends State<NameScreen> {
                                       ),
                                       recognizer: TapGestureRecognizer()
                                         ..onTap = () {
-                                          Navigator.push(
-                                            context,
-                                            MaterialPageRoute(
-                                              builder: (_) =>
-                                                  const PrivacyPolicyScreen(),
-                                            ),
-                                          );
+                                          _openPrivacyPolicy();
                                         },
                                     ),
                                     const TextSpan(text: '.'),

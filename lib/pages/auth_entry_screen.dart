@@ -1,8 +1,7 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
-import '../modules/legal/privacy_policy_screen.dart';
-import '../modules/legal/terms_screen.dart';
+import '../modules/legal/legal_links.dart';
 import '../services/auth_service.dart';
 
 class AuthEntryScreen extends StatefulWidget {
@@ -14,11 +13,13 @@ class AuthEntryScreen extends StatefulWidget {
     required this.authService,
     required this.onAuthenticated,
     required this.onContinueAnonymously,
+    this.legalUrlLauncher,
   });
 
   final AuthService authService;
   final Future<void> Function() onAuthenticated;
   final Future<void> Function() onContinueAnonymously;
+  final LegalUrlLauncher? legalUrlLauncher;
 
   @override
   State<AuthEntryScreen> createState() => _AuthEntryScreenState();
@@ -40,13 +41,29 @@ class _AuthEntryScreenState extends State<AuthEntryScreen> {
   void initState() {
     super.initState();
     _termsRecognizer = TapGestureRecognizer()
-      ..onTap = () => Navigator.of(
-        context,
-      ).push(MaterialPageRoute(builder: (_) => const TermsScreen()));
+      ..onTap = () {
+        _openTermsOfService();
+      };
     _privacyRecognizer = TapGestureRecognizer()
-      ..onTap = () => Navigator.of(
-        context,
-      ).push(MaterialPageRoute(builder: (_) => const PrivacyPolicyScreen()));
+      ..onTap = () {
+        _openPrivacyPolicy();
+      };
+  }
+
+  Future<void> _openPrivacyPolicy() async {
+    final opened = await LegalLinks.openPrivacyPolicy(
+      launcher: widget.legalUrlLauncher,
+    );
+    if (!mounted || opened) return;
+    _showError('Unable to open Privacy Policy.');
+  }
+
+  Future<void> _openTermsOfService() async {
+    final opened = await LegalLinks.openTermsOfService(
+      launcher: widget.legalUrlLauncher,
+    );
+    if (!mounted || opened) return;
+    _showError('Unable to open Terms of Service.');
   }
 
   @override

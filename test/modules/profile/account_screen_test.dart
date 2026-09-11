@@ -1,17 +1,20 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:gubify/modules/legal/legal_links.dart';
 import 'package:gubify/modules/profile/models/account_details_model.dart';
 import 'package:gubify/modules/profile/repositories/account_repository.dart';
 import 'package:gubify/modules/profile/screens/account_screen.dart';
 import 'package:gubify/modules/profile/services/account_service.dart';
 import 'package:gubify/services/auth_service.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 void main() {
   Widget subject({
     required bool anonymous,
     required List<String> providers,
     Widget Function()? blockedUsersScreenBuilder,
+    LegalUrlLauncher? legalUrlLauncher,
   }) {
     final auth = AuthService(
       authLinkGateway: _AuthGateway(anonymous, providers),
@@ -25,6 +28,7 @@ void main() {
           repository: _AccountRepository(),
         ),
         blockedUsersScreenBuilder: blockedUsersScreenBuilder,
+        legalUrlLauncher: legalUrlLauncher,
       ),
     );
   }
@@ -111,6 +115,45 @@ void main() {
     await tester.tap(manageBlockedUsers);
     await tester.pumpAndSettle();
     expect(find.text('Blocked users destination'), findsOneWidget);
+  });
+
+  testWidgets('Legal & Privacy opens the two canonical website URLs', (
+    tester,
+  ) async {
+    final opened = <(Uri, LaunchMode)>[];
+    await tester.pumpWidget(
+      subject(
+        anonymous: false,
+        providers: const ['password'],
+        legalUrlLauncher: (uri, {required mode}) async {
+          opened.add((uri, mode));
+          return true;
+        },
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(
+      find.text('Legal & Privacy'),
+      200,
+      scrollable: find.byType(Scrollable),
+    );
+    expect(find.text('Privacy Policy'), findsOneWidget);
+    expect(find.text('Terms of Service'), findsOneWidget);
+
+    final privacyPolicy = find.text('Privacy Policy');
+    await tester.ensureVisible(privacyPolicy);
+    await tester.tap(privacyPolicy);
+    await tester.pump();
+    final termsOfService = find.text('Terms of Service');
+    await tester.ensureVisible(termsOfService);
+    await tester.tap(termsOfService);
+    await tester.pump();
+
+    expect(opened, [
+      (Uri.parse('https://gubify.com/privacy'), LaunchMode.inAppBrowserView),
+      (Uri.parse('https://gubify.com/terms'), LaunchMode.inAppBrowserView),
+    ]);
   });
 
   testWidgets(

@@ -7,9 +7,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:gubify/pages/auth_entry_screen.dart';
 import 'package:gubify/pages/startup_screen.dart';
 import 'package:gubify/modules/profile/repositories/account_deletion_marker_store.dart';
-import 'package:gubify/modules/legal/privacy_policy_screen.dart';
-import 'package:gubify/modules/legal/terms_screen.dart';
+import 'package:gubify/modules/legal/legal_links.dart';
 import 'package:gubify/services/auth_service.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 void main() {
   AuthService serviceFor({
@@ -33,12 +33,14 @@ void main() {
     required AuthService service,
     Future<void> Function()? onAuthenticated,
     Future<void> Function()? onContinueAnonymously,
+    LegalUrlLauncher? legalUrlLauncher,
   }) {
     return MaterialApp(
       home: AuthEntryScreen(
         authService: service,
         onAuthenticated: onAuthenticated ?? () async {},
         onContinueAnonymously: onContinueAnonymously ?? () async {},
+        legalUrlLauncher: legalUrlLauncher,
       ),
     );
   }
@@ -373,10 +375,19 @@ void main() {
     expect(find.text('or'), findsOneWidget);
   });
 
-  testWidgets('terms and privacy links open the existing legal screens', (
+  testWidgets('terms and privacy links open their canonical website URLs', (
     tester,
   ) async {
-    await tester.pumpWidget(app(service: serviceFor()));
+    final opened = <(Uri, LaunchMode)>[];
+    await tester.pumpWidget(
+      app(
+        service: serviceFor(),
+        legalUrlLauncher: (uri, {required mode}) async {
+          opened.add((uri, mode));
+          return true;
+        },
+      ),
+    );
     await tester.tap(find.text('Create account'));
     await tester.pump();
 
@@ -390,14 +401,19 @@ void main() {
     );
 
     _linkRecognizer(tester, 'Terms of Service').onTap!.call();
-    await tester.pumpAndSettle();
-    expect(find.byType(TermsScreen), findsOneWidget);
+    await tester.pump();
+    expect(opened, [
+      (Uri.parse('https://gubify.com/terms'), LaunchMode.inAppBrowserView),
+    ]);
+    expect(find.text('Create your account'), findsOneWidget);
 
-    await tester.pageBack();
-    await tester.pumpAndSettle();
     _linkRecognizer(tester, 'Privacy Policy').onTap!.call();
-    await tester.pumpAndSettle();
-    expect(find.byType(PrivacyPolicyScreen), findsOneWidget);
+    await tester.pump();
+    expect(opened, [
+      (Uri.parse('https://gubify.com/terms'), LaunchMode.inAppBrowserView),
+      (Uri.parse('https://gubify.com/privacy'), LaunchMode.inAppBrowserView),
+    ]);
+    expect(find.text('Create your account'), findsOneWidget);
   });
 }
 

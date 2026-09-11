@@ -1,8 +1,11 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:gubify/modules/legal/legal_links.dart';
 import 'package:gubify/pages/auth_entry_screen.dart';
 import 'package:gubify/pages/name_screen.dart';
 import 'package:gubify/services/auth_service.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 void main() {
   AuthService serviceFor({
@@ -23,6 +26,7 @@ void main() {
   Future<void> pumpOnboarding(
     WidgetTester tester, {
     required AuthService service,
+    LegalUrlLauncher? legalUrlLauncher,
   }) async {
     final navigatorKey = GlobalKey<NavigatorState>();
     await tester.pumpWidget(
@@ -30,6 +34,7 @@ void main() {
         navigatorKey: navigatorKey,
         home: NameScreen(
           authService: service,
+          legalUrlLauncher: legalUrlLauncher,
           onBackToSignIn: () async {
             navigatorKey.currentState!.pushAndRemoveUntil<void>(
               MaterialPageRoute(
@@ -192,6 +197,59 @@ void main() {
     );
     expect(find.widgetWithText(ElevatedButton, 'Continue'), findsOneWidget);
   });
+
+  testWidgets('onboarding legal links use their canonical website URLs', (
+    tester,
+  ) async {
+    final opened = <(Uri, LaunchMode)>[];
+    await pumpOnboarding(
+      tester,
+      service: serviceFor(
+        verification: _FakeVerificationGateway(anonymous: true),
+        userProfileExists: (_) async => false,
+      ),
+      legalUrlLauncher: (uri, {required mode}) async {
+        opened.add((uri, mode));
+        return true;
+      },
+    );
+
+    _linkRecognizer(tester, 'Terms of Service').onTap!.call();
+    await tester.pump();
+    _linkRecognizer(tester, 'Privacy Policy').onTap!.call();
+    await tester.pump();
+
+    expect(opened, [
+      (Uri.parse('https://gubify.com/terms'), LaunchMode.inAppBrowserView),
+      (Uri.parse('https://gubify.com/privacy'), LaunchMode.inAppBrowserView),
+    ]);
+    expect(find.byType(NameScreen), findsOneWidget);
+  });
+}
+
+TapGestureRecognizer _linkRecognizer(WidgetTester tester, String label) {
+  final richText = tester
+      .widgetList<RichText>(find.byType(RichText))
+      .firstWhere((widget) => widget.text.toPlainText().contains(label));
+  final recognizer = _findTextSpan(richText.text, label).recognizer;
+  if (recognizer is! TapGestureRecognizer) {
+    throw TestFailure('TextSpan "$label" has no TapGestureRecognizer.');
+  }
+  return recognizer;
+}
+
+TextSpan _findTextSpan(InlineSpan root, String label) {
+  if (root is TextSpan) {
+    if (root.text == label) return root;
+    for (final child in root.children ?? const <InlineSpan>[]) {
+      try {
+        return _findTextSpan(child, label);
+      } on TestFailure {
+        // Continue searching the remaining branches.
+      }
+    }
+  }
+  throw TestFailure('TextSpan "$label" was not found.');
 }
 
 class _FakeVerificationGateway implements AuthVerificationGateway {
