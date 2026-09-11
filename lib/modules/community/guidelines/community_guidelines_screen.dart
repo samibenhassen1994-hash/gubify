@@ -190,10 +190,32 @@ class _CommunityGuidelinesScreenState extends State<CommunityGuidelinesScreen>
                       index < CommunityGuidelinesScreen.imageAssets.length;
                       index++
                     )
-                      Image.asset(
-                        CommunityGuidelinesScreen.imageAssets[index],
-                        key: Key('community-guidelines-page-$index'),
-                        fit: BoxFit.cover,
+                      ColoredBox(
+                        color: const Color(0xFF05040F),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 8,
+                          ),
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(
+                                color: Colors.white24,
+                                width: 1.5,
+                              ),
+                            ),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(14),
+                              child: Image.asset(
+                                CommunityGuidelinesScreen.imageAssets[index],
+                                key: Key('community-guidelines-page-$index'),
+                                fit: BoxFit.contain,
+                                alignment: Alignment.center,
+                              ),
+                            ),
+                          ),
+                        ),
                       ),
                   ],
                 ),

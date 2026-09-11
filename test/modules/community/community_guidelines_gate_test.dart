@@ -4,6 +4,7 @@ import 'package:gubify/modules/community/guidelines/community_guidelines_gate.da
 import 'package:gubify/modules/community/guidelines/community_guidelines_service.dart';
 import 'package:gubify/modules/community/models/community_model.dart';
 import 'package:gubify/modules/community/widgets/community_home_content.dart';
+import 'package:gubify/widgets/gub_screen_background.dart';
 
 const _community = CommunityModel(
   communityId: 'community-1',
@@ -40,6 +41,32 @@ void main() {
     await tester.pump();
 
     expect(find.byType(CommunityHomeContent), findsNothing);
+    expect(find.byKey(const Key('community-guidelines-pages')), findsOneWidget);
+  });
+
+  testWidgets('unaccepted gate replaces the entire Community Home shell', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CommunityGuidelinesGate(
+          service: _service(accepted: false),
+          child: GubScreenBackground(
+            variant: GubBackgroundAssignments.createGub,
+            child: Scaffold(
+              body: SafeArea(
+                child: SizedBox(key: const Key('community-home-safe-area')),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byType(GubScreenBackground), findsNothing);
+    expect(find.byType(Scaffold), findsNothing);
+    expect(find.byKey(const Key('community-home-safe-area')), findsNothing);
     expect(find.byKey(const Key('community-guidelines-pages')), findsOneWidget);
   });
 

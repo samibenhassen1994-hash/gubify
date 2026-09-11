@@ -169,9 +169,10 @@ class _GubCommunityHomeScreenState extends State<GubCommunityHomeScreen> {
   Widget build(BuildContext context) {
     final isKeyboardOpen = MediaQuery.viewInsetsOf(context).bottom > 0;
 
-    return GubScreenBackground(
-      variant: GubBackgroundAssignments.createGub,
-      child: Scaffold(
+    return CommunityGuidelinesGate(
+      child: GubScreenBackground(
+        variant: GubBackgroundAssignments.createGub,
+        child: Scaffold(
         resizeToAvoidBottomInset: true,
         backgroundColor: Colors.transparent,
         body: SafeArea(
@@ -228,8 +229,7 @@ class _GubCommunityHomeScreenState extends State<GubCommunityHomeScreen> {
                     isOwner: isOwner,
                   );
 
-                  return CommunityGuidelinesGate(
-                    child: Stack(
+                  return Stack(
                       children: [
                         CommunityHomeContent(
                           community: community,
@@ -349,14 +349,14 @@ class _GubCommunityHomeScreenState extends State<GubCommunityHomeScreen> {
                           ),
                         ),
                       ],
-                    ),
-                  );
+                    );
                 },
               ),
             ],
           ),
         ),
       ),
+    ),
     );
   }
 }

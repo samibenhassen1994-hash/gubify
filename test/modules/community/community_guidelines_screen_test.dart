@@ -273,52 +273,76 @@ void main() {
     expect(checkbox.bottom, lessThanOrEqualTo(panel.bottom));
   });
 
-  testWidgets('all pages use the same full-screen cover artwork viewport', (
-    tester,
-  ) async {
-    await tester.pumpWidget(_app());
-    final pageView = tester.widget<PageView>(
-      find.byKey(const Key('community-guidelines-pages')),
-    );
-    pageView.controller!.jumpToPage(3);
-    await tester.pump();
-    final pageFour = tester.getRect(
-      find.byKey(const Key('community-guidelines-page-3')),
-    );
+  testWidgets(
+    'all pages use the same contained artwork card without a background image',
+    (tester) async {
+      await tester.pumpWidget(_app());
+      final pageView = tester.widget<PageView>(
+        find.byKey(const Key('community-guidelines-pages')),
+      );
+      pageView.controller!.jumpToPage(3);
+      await tester.pump();
+      final pageFour = tester.getRect(
+        find.byKey(const Key('community-guidelines-page-3')),
+      );
 
-    pageView.controller!.jumpToPage(4);
-    await tester.pump();
-    final pageFive = tester.getRect(
-      find.byKey(const Key('community-guidelines-page-4')),
-    );
+      pageView.controller!.jumpToPage(4);
+      await tester.pump();
+      final pageFive = tester.getRect(
+        find.byKey(const Key('community-guidelines-page-4')),
+      );
 
-    expect(pageFive, pageFour);
-    expect(
-      tester
-          .widget<Image>(find.byKey(const Key('community-guidelines-page-4')))
-          .fit,
-      BoxFit.cover,
-    );
-  });
+      expect(pageFive, pageFour);
+      expect(
+        find.byKey(const Key('community-guidelines-page-4')),
+        findsOneWidget,
+      );
+      expect(
+        tester
+            .widget<Image>(find.byKey(const Key('community-guidelines-page-4')))
+            .fit,
+        BoxFit.contain,
+      );
+      expect(
+        tester
+            .widget<Image>(find.byKey(const Key('community-guidelines-page-4')))
+            .alignment,
+        Alignment.center,
+      );
+      expect(
+        find.byKey(const Key('community-guidelines-background-4')),
+        findsNothing,
+      );
+    },
+  );
 
-  testWidgets('pages one to four reserve no bottom acceptance panel space', (
-    tester,
-  ) async {
-    await tester.pumpWidget(_app());
+  testWidgets(
+    'pages one to four reserve no acceptance panel space beyond the card margin',
+    (tester) async {
+      await tester.pumpWidget(_app());
 
-    final screen = tester.getRect(
-      find.byKey(const Key('community-guidelines-pages')),
-    );
-    final artwork = tester.getRect(
-      find.byKey(const Key('community-guidelines-page-0')),
-    );
+      final screen = tester.getRect(
+        find.byKey(const Key('community-guidelines-pages')),
+      );
+      final artwork = tester.getRect(
+        find.byKey(const Key('community-guidelines-page-0')),
+      );
 
-    expect(
-      find.byKey(const Key('community-guidelines-acceptance-overlay')),
-      findsNothing,
-    );
-    expect(artwork, screen);
-  });
+      expect(
+        find.byKey(const Key('community-guidelines-acceptance-overlay')),
+        findsNothing,
+      );
+      expect(
+        artwork,
+        Rect.fromLTRB(
+          screen.left + 10,
+          screen.top + 8,
+          screen.right - 10,
+          screen.bottom - 8,
+        ),
+      );
+    },
+  );
 
   testWidgets(
     'Guidelines link opens official URL without toggling acceptance',
