@@ -27,7 +27,6 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: CommunityGuidelinesGate(
-          communityId: 'community-1',
           service: service,
           child: const CommunityHomeContent(
             community: _community,
@@ -52,7 +51,6 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: CommunityGuidelinesGate(
-          communityId: 'community-1',
           service: service,
           child: const Text('Community content'),
         ),
@@ -70,13 +68,12 @@ void main() {
     var accepted = false;
     final service = CommunityGuidelinesService.forTesting(
       currentUserId: () => 'member-1',
-      hasAccepted: ({required communityId, required userId}) async => accepted,
-      accept: ({required communityId, required userId}) async {},
+      hasAccepted: ({required userId}) async => accepted,
+      accept: ({required userId}) async {},
     );
 
     Widget app() => MaterialApp(
       home: CommunityGuidelinesGate(
-        communityId: 'community-1',
         service: service,
         child: Semantics(
           button: true,
@@ -104,8 +101,8 @@ void main() {
     var accepted = false;
     final service = CommunityGuidelinesService.forTesting(
       currentUserId: () => 'member-1',
-      hasAccepted: ({required communityId, required userId}) async => accepted,
-      accept: ({required communityId, required userId}) async {
+      hasAccepted: ({required userId}) async => accepted,
+      accept: ({required userId}) async {
         writes++;
         accepted = true;
       },
@@ -114,7 +111,6 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: CommunityGuidelinesGate(
-          communityId: 'community-1',
           service: service,
           child: const Text('Community content'),
         ),
@@ -131,14 +127,54 @@ void main() {
     expect(find.text('Community content'), findsOneWidget);
   });
 
+  testWidgets('acceptance in Community A also admits Community B', (
+    tester,
+  ) async {
+    var accepted = false;
+    final service = CommunityGuidelinesService.forTesting(
+      currentUserId: () => 'member-1',
+      hasAccepted: ({required userId}) async => accepted,
+      accept: ({required userId}) async => accepted = true,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CommunityGuidelinesGate(
+          service: service,
+          child: const Text('Community A'),
+        ),
+      ),
+    );
+    await tester.pump();
+    await _showFinalPage(tester);
+    await tester.tap(find.byKey(const Key('community-guidelines-checkbox')));
+    await tester.pump();
+    await tester.tap(find.text('I understand and continue'));
+    await tester.pump();
+    expect(find.text('Community A'), findsOneWidget);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CommunityGuidelinesGate(
+          service: service,
+          child: const Text('Community B'),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('Community B'), findsOneWidget);
+    expect(find.byKey(const Key('community-guidelines-pages')), findsNothing);
+  });
+
   testWidgets('failed acceptance stays gated and can be retried', (
     tester,
   ) async {
     var attempts = 0;
     final service = CommunityGuidelinesService.forTesting(
       currentUserId: () => 'member-1',
-      hasAccepted: ({required communityId, required userId}) async => false,
-      accept: ({required communityId, required userId}) async {
+      hasAccepted: ({required userId}) async => false,
+      accept: ({required userId}) async {
         attempts++;
         if (attempts == 1) throw StateError('offline');
       },
@@ -147,7 +183,6 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: CommunityGuidelinesGate(
-          communityId: 'community-1',
           service: service,
           child: const Text('Community content'),
         ),
@@ -176,8 +211,8 @@ void main() {
 CommunityGuidelinesService _service({required bool accepted}) {
   return CommunityGuidelinesService.forTesting(
     currentUserId: () => 'member-1',
-    hasAccepted: ({required communityId, required userId}) async => accepted,
-    accept: ({required communityId, required userId}) async {},
+    hasAccepted: ({required userId}) async => accepted,
+    accept: ({required userId}) async {},
   );
 }
 

@@ -8,32 +8,33 @@ import {
 import {
   deleteDoc,
   doc,
+  getDoc,
   serverTimestamp,
+  setDoc,
   updateDoc,
   writeBatch,
 } from 'firebase/firestore';
 
 const projectId = 'demo-gubify-community-guidelines';
-const ids = {
-  owner: 'owner',
-  member: 'member',
-  outsider: 'outsider',
-  anonymous: 'anonymous',
-};
-const joinedAt = new Date('2026-09-09T00:00:00Z');
 let env;
-
 const db = (uid, provider = 'google.com') =>
   env.authenticatedContext(uid, {
     firebase: { sign_in_provider: provider },
   }).firestore();
+const upgradedDb = (uid, identityProvider) =>
+  env.authenticatedContext(uid, {
+    firebase: {
+      sign_in_provider: 'anonymous',
+      identities: { [identityProvider]: ['linked-identity'] },
+    },
+  }).firestore();
 const unauthenticatedDb = () => env.unauthenticatedContext().firestore();
-const memberRef = (database, uid) =>
-  doc(database, 'communities', 'community-1', 'members', uid);
+const ref = (database, uid = 'member') =>
+  doc(database, 'communityGuidelinesAcceptances', uid);
 const acceptance = (overrides = {}) => ({
-  antiSpamRulesAccepted: true,
-  antiSpamRulesAcceptedAt: serverTimestamp(),
-  antiSpamRulesVersion: 1,
+  accepted: true,
+  acceptedAt: serverTimestamp(),
+  version: 1,
   ...overrides,
 });
 
@@ -43,151 +44,86 @@ before(async () => {
     firestore: { rules: readFileSync('firestore.rules', 'utf8') },
   });
 });
-
 after(async () => env.cleanup());
+beforeEach(async () => env.clearFirestore());
 
-beforeEach(async () => {
-  await env.clearFirestore();
-  await env.withSecurityRulesDisabled(async (context) => {
-    const database = context.firestore();
-    const batch = writeBatch(database);
-    batch.set(doc(database, 'communities', 'community-1'), {
-      communityId: 'community-1',
-      name: 'Community',
-      ownerId: ids.owner,
-      memberCount: 3,
-      visibility: 'public',
-      deletionStatus: 'active',
-      createdAt: joinedAt,
+describe('global Community Guidelines acceptance', () => {
+  for (const [name, database] of [
+    ['direct Google', () => db('member', 'google.com')],
+    ['direct email/password', () => db('member', 'password')],
+    ['anonymous-upgraded Google', () => upgradedDb('member', 'google.com')],
+    ['anonymous-upgraded email', () => upgradedDb('member', 'email')],
+  ]) {
+    test(`${name} writes and reads own current acceptance`, async () => {
+      const client = database();
+      await assertSucceeds(setDoc(ref(client), acceptance()));
+      await assertSucceeds(getDoc(ref(client)));
     });
-    for (const [uid, role] of [
-      [ids.owner, 'owner'],
-      [ids.member, 'member'],
-      [ids.anonymous, 'member'],
-    ]) {
-      batch.set(memberRef(database, uid), {
-        uid,
-        displayName: uid,
-        photoUrl: null,
-        role,
-        joinedAt,
-      });
-    }
-    await batch.commit();
-  });
-});
+  }
 
-describe('Community Guidelines acceptance', () => {
-  test('linked current member can accept the supported version', async () => {
-    const database = db(ids.member);
-    await assertSucceeds(
-      updateDoc(memberRef(database, ids.member), acceptance()),
-    );
+  test('owner can update and delete own acceptance', async () => {
+    const client = db('member');
+    await assertSucceeds(setDoc(ref(client), acceptance()));
+    await assertSucceeds(setDoc(ref(client), acceptance()));
+    await assertSucceeds(deleteDoc(ref(client)));
   });
 
-  test('linked owner can accept the supported version', async () => {
-    const database = db(ids.owner);
-    await assertSucceeds(
-      updateDoc(memberRef(database, ids.owner), acceptance()),
-    );
+  test('anonymous and unauthenticated users are denied', async () => {
+    await assertFails(setDoc(ref(db('member', 'anonymous')), acceptance()));
+    await assertFails(setDoc(ref(unauthenticatedDb()), acceptance()));
   });
 
-  test('anonymous and unauthenticated users cannot accept', async () => {
-    const anonymous = db(ids.anonymous, 'anonymous');
-    await assertFails(
-      updateDoc(memberRef(anonymous, ids.anonymous), acceptance()),
+  test('users cannot write or read another user acceptance', async () => {
+    const client = db('other');
+    await assertFails(setDoc(ref(client, 'member'), acceptance()));
+    await env.withSecurityRulesDisabled((context) =>
+      setDoc(ref(context.firestore(), 'member'), {
+        accepted: true,
+        acceptedAt: new Date(),
+        version: 1,
+      }),
     );
-    await assertFails(
-      updateDoc(
-        memberRef(unauthenticatedDb(), ids.member),
-        acceptance(),
-      ),
-    );
+    await assertFails(getDoc(ref(client, 'member')));
   });
 
-  test('outsiders, removed members and other users cannot accept', async () => {
-    await assertFails(
-      updateDoc(memberRef(db(ids.outsider), ids.outsider), acceptance()),
-    );
+  test('false acceptance and wrong version are denied', async () => {
+    const client = db('member');
+    await assertFails(setDoc(ref(client), acceptance({ accepted: false })));
+    await assertFails(setDoc(ref(client), acceptance({ version: 0 })));
+    await assertFails(setDoc(ref(client), acceptance({ version: 2 })));
+  });
 
+  test('forged timestamp, missing fields and extra fields are denied', async () => {
+    const client = db('member');
+    await assertFails(setDoc(ref(client), acceptance({ acceptedAt: new Date(0) })));
+    await assertFails(setDoc(ref(client), { accepted: true, version: 1 }));
+    await assertFails(setDoc(ref(client), acceptance({ extra: true })));
+  });
+
+  test('old Community member fields are no longer an acceptance path', async () => {
     await env.withSecurityRulesDisabled(async (context) => {
-      await deleteDoc(memberRef(context.firestore(), ids.member));
-    });
-    await assertFails(
-      updateDoc(memberRef(db(ids.member), ids.member), acceptance()),
-    );
-    await assertFails(
-      updateDoc(memberRef(db(ids.owner), ids.anonymous), acceptance()),
-    );
-  });
-
-  test('false, unsupported version and forged timestamp are denied', async () => {
-    const database = db(ids.member);
-    await assertFails(
-      updateDoc(
-        memberRef(database, ids.member),
-        acceptance({ antiSpamRulesAccepted: false }),
-      ),
-    );
-    await assertFails(
-      updateDoc(
-        memberRef(database, ids.member),
-        acceptance({ antiSpamRulesVersion: 2 }),
-      ),
-    );
-    await assertFails(
-      updateDoc(
-        memberRef(database, ids.member),
-        acceptance({
-          antiSpamRulesAcceptedAt: new Date('2026-09-09T00:00:00Z'),
-        }),
-      ),
-    );
-  });
-
-  test('acceptance cannot modify identity or role fields', async () => {
-    const database = db(ids.member);
-    for (const extra of [
-      { displayName: 'Forged' },
-      { role: 'owner' },
-      { photoUrl: 'https://example.com/forged.png' },
-      { joinedAt: serverTimestamp() },
-    ]) {
-      await assertFails(
-        updateDoc(
-          memberRef(database, ids.member),
-          acceptance(extra),
-        ),
-      );
-    }
-  });
-
-  test('acceptance cannot modify progress, reward or cooldown fields', async () => {
-    const database = db(ids.member);
-    for (const extra of [
-      { xp: 100 },
-      { bestAnswerCount: 1 },
-      { lastAskCreatedAt: serverTimestamp() },
-      { arbitraryField: true },
-    ]) {
-      await assertFails(
-        updateDoc(
-          memberRef(database, ids.member),
-          acceptance(extra),
-        ),
-      );
-    }
-  });
-
-  test('acceptance is denied while the Community is deleting', async () => {
-    await env.withSecurityRulesDisabled(async (context) => {
-      await updateDoc(doc(context.firestore(), 'communities', 'community-1'), {
-        deletionStatus: 'deleting',
+      const batch = writeBatch(context.firestore());
+      batch.set(doc(context.firestore(), 'communities', 'community-1'), {
+        communityId: 'community-1',
+        ownerId: 'owner',
+        memberCount: 1,
+        deletionStatus: 'active',
       });
+      batch.set(
+        doc(context.firestore(), 'communities', 'community-1', 'members', 'member'),
+        { uid: 'member', displayName: 'Member', role: 'member', joinedAt: new Date() },
+      );
+      await batch.commit();
     });
-    const database = db(ids.member);
     await assertFails(
-      updateDoc(memberRef(database, ids.member), acceptance()),
+      updateDoc(
+        doc(db('member'), 'communities', 'community-1', 'members', 'member'),
+        {
+          antiSpamRulesAccepted: true,
+          antiSpamRulesAcceptedAt: serverTimestamp(),
+          antiSpamRulesVersion: 1,
+        },
+      ),
     );
   });
 });

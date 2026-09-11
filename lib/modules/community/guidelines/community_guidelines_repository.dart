@@ -1,13 +1,9 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-typedef CommunityGuidelinesMemberLoader =
-    Future<Map<String, dynamic>?> Function({
-      required String communityId,
-      required String userId,
-    });
+typedef CommunityGuidelinesAcceptanceLoader =
+    Future<Map<String, dynamic>?> Function({required String userId});
 typedef CommunityGuidelinesAcceptanceWriter =
     Future<void> Function({
-      required String communityId,
       required String userId,
       required Map<String, Object?> data,
     });
@@ -15,14 +11,14 @@ typedef CommunityGuidelinesAcceptanceWriter =
 class CommunityGuidelinesRepository {
   CommunityGuidelinesRepository._([
     this._firestore,
-    this._loadMember,
+    this._loadAcceptance,
     this._writeAcceptance,
   ]);
 
   factory CommunityGuidelinesRepository.forTesting({
-    required CommunityGuidelinesMemberLoader loadMember,
+    required CommunityGuidelinesAcceptanceLoader loadAcceptance,
     required CommunityGuidelinesAcceptanceWriter writeAcceptance,
-  }) => CommunityGuidelinesRepository._(null, loadMember, writeAcceptance);
+  }) => CommunityGuidelinesRepository._(null, loadAcceptance, writeAcceptance);
 
   static final CommunityGuidelinesRepository instance =
       CommunityGuidelinesRepository._(FirebaseFirestore.instance);
@@ -31,81 +27,31 @@ class CommunityGuidelinesRepository {
   static const int currentVersion = 1;
 
   final FirebaseFirestore? _firestore;
-  final CommunityGuidelinesMemberLoader? _loadMember;
+  final CommunityGuidelinesAcceptanceLoader? _loadAcceptance;
   final CommunityGuidelinesAcceptanceWriter? _writeAcceptance;
 
-  DocumentReference<Map<String, dynamic>> _memberReference({
-    required String communityId,
-    required String userId,
-  }) => _firestore!
-      .collection('communities')
-      .doc(communityId)
-      .collection('members')
-      .doc(userId);
+  DocumentReference<Map<String, dynamic>> _acceptanceReference(String userId) =>
+      _firestore!.collection('communityGuidelinesAcceptances').doc(userId);
 
-  Future<Map<String, dynamic>?> _loadMemberData({
-    required String communityId,
-    required String userId,
-  }) async {
-    final loadMember = _loadMember;
-    if (loadMember != null) {
-      return loadMember(communityId: communityId, userId: userId);
-    }
-    final snapshot = await _memberReference(
-      communityId: communityId,
-      userId: userId,
-    ).get();
-    return snapshot.data();
+  Future<bool> hasAccepted({required String userId}) async {
+    final loader = _loadAcceptance;
+    final data = loader != null
+        ? await loader(userId: userId)
+        : (await _acceptanceReference(userId).get()).data();
+    return data?['accepted'] == true && data?['version'] == currentVersion;
   }
 
-  Future<bool> hasAccepted({
-    required String communityId,
-    required String userId,
-  }) async {
-    final data = await _loadMemberData(
-      communityId: communityId,
-      userId: userId,
-    );
-    return data?['antiSpamRulesAccepted'] == true &&
-        data?['antiSpamRulesVersion'] == currentVersion;
-  }
-
-  Future<void> accept({
-    required String communityId,
-    required String userId,
-  }) async {
+  Future<void> accept({required String userId}) async {
     final data = <String, Object?>{
-      'antiSpamRulesAccepted': true,
-      'antiSpamRulesAcceptedAt': FieldValue.serverTimestamp(),
-      'antiSpamRulesVersion': currentVersion,
+      'accepted': true,
+      'acceptedAt': FieldValue.serverTimestamp(),
+      'version': currentVersion,
     };
-    final writeAcceptance = _writeAcceptance;
-    if (writeAcceptance != null) {
-      final member = await _loadMemberData(
-        communityId: communityId,
-        userId: userId,
-      );
-      if (member == null) {
-        throw StateError('Community member not found.');
-      }
-      await writeAcceptance(
-        communityId: communityId,
-        userId: userId,
-        data: data,
-      );
+    final writer = _writeAcceptance;
+    if (writer != null) {
+      await writer(userId: userId, data: data);
       return;
     }
-
-    final memberReference = _memberReference(
-      communityId: communityId,
-      userId: userId,
-    );
-    await _firestore!.runTransaction((transaction) async {
-      final member = await transaction.get(memberReference);
-      if (!member.exists) {
-        throw StateError('Community member not found.');
-      }
-      transaction.update(memberReference, data);
-    });
+    await _acceptanceReference(userId).set(data);
   }
 }

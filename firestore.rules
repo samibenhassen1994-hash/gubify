@@ -1619,19 +1619,6 @@ service cloud.firestore {
         && member.data.displayName == get(communityJoinRequestPath(id, uid)).data.displayName
         && member.data.joinedAt == request.time;
     }
-    function validCommunityGuidelinesAcceptanceUpdate(id, uid) {
-      return linkedCommunityAccount()
-        && own(uid)
-        && communityActive(id)
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'antiSpamRulesAccepted',
-          'antiSpamRulesAcceptedAt',
-          'antiSpamRulesVersion'
-        ])
-        && request.resource.data.antiSpamRulesAccepted == true
-        && request.resource.data.antiSpamRulesAcceptedAt == request.time
-        && request.resource.data.antiSpamRulesVersion == 1;
-    }
     function validCommunityApprovalMutation(id, uid) {
       let root = communityDoc(id);
       let rootAfter = communityAfter(id);
@@ -1654,6 +1641,19 @@ service cloud.firestore {
       allow update: if validCommunityProjectionRemoval(uid);
       allow delete: if own(uid)
         && !existsAfter(/databases/$(database)/documents/users/$(uid));
+    }
+
+    match /communityGuidelinesAcceptances/{uid} {
+      allow read: if linkedCommunityAccount() && own(uid);
+      allow create, update: if linkedCommunityAccount()
+        && own(uid)
+        && request.resource.data.keys().hasOnly([
+          'accepted', 'acceptedAt', 'version'
+        ])
+        && request.resource.data.accepted == true
+        && request.resource.data.acceptedAt == request.time
+        && request.resource.data.version == 1;
+      allow delete: if linkedCommunityAccount() && own(uid);
     }
 
     match /users/{uid} {
@@ -2069,8 +2069,7 @@ service cloud.firestore {
           && validCommunityMemberAndCopy(id,uid,request.resource.data.role))
           || (validCommunityApprovalSignal(id, uid)
             && validCommunityApprovalMember(id, uid));
-        allow update: if validCommunityGuidelinesAcceptanceUpdate(id, uid)
-          || (linkedCommunityAccount() && own(uid) && communityActive(id)
+        allow update: if (linkedCommunityAccount() && own(uid) && communityActive(id)
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['displayName'])
             && validText(request.resource.data.displayName, 1, 25)
             && request.resource.data.displayName

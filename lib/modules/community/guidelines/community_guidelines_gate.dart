@@ -4,14 +4,8 @@ import 'community_guidelines_screen.dart';
 import 'community_guidelines_service.dart';
 
 class CommunityGuidelinesGate extends StatefulWidget {
-  const CommunityGuidelinesGate({
-    super.key,
-    required this.communityId,
-    required this.child,
-    this.service,
-  });
+  const CommunityGuidelinesGate({super.key, required this.child, this.service});
 
-  final String communityId;
   final Widget child;
   final CommunityGuidelinesService? service;
 
@@ -36,8 +30,7 @@ class _CommunityGuidelinesGateState extends State<CommunityGuidelinesGate> {
   @override
   void didUpdateWidget(covariant CommunityGuidelinesGate oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.communityId != widget.communityId ||
-        oldWidget.service != widget.service) {
+    if (oldWidget.service != widget.service) {
       _accepted = null;
       _error = null;
       _loadAcceptance();
@@ -46,9 +39,7 @@ class _CommunityGuidelinesGateState extends State<CommunityGuidelinesGate> {
 
   Future<void> _loadAcceptance() async {
     try {
-      final accepted = await _service.hasCurrentUserAccepted(
-        widget.communityId,
-      );
+      final accepted = await _service.hasCurrentUserAccepted();
       if (!mounted) return;
       setState(() {
         _accepted = accepted;
@@ -91,7 +82,7 @@ class _CommunityGuidelinesGateState extends State<CommunityGuidelinesGate> {
     if (_accepted!) return widget.child;
 
     return CommunityGuidelinesScreen(
-      onAccept: () => _service.acceptForCurrentUser(widget.communityId),
+      onAccept: _service.acceptForCurrentUser,
       onAccepted: () => setState(() => _accepted = true),
     );
   }

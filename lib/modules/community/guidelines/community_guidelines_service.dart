@@ -4,15 +4,9 @@ import 'community_guidelines_repository.dart';
 
 typedef CommunityGuidelinesCurrentUserId = String? Function();
 typedef CommunityGuidelinesAcceptanceCheck =
-    Future<bool> Function({
-      required String communityId,
-      required String userId,
-    });
+    Future<bool> Function({required String userId});
 typedef CommunityGuidelinesAcceptanceWrite =
-    Future<void> Function({
-      required String communityId,
-      required String userId,
-    });
+    Future<void> Function({required String userId});
 
 class CommunityGuidelinesService {
   CommunityGuidelinesService._(
@@ -47,23 +41,18 @@ class CommunityGuidelinesService {
     return userId;
   }
 
-  Future<bool> hasCurrentUserAccepted(String communityId) async {
-    return _hasAccepted(
-      communityId: communityId,
-      userId: _requireCurrentUserId(),
-    );
-  }
+  Future<bool> hasCurrentUserAccepted() async =>
+      _hasAccepted(userId: _requireCurrentUserId());
 
-  Future<void> acceptForCurrentUser(String communityId) async {
+  Future<void> acceptForCurrentUser() async {
     final userId = _requireCurrentUserId();
-    final key = '$communityId/$userId';
-    if (!_pendingAcceptances.add(key)) {
+    if (!_pendingAcceptances.add(userId)) {
       throw StateError('Community Guidelines acceptance is already pending.');
     }
     try {
-      await _accept(communityId: communityId, userId: userId);
+      await _accept(userId: userId);
     } finally {
-      _pendingAcceptances.remove(key);
+      _pendingAcceptances.remove(userId);
     }
   }
 }

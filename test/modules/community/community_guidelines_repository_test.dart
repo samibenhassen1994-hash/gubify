@@ -3,99 +3,45 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:gubify/modules/community/guidelines/community_guidelines_repository.dart';
 
 void main() {
-  test(
-    'current accepted version is recognized and stale data is rejected',
-    () async {
-      final accepted = CommunityGuidelinesRepository.forTesting(
-        loadMember: ({required communityId, required userId}) async => {
-          'antiSpamRulesAccepted': true,
-          'antiSpamRulesVersion': 1,
-        },
-        writeAcceptance:
-            ({required communityId, required userId, required data}) async {},
-      );
-      expect(
-        await accepted.hasAccepted(
-          communityId: 'community-1',
-          userId: 'member-1',
-        ),
-        isTrue,
-      );
-
-      for (final data in <Map<String, dynamic>?>[
-        null,
-        const {},
-        const {'antiSpamRulesAccepted': true},
-        const {'antiSpamRulesAccepted': false, 'antiSpamRulesVersion': 1},
-        const {'antiSpamRulesAccepted': true, 'antiSpamRulesVersion': 0},
-      ]) {
-        final repository = CommunityGuidelinesRepository.forTesting(
-          loadMember: ({required communityId, required userId}) async => data,
-          writeAcceptance:
-              ({required communityId, required userId, required data}) async {},
-        );
-        expect(
-          await repository.hasAccepted(
-            communityId: 'community-1',
-            userId: 'member-1',
-          ),
-          isFalse,
-        );
-      }
-    },
-  );
-
-  test(
-    'acceptance targets the current member and writes only versioned fields',
-    () async {
-      String? writtenCommunityId;
-      String? writtenUserId;
-      Map<String, Object?>? writtenData;
+  test('global acceptance recognizes only accepted current version', () async {
+    for (final entry in <(Map<String, dynamic>?, bool)>[
+      (null, false),
+      (const {}, false),
+      (const {'accepted': true}, false),
+      (const {'accepted': false, 'version': 1}, false),
+      (const {'accepted': true, 'version': 0}, false),
+      (const {'accepted': true, 'version': 2}, false),
+      (const {'accepted': true, 'version': 1}, true),
+    ]) {
       final repository = CommunityGuidelinesRepository.forTesting(
-        loadMember: ({required communityId, required userId}) async => {
-          'uid': userId,
-        },
-        writeAcceptance:
-            ({
-              required String communityId,
-              required String userId,
-              required Map<String, Object?> data,
-            }) async {
-              writtenCommunityId = communityId;
-              writtenUserId = userId;
-              writtenData = data;
-            },
+        loadAcceptance: ({required userId}) async => entry.$1,
+        writeAcceptance: ({required userId, required data}) async {},
       );
+      expect(await repository.hasAccepted(userId: 'member-1'), entry.$2);
+    }
+  });
 
-      await repository.accept(communityId: 'community-1', userId: 'member-1');
-
-      expect(writtenCommunityId, 'community-1');
-      expect(writtenUserId, 'member-1');
-      expect(writtenData!.keys, {
-        'antiSpamRulesAccepted',
-        'antiSpamRulesAcceptedAt',
-        'antiSpamRulesVersion',
-      });
-      expect(writtenData!['antiSpamRulesAccepted'], isTrue);
-      expect(writtenData!['antiSpamRulesVersion'], 1);
-      expect(writtenData!['antiSpamRulesAcceptedAt'], isA<FieldValue>());
-    },
-  );
-
-  test('acceptance does not create a missing member', () async {
-    var writes = 0;
+  test('accept writes only the global versioned acceptance fields', () async {
+    String? writtenUserId;
+    Map<String, Object?>? writtenData;
     final repository = CommunityGuidelinesRepository.forTesting(
-      loadMember: ({required communityId, required userId}) async => null,
+      loadAcceptance: ({required userId}) async => null,
       writeAcceptance:
-          ({required communityId, required userId, required data}) async {
-            writes++;
+          ({required String userId, required Map<String, Object?> data}) async {
+            writtenUserId = userId;
+            writtenData = data;
           },
     );
 
-    await expectLater(
-      repository.accept(communityId: 'community-1', userId: 'missing-member'),
-      throwsStateError,
+    await repository.accept(userId: 'member-1');
+
+    expect(writtenUserId, 'member-1');
+    expect(writtenData!.keys, {'accepted', 'acceptedAt', 'version'});
+    expect(writtenData!['accepted'], isTrue);
+    expect(
+      writtenData!['version'],
+      CommunityGuidelinesRepository.currentVersion,
     );
-    expect(writes, 0);
+    expect(writtenData!['acceptedAt'], isA<FieldValue>());
   });
 }

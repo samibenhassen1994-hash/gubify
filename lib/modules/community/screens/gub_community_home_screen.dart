@@ -229,7 +229,6 @@ class _GubCommunityHomeScreenState extends State<GubCommunityHomeScreen> {
                   );
 
                   return CommunityGuidelinesGate(
-                    communityId: community.communityId,
                     child: Stack(
                       children: [
                         CommunityHomeContent(

@@ -267,6 +267,76 @@ void main() {
     expect(artwork.bottom, lessThanOrEqualTo(checkbox.top));
   });
 
+  testWidgets('pages four and five keep the same artwork viewport', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_app());
+    final pageView = tester.widget<PageView>(
+      find.byKey(const Key('community-guidelines-pages')),
+    );
+    pageView.controller!.jumpToPage(3);
+    await tester.pump();
+    final pageFour = tester.getRect(
+      find.byKey(const Key('community-guidelines-page-3')),
+    );
+
+    pageView.controller!.jumpToPage(4);
+    await tester.pump();
+    final pageFive = tester.getRect(
+      find.byKey(const Key('community-guidelines-page-4')),
+    );
+
+    expect(pageFive, pageFour);
+    expect(
+      tester
+          .widget<Image>(find.byKey(const Key('community-guidelines-page-4')))
+          .fit,
+      BoxFit.contain,
+    );
+  });
+
+  testWidgets(
+    'Guidelines link opens official URL without toggling acceptance',
+    (tester) async {
+      Uri? launched;
+      await tester.pumpWidget(
+        _app(
+          launchGuidelines: (uri) async {
+            launched = uri;
+            return true;
+          },
+        ),
+      );
+      await _showFinalPage(tester);
+
+      await tester.tap(find.text('Community Guidelines'));
+      await tester.pump();
+
+      expect(launched, Uri.parse('https://gubify.com/guidelines'));
+      expect(tester.widget<Checkbox>(find.byType(Checkbox)).value, isFalse);
+    },
+  );
+
+  testWidgets('failed Guidelines launch stays unaccepted and shows an error', (
+    tester,
+  ) async {
+    var accepts = 0;
+    await tester.pumpWidget(
+      _app(
+        onAccept: () async => accepts++,
+        launchGuidelines: (_) async => false,
+      ),
+    );
+    await _showFinalPage(tester);
+
+    await tester.tap(find.text('Community Guidelines'));
+    await tester.pump();
+
+    expect(find.text('Unable to open Community Guidelines.'), findsOneWidget);
+    expect(tester.widget<Checkbox>(find.byType(Checkbox)).value, isFalse);
+    expect(accepts, 0);
+  });
+
   testWidgets('saving blocks Back and swipe navigation', (tester) async {
     final pending = Completer<void>();
     await tester.pumpWidget(_app(onAccept: () => pending.future));
@@ -345,15 +415,21 @@ void main() {
 
     await tester.pumpWidget(_app());
     await _showFinalPage(tester);
-    expect(tester.takeException(), isNull);
+    final exception = tester.takeException();
+    expect(exception, isNull);
   });
 }
 
-Widget _app({Future<void> Function()? onAccept, VoidCallback? onAccepted}) {
+Widget _app({
+  Future<void> Function()? onAccept,
+  VoidCallback? onAccepted,
+  Future<bool> Function(Uri)? launchGuidelines,
+}) {
   return MaterialApp(
     home: CommunityGuidelinesScreen(
       onAccept: onAccept ?? () async {},
       onAccepted: onAccepted ?? () {},
+      launchGuidelines: launchGuidelines,
     ),
   );
 }
