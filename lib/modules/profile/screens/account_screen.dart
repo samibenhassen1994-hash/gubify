@@ -170,20 +170,35 @@ class _AccountScreenState extends State<AccountScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Account')),
-      body: FutureBuilder<AccountDetailsModel?>(
-        future: _details,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState != ConnectionState.done) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (snapshot.hasError || snapshot.data == null) {
-            return const Center(child: Text('Unable to load account details.'));
-          }
-          return _buildDetails(snapshot.data!);
-        },
-      ),
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        IgnorePointer(
+          child: Image.asset(
+            'assets/images/settings/background_user_setting.png',
+            fit: BoxFit.cover,
+            alignment: Alignment.center,
+          ),
+        ),
+        Scaffold(
+          backgroundColor: Colors.transparent,
+          appBar: AppBar(title: const Text('Account')),
+          body: FutureBuilder<AccountDetailsModel?>(
+            future: _details,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState != ConnectionState.done) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              if (snapshot.hasError || snapshot.data == null) {
+                return const Center(
+                  child: Text('Unable to load account details.'),
+                );
+              }
+              return _buildDetails(snapshot.data!);
+            },
+          ),
+        ),
+      ],
     );
   }
 

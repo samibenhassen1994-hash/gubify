@@ -11,6 +11,7 @@ import '../modules/profile/screens/account_screen.dart';
 import '../modules/profile/screens/user_profile_screen.dart';
 import '../modules/profile/widgets/account_session_section.dart';
 import '../modules/profile/widgets/google_account_connection_section.dart';
+import '../modules/legal/legal_links.dart';
 import '../pages/startup_screen.dart';
 import '../repositories/user_repository.dart';
 import '../services/app_sound_service.dart';
@@ -281,10 +282,16 @@ class _UserHeaderState extends State<UserHeader> {
 }
 
 class UserSettingsSheet extends StatefulWidget {
-  const UserSettingsSheet({super.key, this.authService, this.onLoggedOut});
+  const UserSettingsSheet({
+    super.key,
+    this.authService,
+    this.onLoggedOut,
+    this.legalUrlLauncher,
+  });
 
   final AuthService? authService;
   final Future<void> Function()? onLoggedOut;
+  final LegalUrlLauncher? legalUrlLauncher;
 
   @override
   State<UserSettingsSheet> createState() => _UserSettingsSheetState();
@@ -334,6 +341,26 @@ class _UserSettingsSheetState extends State<UserSettingsSheet> {
     );
   }
 
+  Future<void> _openSupport() async {
+    final opened = await LegalLinks.openSupport(
+      launcher: widget.legalUrlLauncher,
+    );
+    if (!mounted || opened) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Unable to open Support.')));
+  }
+
+  Future<void> _openBugReport() async {
+    final opened = await LegalLinks.openBugReport(
+      launcher: widget.legalUrlLauncher,
+    );
+    if (!mounted || opened) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Unable to open Report a bug.')),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -365,6 +392,26 @@ class _UserSettingsSheetState extends State<UserSettingsSheet> {
                   builder: (_) => AccountScreen(authService: _authService),
                 ),
               ),
+            ),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.support_agent_outlined),
+              title: const Text(
+                'Support',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
+              trailing: const Icon(Icons.chevron_right_rounded),
+              onTap: _openSupport,
+            ),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.bug_report_outlined),
+              title: const Text(
+                'Report a bug',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
+              trailing: const Icon(Icons.chevron_right_rounded),
+              onTap: _openBugReport,
             ),
             ValueListenableBuilder<bool>(
               valueListenable: AppSoundService.instance.enabledListenable,

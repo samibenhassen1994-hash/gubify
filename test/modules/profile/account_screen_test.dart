@@ -49,6 +49,27 @@ void main() {
     expect(find.text('Delete account'), findsOneWidget);
   });
 
+  testWidgets('Account keeps its content above the full-screen background', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      subject(anonymous: false, providers: const ['password']),
+    );
+    await tester.pumpAndSettle();
+
+    final background = find.byWidgetPredicate(
+      (widget) =>
+          widget is Image &&
+          widget.image is AssetImage &&
+          (widget.image as AssetImage).assetName ==
+              'assets/images/settings/background_user_setting.png',
+    );
+    expect(background, findsOneWidget);
+    expect(tester.widget<Image>(background).fit, BoxFit.cover);
+    expect(tester.widget<Image>(background).alignment, Alignment.center);
+    expect(find.text('Name'), findsOneWidget);
+  });
+
   testWidgets('Google-only account exposes no password or linking action', (
     tester,
   ) async {

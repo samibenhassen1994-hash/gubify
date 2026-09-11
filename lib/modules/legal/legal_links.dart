@@ -6,6 +6,8 @@ typedef LegalUrlLauncher =
 abstract final class LegalLinks {
   static final privacyPolicyUri = Uri.parse('https://gubify.com/privacy');
   static final termsOfServiceUri = Uri.parse('https://gubify.com/terms');
+  static final supportUri = Uri.parse('https://gubify.com/support');
+  static final bugReportUri = Uri.parse('https://gubify.com/feedback?type=bug');
 
   static Future<bool> openPrivacyPolicy({LegalUrlLauncher? launcher}) {
     return _open(privacyPolicyUri, launcher: launcher);
@@ -13,6 +15,14 @@ abstract final class LegalLinks {
 
   static Future<bool> openTermsOfService({LegalUrlLauncher? launcher}) {
     return _open(termsOfServiceUri, launcher: launcher);
+  }
+
+  static Future<bool> openSupport({LegalUrlLauncher? launcher}) {
+    return _open(supportUri, launcher: launcher);
+  }
+
+  static Future<bool> openBugReport({LegalUrlLauncher? launcher}) {
+    return _open(bugReportUri, launcher: launcher);
   }
 
   static Future<bool> _open(Uri uri, {LegalUrlLauncher? launcher}) async {

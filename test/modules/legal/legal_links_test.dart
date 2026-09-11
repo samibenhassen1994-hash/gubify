@@ -38,4 +38,43 @@ void main() {
       (Uri.parse('https://gubify.com/terms'), LaunchMode.externalApplication),
     ]);
   });
+
+  test('opens Support in the in-app browser at its canonical URL', () async {
+    final calls = <(Uri, LaunchMode)>[];
+
+    final opened = await LegalLinks.openSupport(
+      launcher: (uri, {required mode}) async {
+        calls.add((uri, mode));
+        return true;
+      },
+    );
+
+    expect(opened, isTrue);
+    expect(calls, [
+      (Uri.parse('https://gubify.com/support'), LaunchMode.inAppBrowserView),
+    ]);
+  });
+
+  test('falls back to the external browser for Report a bug', () async {
+    final calls = <(Uri, LaunchMode)>[];
+
+    final opened = await LegalLinks.openBugReport(
+      launcher: (uri, {required mode}) async {
+        calls.add((uri, mode));
+        return mode == LaunchMode.externalApplication;
+      },
+    );
+
+    expect(opened, isTrue);
+    expect(calls, [
+      (
+        Uri.parse('https://gubify.com/feedback?type=bug'),
+        LaunchMode.inAppBrowserView,
+      ),
+      (
+        Uri.parse('https://gubify.com/feedback?type=bug'),
+        LaunchMode.externalApplication,
+      ),
+    ]);
+  });
 }

@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:gubify/modules/profile/widgets/account_session_section.dart';
 import 'package:gubify/modules/profile/widgets/google_account_connection_section.dart';
 import 'package:gubify/services/auth_service.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:gubify/widgets/user_header.dart';
 
 void main() {
@@ -193,6 +194,44 @@ void main() {
       find.text('To log out, secure your account first.'),
       findsNothing,
     );
+  });
+
+  testWidgets('settings opens Support and Report a bug at canonical URLs', (
+    tester,
+  ) async {
+    final opened = <(Uri, LaunchMode)>[];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: UserSettingsSheet(
+            authService: serviceFor(
+              anonymous: false,
+              providerIds: const ['password'],
+            ),
+            onLoggedOut: () async {},
+            legalUrlLauncher: (uri, {required mode}) async {
+              opened.add((uri, mode));
+              return true;
+            },
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Support'), findsOneWidget);
+    expect(find.text('Report a bug'), findsOneWidget);
+    await tester.tap(find.text('Support'));
+    await tester.pump();
+    await tester.tap(find.text('Report a bug'));
+    await tester.pump();
+
+    expect(opened, [
+      (Uri.parse('https://gubify.com/support'), LaunchMode.inAppBrowserView),
+      (
+        Uri.parse('https://gubify.com/feedback?type=bug'),
+        LaunchMode.inAppBrowserView,
+      ),
+    ]);
   });
 
   testWidgets('settings shows anonymous warning and opens account security', (
