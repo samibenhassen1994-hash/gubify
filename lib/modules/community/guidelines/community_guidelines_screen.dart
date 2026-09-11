@@ -172,121 +172,133 @@ class _CommunityGuidelinesScreenState extends State<CommunityGuidelinesScreen>
         color: const Color(0xFF08065F),
         child: Material(
           type: MaterialType.transparency,
-          child: SafeArea(
-            child: Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
-                  child: AnimatedBuilder(
-                    animation: _progressController,
-                    builder: (context, child) => Row(
-                      children: [
-                        for (
-                          var index = 0;
-                          index < CommunityGuidelinesScreen.imageAssets.length;
-                          index++
-                        )
-                          Expanded(
-                            child: Padding(
-                              padding: EdgeInsets.only(
-                                right:
-                                    index ==
-                                        CommunityGuidelinesScreen
-                                                .imageAssets
-                                                .length -
-                                            1
-                                    ? 0
-                                    : 5,
-                              ),
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(99),
-                                child: LinearProgressIndicator(
-                                  key: Key(
-                                    'community-guidelines-progress-$index',
-                                  ),
-                                  minHeight: 4,
-                                  value: index < _currentPage
-                                      ? 1
-                                      : index == _currentPage
-                                      ? (_currentPage ==
-                                                CommunityGuidelinesScreen
-                                                        .imageAssets
-                                                        .length -
-                                                    1
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              SizedBox.expand(
+                key: const Key('community-guidelines-artwork-viewport'),
+                child: PageView(
+                  key: const Key('community-guidelines-pages'),
+                  controller: _pageController,
+                  physics: _saving
+                      ? const NeverScrollableScrollPhysics()
+                      : const PageScrollPhysics(),
+                  onPageChanged: _handlePageChanged,
+                  children: [
+                    for (
+                      var index = 0;
+                      index < CommunityGuidelinesScreen.imageAssets.length;
+                      index++
+                    )
+                      Image.asset(
+                        CommunityGuidelinesScreen.imageAssets[index],
+                        key: Key('community-guidelines-page-$index'),
+                        fit: BoxFit.cover,
+                      ),
+                  ],
+                ),
+              ),
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: SafeArea(
+                  bottom: false,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
+                        child: AnimatedBuilder(
+                          animation: _progressController,
+                          builder: (context, child) => Row(
+                            children: [
+                              for (
+                                var index = 0;
+                                index <
+                                    CommunityGuidelinesScreen
+                                        .imageAssets
+                                        .length;
+                                index++
+                              )
+                                Expanded(
+                                  child: Padding(
+                                    padding: EdgeInsets.only(
+                                      right:
+                                          index ==
+                                              CommunityGuidelinesScreen
+                                                      .imageAssets
+                                                      .length -
+                                                  1
+                                          ? 0
+                                          : 5,
+                                    ),
+                                    child: ClipRRect(
+                                      borderRadius: BorderRadius.circular(99),
+                                      child: LinearProgressIndicator(
+                                        key: Key(
+                                          'community-guidelines-progress-$index',
+                                        ),
+                                        minHeight: 4,
+                                        value: index < _currentPage
                                             ? 1
-                                            : _progressController.value)
-                                      : 0,
-                                  backgroundColor: Colors.white.withValues(
-                                    alpha: 0.28,
-                                  ),
-                                  valueColor:
-                                      const AlwaysStoppedAnimation<Color>(
-                                        Colors.white,
+                                            : index == _currentPage
+                                            ? (_currentPage ==
+                                                      CommunityGuidelinesScreen
+                                                              .imageAssets
+                                                              .length -
+                                                          1
+                                                  ? 1
+                                                  : _progressController.value)
+                                            : 0,
+                                        backgroundColor: Colors.white
+                                            .withValues(alpha: 0.28),
+                                        valueColor:
+                                            const AlwaysStoppedAnimation<Color>(
+                                              Colors.white,
+                                            ),
                                       ),
+                                    ),
+                                  ),
                                 ),
-                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(8, 0, 8, 4),
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: Material(
+                            color: Colors.white.withValues(alpha: 0.16),
+                            shape: const CircleBorder(),
+                            child: IconButton(
+                              key: const Key('community-guidelines-back'),
+                              tooltip: 'Back',
+                              onPressed: _saving ? null : _goBack,
+                              icon: const Icon(Icons.arrow_back_rounded),
+                              color: Colors.white,
+                              disabledColor: Colors.white38,
                             ),
                           ),
-                      ],
-                    ),
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(8, 0, 8, 4),
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: Material(
-                      color: Colors.white.withValues(alpha: 0.16),
-                      shape: const CircleBorder(),
-                      child: IconButton(
-                        key: const Key('community-guidelines-back'),
-                        tooltip: 'Back',
-                        onPressed: _saving ? null : _goBack,
-                        icon: const Icon(Icons.arrow_back_rounded),
-                        color: Colors.white,
-                        disabledColor: Colors.white38,
+                        ),
                       ),
-                    ),
+                    ],
                   ),
                 ),
-                Expanded(
-                  child: SizedBox.expand(
-                    key: const Key('community-guidelines-artwork-viewport'),
-                    child: PageView(
-                      key: const Key('community-guidelines-pages'),
-                      controller: _pageController,
-                      physics: _saving
-                          ? const NeverScrollableScrollPhysics()
-                          : const PageScrollPhysics(),
-                      onPageChanged: _handlePageChanged,
-                      children: [
-                        for (
-                          var index = 0;
-                          index < CommunityGuidelinesScreen.imageAssets.length;
-                          index++
-                        )
-                          Image.asset(
-                            CommunityGuidelinesScreen.imageAssets[index],
-                            key: Key('community-guidelines-page-$index'),
-                            fit: BoxFit.contain,
-                          ),
-                      ],
-                    ),
-                  ),
-                ),
-                SizedBox(
-                  key: const Key('community-guidelines-acceptance-panel-space'),
-                  height: 156,
-                  child: Visibility(
-                    visible:
-                        _currentPage ==
-                        CommunityGuidelinesScreen.imageAssets.length - 1,
-                    maintainSize: true,
-                    maintainAnimation: true,
-                    maintainState: true,
+              ),
+              if (_currentPage ==
+                  CommunityGuidelinesScreen.imageAssets.length - 1)
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  child: SafeArea(
+                    top: false,
                     child: Container(
+                      key: const Key('community-guidelines-acceptance-overlay'),
                       padding: const EdgeInsets.fromLTRB(16, 10, 16, 14),
-                      color: const Color(0xFF08065F),
+                      color: const Color(0xE608065F),
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
@@ -374,8 +386,7 @@ class _CommunityGuidelinesScreenState extends State<CommunityGuidelinesScreen>
                     ),
                   ),
                 ),
-              ],
-            ),
+            ],
           ),
         ),
       ),

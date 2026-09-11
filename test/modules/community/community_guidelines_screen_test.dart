@@ -26,7 +26,7 @@ void main() {
     expect(find.text('I have read the Community Guidelines'), findsNothing);
   });
 
-  testWidgets('visible Back sits below progress and above the artwork', (
+  testWidgets('visible Back overlays the full-screen artwork below progress', (
     tester,
   ) async {
     await tester.pumpWidget(_app());
@@ -42,7 +42,8 @@ void main() {
     );
 
     expect(back.top, greaterThanOrEqualTo(progress.bottom));
-    expect(back.bottom, lessThanOrEqualTo(artwork.top));
+    expect(back.bottom, lessThanOrEqualTo(artwork.bottom));
+    expect(back.top, greaterThanOrEqualTo(artwork.top));
     expect(find.byIcon(Icons.arrow_back_rounded), findsOneWidget);
   });
 
@@ -251,7 +252,7 @@ void main() {
     );
   });
 
-  testWidgets('final acceptance controls are laid out below the artwork', (
+  testWidgets('final acceptance controls overlay the full-screen artwork', (
     tester,
   ) async {
     await tester.pumpWidget(_app());
@@ -263,11 +264,16 @@ void main() {
     final checkbox = tester.getRect(
       find.byKey(const Key('community-guidelines-checkbox')),
     );
+    final panel = tester.getRect(
+      find.byKey(const Key('community-guidelines-acceptance-overlay')),
+    );
 
-    expect(artwork.bottom, lessThanOrEqualTo(checkbox.top));
+    expect(panel.overlaps(artwork), isTrue);
+    expect(checkbox.top, greaterThanOrEqualTo(panel.top));
+    expect(checkbox.bottom, lessThanOrEqualTo(panel.bottom));
   });
 
-  testWidgets('pages four and five keep the same artwork viewport', (
+  testWidgets('all pages use the same full-screen cover artwork viewport', (
     tester,
   ) async {
     await tester.pumpWidget(_app());
@@ -291,8 +297,27 @@ void main() {
       tester
           .widget<Image>(find.byKey(const Key('community-guidelines-page-4')))
           .fit,
-      BoxFit.contain,
+      BoxFit.cover,
     );
+  });
+
+  testWidgets('pages one to four reserve no bottom acceptance panel space', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_app());
+
+    final screen = tester.getRect(
+      find.byKey(const Key('community-guidelines-pages')),
+    );
+    final artwork = tester.getRect(
+      find.byKey(const Key('community-guidelines-page-0')),
+    );
+
+    expect(
+      find.byKey(const Key('community-guidelines-acceptance-overlay')),
+      findsNothing,
+    );
+    expect(artwork, screen);
   });
 
   testWidgets(
