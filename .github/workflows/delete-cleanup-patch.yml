@@ -5,105 +5,23 @@ on:
     branches:
       - fix/delete-cleanup-orphans
 
-permissions:
-  contents: write
-
 jobs:
   patch:
-    if: github.event.head_commit.message == 'chore: apply deletion cleanup patch'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
         with:
           ref: fix/delete-cleanup-orphans
           fetch-depth: 0
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      - name: Patch deletion cleanup coverage
-        shell: bash
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-
-          def replace_once(path, old, new):
-              p = Path(path)
-              text = p.read_text()
-              if old not in text:
-                  raise SystemExit(f'Expected snippet not found in {path}: {old[:80]!r}')
-              p.write_text(text.replace(old, new, 1))
-
-          account = 'lib/modules/profile/repositories/account_deletion_repository.dart'
-          replace_once(
-              account,
-              """  static const profileSubcollectionsForDeletion = <String>[\n    'gubs',\n    'communities',\n    'blockedUsers',\n  ];\n""",
-              """  static const profileSubcollectionsForDeletion = <String>[\n    'gubs',\n    'communities',\n    'blockedUsers',\n  ];\n\n  @visibleForTesting\n  static const externalCollectionGroupsForDeletion = <String>[\n    'joinRequests',\n  ];\n""",
-          )
-          replace_once(
-              account,
-              """  Future<void> deleteProfile(String userId) async {\n    final userReference = _firestore.collection('users').doc(userId);\n""",
-              """  Future<void> deleteProfile(String userId) async {\n    await _deleteExternalUserDocuments(userId);\n    final userReference = _firestore.collection('users').doc(userId);\n""",
-          )
-          replace_once(
-              account,
-              """  Future<void> _deleteCollection(\n    CollectionReference<Map<String, dynamic>> collection,\n  ) async {\n""",
-              """  Future<void> _deleteExternalUserDocuments(String userId) async {\n    for (final collectionGroup in externalCollectionGroupsForDeletion) {\n      while (true) {\n        final page = await _firestore\n            .collectionGroup(collectionGroup)\n            .where('userId', isEqualTo: userId)\n            .limit(_deletePageSize)\n            .get(const GetOptions(source: Source.server));\n        if (page.docs.isEmpty) break;\n\n        final batch = _firestore.batch();\n        for (final document in page.docs) {\n          batch.delete(document.reference);\n        }\n        await batch.commit();\n      }\n    }\n  }\n\n  Future<void> _deleteCollection(\n    CollectionReference<Map<String, dynamic>> collection,\n  ) async {\n""",
-          )
-
-          community = 'lib/modules/community/repositories/community_repository.dart'
-          replace_once(
-              community,
-              """  static const String _deletionMembersSubcollection = \"deletionMembers\";\n""",
-              """  static const String _deletionMembersSubcollection = \"deletionMembers\";\n\n  @visibleForTesting\n  static const List<String> rewardReferenceFieldsForDeletion = [\n    'lastRewardCommunityId',\n    'lastRewardAskId',\n    'lastRewardRole',\n  ];\n""",
-          )
-          replace_once(
-              community,
-              """          await _deleteUserMembershipCopies(\n            communityId: normalizedCommunityId,\n            communityReference: communityReference,\n          );\n\n          deletionStep = 'delete_ask_answers';\n""",
-              """          await _deleteUserMembershipCopies(\n            communityId: normalizedCommunityId,\n            communityReference: communityReference,\n          );\n\n          deletionStep = 'delete_reward_references';\n          deletionPath = 'communityUserProgress/*';\n          await _deleteCommunityRewardReferences(normalizedCommunityId);\n\n          deletionStep = 'delete_ask_answers';\n""",
-          )
-          replace_once(
-              community,
-              """  Future<void> _deleteOwnershipAndCommunity({\n""",
-              """  Future<void> _deleteCommunityRewardReferences(String communityId) async {\n    while (true) {\n      final page = await _firestore\n          .collection('communityUserProgress')\n          .where('lastRewardCommunityId', isEqualTo: communityId)\n          .limit(_batchSize)\n          .get();\n      if (page.docs.isEmpty) return;\n\n      final batch = _firestore.batch();\n      for (final document in page.docs) {\n        batch.update(document.reference, {\n          for (final field in rewardReferenceFieldsForDeletion)\n            field: FieldValue.delete(),\n        });\n      }\n      await batch.commit();\n    }\n  }\n\n  Future<void> _deleteOwnershipAndCommunity({\n""",
-          )
-
-          rules = 'firestore.rules'
-          replace_once(
-              rules,
-              """    function validCommunityProjectionVersion(uid) {\n""",
-              """    function validCommunityRewardReferenceCleanup(uid) {\n      let id = resource.data.get('lastRewardCommunityId', '');\n      let after = request.resource.data;\n      return linkedCommunityAccount()\n        && id is string && id.size() > 0\n        && communityDeletingOwner(id)\n        && validCommunityProgressSchema(after)\n        && after.diff(resource.data).affectedKeys().hasOnly([\n          'lastRewardCommunityId','lastRewardAskId','lastRewardRole'\n        ])\n        && !after.keys().hasAny([\n          'lastRewardCommunityId','lastRewardAskId','lastRewardRole'\n        ]);\n    }\n    function validCommunityProjectionVersion(uid) {\n""",
-          )
-          replace_once(
-              rules,
-              """      allow update: if validCommunityProjectionRemoval(uid);\n""",
-              """      allow update: if validCommunityProjectionRemoval(uid)\n        || validCommunityRewardReferenceCleanup(uid);\n""",
-          )
-          replace_once(
-              rules,
-              """    match /{path=**}/members/{memberId} {\n      allow list: if signedIn() && resource.data.uid == request.auth.uid;\n    }\n\n    match /inviteTokens/{canonicalCode} {\n""",
-              """    match /{path=**}/members/{memberId} {\n      allow list: if signedIn() && resource.data.uid == request.auth.uid;\n    }\n\n    match /{path=**}/joinRequests/{uid} {\n      allow list: if linkedCommunityAccount()\n        && resource.data.userId == request.auth.uid;\n    }\n\n    match /inviteTokens/{canonicalCode} {\n""",
-          )
-          replace_once(
-              rules,
-              """            || (!existsAfter(/databases/$(database)/documents/users/$(uid))\n              && resource.data.status in ['approved','rejected'])))\n          || communityDeletingOwner(id);\n""",
-              """            || ((!existsAfter(/databases/$(database)/documents/users/$(uid))\n                  || !exists(communityMemberPath(id, uid)))\n              && resource.data.status in ['approved','rejected'])))\n          || communityDeletingOwner(id);\n""",
-          )
-          replace_once(
-              rules,
-              """          allow update, delete: if false;\n        }\n\n        match /likes/{uid} {\n""",
-              """          allow update: if false;\n          allow delete: if gubDeletingOwner(id);\n        }\n\n        match /likes/{uid} {\n""",
-          )
-          replace_once(
-              rules,
-              """          allow delete: if own(uid) && isGubMember(id) && gubActive(id)\n            && getAfter(/databases/$(database)/documents/gubs/$(id)/posts/$(postId)).data.likes\n              == get(/databases/$(database)/documents/gubs/$(id)/posts/$(postId)).data.likes - 1;\n""",
-              """          allow delete: if (own(uid) && isGubMember(id) && gubActive(id)\n            && getAfter(/databases/$(database)/documents/gubs/$(id)/posts/$(postId)).data.likes\n              == get(/databases/$(database)/documents/gubs/$(id)/posts/$(postId)).data.likes - 1)\n            || gubDeletingOwner(id);\n""",
-          )
-          PY
-      - name: Commit patch
-        shell: bash
+      - name: Apply patch
+        run: python tool/delete_cleanup_patch.py
+      - name: Commit patched files
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/delete-cleanup-patch.yml tool/delete_cleanup_patch.py
           git add firestore.rules lib/modules/profile/repositories/account_deletion_repository.dart lib/modules/community/repositories/community_repository.dart
           git commit -m "fix: complete deletion cleanup coverage"
           git push origin HEAD:fix/delete-cleanup-orphans
