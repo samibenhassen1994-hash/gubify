@@ -23,19 +23,19 @@ jobs:
           cache: true
       - name: Install Flutter dependencies
         run: flutter pub get
-      - name: Check Dart formatting
-        run: dart format --output=none --set-exit-if-changed lib/repositories/gub_deletion_repository.dart lib/modules/profile/repositories/account_deletion_repository.dart lib/modules/community/repositories/community_repository.dart test/services/deletion_cleanup_manifest_test.dart
+      - name: Format changed Dart files
+        run: dart format lib/repositories/gub_deletion_repository.dart lib/modules/profile/repositories/account_deletion_repository.dart lib/modules/community/repositories/community_repository.dart test/services/deletion_cleanup_manifest_test.dart
       - name: Run Flutter tests
         run: flutter test
       - name: Run Flutter analyzer
         run: flutter analyze
       - name: Compile Firestore rules in emulator
         run: npx --yes firebase-tools emulators:exec --only firestore --project demo-gubify "echo rules-compiled"
-      - name: Commit verified rules patch and remove temporary verification files
+      - name: Commit verified cleanup and remove temporary verification files
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git rm .github/workflows/delete-cleanup-verify.yml tool/delete_cleanup_verify_patch.py
-          git add firestore.rules
-          git commit -m "fix: allow safe join request cleanup during account deletion"
+          git add firestore.rules lib/repositories/gub_deletion_repository.dart lib/modules/profile/repositories/account_deletion_repository.dart lib/modules/community/repositories/community_repository.dart test/services/deletion_cleanup_manifest_test.dart
+          git commit -m "fix: finalize verified deletion cleanup"
           git push origin HEAD:fix/delete-cleanup-orphans
