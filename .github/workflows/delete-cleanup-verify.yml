@@ -1,0 +1,41 @@
+name: Verify deletion cleanup
+
+on:
+  push:
+    branches:
+      - fix/delete-cleanup-orphans
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/delete-cleanup-orphans
+          fetch-depth: 0
+      - name: Apply final rules edge-case patch
+        run: python tool/delete_cleanup_verify_patch.py
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Install Flutter dependencies
+        run: flutter pub get
+      - name: Check Dart formatting
+        run: dart format --output=none --set-exit-if-changed lib/repositories/gub_deletion_repository.dart lib/modules/profile/repositories/account_deletion_repository.dart lib/modules/community/repositories/community_repository.dart test/services/deletion_cleanup_manifest_test.dart
+      - name: Run Flutter tests
+        run: flutter test
+      - name: Run Flutter analyzer
+        run: flutter analyze
+      - name: Compile Firestore rules in emulator
+        run: npx --yes firebase-tools emulators:exec --only firestore --project demo-gubify "echo rules-compiled"
+      - name: Commit verified rules patch and remove temporary verification files
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/delete-cleanup-verify.yml tool/delete_cleanup_verify_patch.py
+          git add firestore.rules
+          git commit -m "fix: allow safe join request cleanup during account deletion"
+          git push origin HEAD:fix/delete-cleanup-orphans
