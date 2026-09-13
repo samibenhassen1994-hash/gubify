@@ -1,0 +1,5 @@
+Analyzing gubify...                                             
+
+warning • Returning a 'Future' without 'await' inside a try block. Try adding an 'await' • lib/services/gub_service.dart:164:7 • unawaited_return_in_try_block
+
+1 issue found. (ran in 14.3s)
