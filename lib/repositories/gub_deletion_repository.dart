@@ -22,6 +22,25 @@ class GubDeletionRepository {
 
   static const _pageSize = 300;
 
+  static const Map<String, List<String>> nestedCollectionsForDeletion = {
+    'proposals': ['votes'],
+    'goals': ['members'],
+    'posts': ['comments', 'likes'],
+  };
+
+  static const List<String> directCollectionsForDeletion = [
+    'messages',
+    'chatReads',
+    'boardReads',
+    'tasks',
+    'events',
+    'organizedEvents',
+    'notifications',
+    'creationCooldowns',
+    'bans',
+    'members',
+  ];
+
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   DocumentReference<Map<String, dynamic>> _gub(String gubId) =>
@@ -64,14 +83,12 @@ class GubDeletionRepository {
     final phase = _phaseFrom(data['deletionPhase']);
     if (phase.index <= GubDeletionPhase.nestedCollections.index) {
       onPhase(GubDeletionPhase.nestedCollections);
-      await _deleteParentsWithChildren(
-        parents: gubReference.collection('proposals'),
-        childCollection: 'votes',
-      );
-      await _deleteParentsWithChildren(
-        parents: gubReference.collection('goals'),
-        childCollection: 'members',
-      );
+      for (final entry in nestedCollectionsForDeletion.entries) {
+        await _deleteParentsWithChildren(
+          parents: gubReference.collection(entry.key),
+          childCollections: entry.value,
+        );
+      }
       await _completePhase(
         gubReference,
         ownerId,
@@ -81,18 +98,7 @@ class GubDeletionRepository {
 
     if (phase.index <= GubDeletionPhase.directCollections.index) {
       onPhase(GubDeletionPhase.directCollections);
-      for (final collection in const [
-        'messages',
-        'chatReads',
-        'boardReads',
-        'posts',
-        'tasks',
-        'events',
-        'organizedEvents',
-        'notifications',
-        'creationCooldowns',
-        'members',
-      ]) {
+      for (final collection in directCollectionsForDeletion) {
         await _deleteCollection(gubReference.collection(collection));
       }
       await _completePhase(
@@ -275,7 +281,7 @@ class GubDeletionRepository {
 
   Future<void> _deleteParentsWithChildren({
     required CollectionReference<Map<String, dynamic>> parents,
-    required String childCollection,
+    required List<String> childCollections,
   }) async {
     while (true) {
       final page = await parents
@@ -285,7 +291,9 @@ class GubDeletionRepository {
       if (page.docs.isEmpty) return;
 
       for (final parent in page.docs) {
-        await _deleteCollection(parent.reference.collection(childCollection));
+        for (final childCollection in childCollections) {
+          await _deleteCollection(parent.reference.collection(childCollection));
+        }
       }
 
       await _deleteReferences(page.docs.map((document) => document.reference));
