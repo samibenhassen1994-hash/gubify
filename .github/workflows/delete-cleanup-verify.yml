@@ -1,4 +1,4 @@
-name: Verify deletion cleanup
+name: Capture deletion analyzer output
 
 on:
   push:
@@ -6,8 +6,7 @@ on:
       - fix/delete-cleanup-orphans
 
 jobs:
-  verify:
-    if: github.event.head_commit.message != 'chore: capture analyzer diagnostics'
+  analyze:
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -16,34 +15,18 @@ jobs:
         with:
           ref: fix/delete-cleanup-orphans
           fetch-depth: 0
-      - name: Apply final rules edge-case patch
-        run: python tool/delete_cleanup_verify_patch.py
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
           cache: true
-      - name: Install Flutter dependencies
-        run: flutter pub get
-      - name: Format changed Dart files
-        run: dart format lib/repositories/gub_deletion_repository.dart lib/modules/profile/repositories/account_deletion_repository.dart lib/modules/community/repositories/community_repository.dart test/services/deletion_cleanup_manifest_test.dart
-      - name: Capture Flutter analyzer diagnostics
-        id: analyze
-        shell: bash
-        run: |
-          set +e
-          flutter analyze > analyzer-output.txt 2>&1
-          code=$?
-          cat analyzer-output.txt
-          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
-          exit 0
-      - name: Commit analyzer diagnostics
-        if: steps.analyze.outputs.exit_code != '0'
+      - run: flutter pub get
+      - name: Capture analyzer output
+        run: flutter analyze > analyzer-output.txt 2>&1 || true
+      - name: Save diagnostic and remove temporary workflow
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/delete-cleanup-verify.yml tool/delete_cleanup_verify_patch.py
           git add analyzer-output.txt
-          git commit -m "chore: capture analyzer diagnostics"
+          git commit -m "chore: save analyzer output"
           git push origin HEAD:fix/delete-cleanup-orphans
-      - name: Fail on analyzer diagnostics
-        if: steps.analyze.outputs.exit_code != '0'
-        run: exit 1
