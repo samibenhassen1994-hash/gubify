@@ -25,12 +25,20 @@ class AccountDeletionRepository implements AccountDeletionRepositoryContract {
   final FirebaseFirestore _firestore;
   static const deletedUserId = '__deleted_user__';
   static const deletedUserName = 'Deleted user';
+  static const _deletePageSize = 300;
 
   @visibleForTesting
   static const profileDocumentCollections = <String>[
     'communityGuidelinesAcceptances',
     'communityUserProgress',
     'users',
+  ];
+
+  @visibleForTesting
+  static const profileSubcollectionsForDeletion = <String>[
+    'gubs',
+    'communities',
+    'blockedUsers',
   ];
 
   @visibleForTesting
@@ -391,12 +399,35 @@ class AccountDeletionRepository implements AccountDeletionRepositoryContract {
           .delete();
 
   @override
-  Future<void> deleteProfile(String userId) {
+  Future<void> deleteProfile(String userId) async {
+    final userReference = _firestore.collection('users').doc(userId);
+    for (final collection in profileSubcollectionsForDeletion) {
+      await _deleteCollection(userReference.collection(collection));
+    }
+
     final batch = _firestore.batch();
     for (final collection in profileDocumentCollections) {
       batch.delete(_firestore.collection(collection).doc(userId));
     }
-    return batch.commit();
+    await batch.commit();
+  }
+
+  Future<void> _deleteCollection(
+    CollectionReference<Map<String, dynamic>> collection,
+  ) async {
+    while (true) {
+      final page = await collection
+          .orderBy(FieldPath.documentId)
+          .limit(_deletePageSize)
+          .get(const GetOptions(source: Source.server));
+      if (page.docs.isEmpty) return;
+
+      final batch = _firestore.batch();
+      for (final document in page.docs) {
+        batch.delete(document.reference);
+      }
+      await batch.commit();
+    }
   }
 
   String _name(Map<String, dynamic> data, String fallback) {
