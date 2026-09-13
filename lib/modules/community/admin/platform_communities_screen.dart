@@ -24,13 +24,16 @@ class _PlatformCommunitiesScreenState extends State<PlatformCommunitiesScreen> {
     body: StreamBuilder<List<CommunityModel>>(
       stream: _communities,
       builder: (context, snapshot) {
-        if (snapshot.hasError)
+        if (snapshot.hasError) {
           return const Center(child: Text('Unable to load communities.'));
-        if (!snapshot.hasData)
+        }
+        if (!snapshot.hasData) {
           return const Center(child: CircularProgressIndicator());
+        }
         final communities = snapshot.data!;
-        if (communities.isEmpty)
+        if (communities.isEmpty) {
           return const Center(child: Text('No communities.'));
+        }
         return ListView(
           children: [
             for (final community in communities)
