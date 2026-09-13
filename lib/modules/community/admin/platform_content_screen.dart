@@ -65,7 +65,7 @@ class _PlatformContentScreenState extends State<PlatformContentScreen> {
         itemId: item.id,
         hidden: !item.hidden,
       );
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
@@ -73,8 +73,9 @@ class _PlatformContentScreenState extends State<PlatformContentScreen> {
             ),
           ),
         );
+      }
     } catch (_) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
@@ -82,6 +83,7 @@ class _PlatformContentScreenState extends State<PlatformContentScreen> {
             ),
           ),
         );
+      }
     } finally {
       if (mounted) setState(() => _busy.remove(item.id));
     }
@@ -99,10 +101,12 @@ class _PlatformContentScreenState extends State<PlatformContentScreen> {
     body: StreamBuilder<List<PlatformModerationItem>>(
       stream: _items,
       builder: (context, snapshot) {
-        if (snapshot.hasError)
+        if (snapshot.hasError) {
           return const Center(child: Text('Unable to load content.'));
-        if (!snapshot.hasData)
+        }
+        if (!snapshot.hasData) {
           return const Center(child: CircularProgressIndicator());
+        }
         final items = snapshot.data!;
         if (items.isEmpty) return const Center(child: Text('No content.'));
         return ListView(
