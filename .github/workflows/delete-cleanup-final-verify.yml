@@ -21,19 +21,19 @@ jobs:
           from pathlib import Path
           p = Path('firestore.rules')
           text = p.read_text()
-          old = """    match /{path=**}/joinRequests/{uid} {
-              allow list: if linkedCommunityAccount()
-                && resource.data.userId == request.auth.uid;
-            }
-          """
-          new = """    match /{path=**}/joinRequests/{uid} {
-              allow list: if signedIn()
-                && resource.data.userId == request.auth.uid;
-            }
-          """
-          if old not in text:
-              raise SystemExit('Expected joinRequests collection-group rule not found')
-          p.write_text(text.replace(old, new, 1))
+          marker = "match /{path=**}/joinRequests/{uid} {"
+          start = text.find(marker)
+          if start < 0:
+              raise SystemExit('joinRequests collection-group rule not found')
+          end = text.find("\n    }", start)
+          if end < 0:
+              raise SystemExit('joinRequests collection-group rule end not found')
+          block = text[start:end]
+          old = "allow list: if linkedCommunityAccount()"
+          if old not in block:
+              raise SystemExit('Expected joinRequests list condition not found')
+          block = block.replace(old, "allow list: if signedIn()", 1)
+          p.write_text(text[:start] + block + text[end:])
           PY
       - uses: subosito/flutter-action@v2
         with:
