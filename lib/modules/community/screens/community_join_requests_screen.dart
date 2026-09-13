@@ -89,12 +89,13 @@ class _CommunityJoinRequestsScreenState
       }
       if (!mounted) return;
       setState(_reload);
-      if (widget.confirmBeforeResolve)
+      if (widget.confirmBeforeResolve) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(approve ? 'Request approved.' : 'Request rejected.'),
           ),
         );
+      }
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context)
