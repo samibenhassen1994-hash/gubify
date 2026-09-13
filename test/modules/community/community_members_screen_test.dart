@@ -41,6 +41,7 @@ const _member = CommunityMemberModel(
 
 Widget _screen({
   required bool owner,
+  bool canModerate = false,
   String currentUserId = 'member',
   Future<void> Function(String)? onRemove,
   Future<void> Function(String)? onBan,
@@ -49,6 +50,7 @@ Widget _screen({
   home: CommunityMembersScreen(
     community: _community,
     isOwner: owner,
+    canModerate: canModerate,
     currentUserId: currentUserId,
     memberStream: Stream.value(const [_owner, _member]),
     userXpCache: CommunityUserXpCache(
@@ -62,6 +64,40 @@ Widget _screen({
 );
 
 void main() {
+  testWidgets(
+    'nonmember platform admin moderates without owner role and protects owner and self',
+    (tester) async {
+      String? removed;
+      await tester.pumpWidget(
+        _screen(
+          owner: false,
+          currentUserId: 'admin',
+          canModerate: true,
+          onRemove: (uid) async {
+            removed = uid;
+          },
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('You'), findsNothing);
+      expect(find.byIcon(Icons.more_vert), findsOneWidget);
+      await tester.tap(find.byIcon(Icons.more_vert));
+      await tester.pumpAndSettle();
+      expect(find.text('Assign role'), findsNothing);
+      await tester.tap(find.text('Remove'));
+      await tester.pumpAndSettle();
+      expect(removed, isNull);
+      await tester.tap(find.byKey(const ValueKey('confirm-remove')));
+      await tester.pumpAndSettle();
+      expect(removed, 'member');
+      await tester.pumpWidget(
+        _screen(owner: false, currentUserId: 'member', canModerate: true),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byIcon(Icons.more_vert), findsNothing);
+    },
+  );
+
   testWidgets('a member sees the Community member list without admin actions', (
     tester,
   ) async {

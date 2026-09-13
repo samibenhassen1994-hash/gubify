@@ -11,6 +11,41 @@ service cloud.firestore {
             && request.auth.token.firebase.get('identities', {}).keys()
               .hasAny(['email', 'google.com'])));
     }
+    // Il registro è amministrato solo tramite Firebase Console/Admin SDK.
+    function isPlatformAdmin() {
+      return linkedCommunityAccount()
+        && request.auth.token.firebase.sign_in_provider != 'anonymous'
+        && exists(/databases/$(database)/documents/platformAdmins/$(request.auth.uid))
+        && get(/databases/$(database)/documents/platformAdmins/$(request.auth.uid)).data.active == true;
+    }
+    function canModerateCommunity(id) {
+      return isCommunityOwner(id) || (isPlatformAdmin() && communityActive(id));
+    }
+    function validContentModeration(id) {
+      return isPlatformAdmin() && communityActive(id)
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['moderationHidden','moderatedBy','moderatedAt'])
+        && request.resource.data.moderationHidden is bool
+        && request.resource.data.moderationHidden != resource.data.get('moderationHidden', false)
+        && request.resource.data.moderatedBy == request.auth.uid
+        && request.resource.data.moderatedAt == request.time;
+    }
+    // Un solo membro per transazione; il segnale non conferisce permessi futuri.
+    function validAdminMemberRemoval(id) {
+      let marker = getAfter(/databases/$(database)/documents/communities/$(id)/membershipMutations/admin).data;
+      let uid = marker.userId;
+      return isPlatformAdmin() && communityActive(id)
+        && marker.keys().hasOnly(['action','userId','actorId','createdAt'])
+        && marker.action == 'remove' && marker.actorId == request.auth.uid
+        && marker.createdAt == request.time
+        && uid != request.auth.uid && uid != communityDoc(id).data.ownerId
+        && exists(communityMemberPath(id, uid))
+        && !existsAfter(communityMemberPath(id, uid))
+        && !existsAfter(userCommunityPath(uid, id))
+        && communityProjectionAbsent(id, uid)
+        && communityAfter(id).data.diff(communityDoc(id).data).affectedKeys().hasOnly(['memberCount'])
+        && communityAfter(id).data.memberCount == communityDoc(id).data.memberCount - 1;
+    }
     function validText(value, minLength, maxLength) {
       return value is string
         && value.size() >= minLength
@@ -752,7 +787,8 @@ service cloud.firestore {
         .replace('/', '∕');
     }
     function communityOwnerRemovingMember(id, uid) {
-      return isCommunityOwner(id) && uid != request.auth.uid
+      return canModerateCommunity(id) && uid != request.auth.uid
+        && uid != communityDoc(id).data.ownerId
         && exists(communityMemberPath(id, uid))
         && !existsAfter(communityMemberPath(id, uid));
     }
@@ -881,7 +917,11 @@ service cloud.firestore {
         && beforeIds.hasAny([id])
         && afterIds == beforeIds.difference([id].toSet())
         && after.xp == resource.data.xp
-        && ((request.auth.uid == uid || isCommunityOwner(id))
+        && ((request.auth.uid == uid || isCommunityOwner(id)
+            || (isPlatformAdmin() && uid != communityDoc(id).data.ownerId
+              && after.diff(resource.data).affectedKeys().hasOnly([
+                'communityIds','membershipProjectionCommunityId',
+                'membershipProjectionAction','membershipProjectionUpdatedAt'])))
           && !existsAfter(communityMemberPath(id, uid))
           || deletionCleanup);
     }
@@ -1609,7 +1649,8 @@ service cloud.firestore {
     function validCommunityApprovalRequest(id, uid) {
       let before = get(communityJoinRequestPath(id, uid));
       let after = getAfter(communityJoinRequestPath(id, uid));
-      return isCommunityOwner(id)
+      return canModerateCommunity(id)
+        && uid != request.auth.uid && uid != communityDoc(id).data.ownerId
         && exists(communityJoinRequestPath(id, uid))
         && !exists(communityBanPath(id, uid))
         && !exists(communityMemberPath(id, uid))
@@ -2033,7 +2074,7 @@ service cloud.firestore {
     }
 
     match /communities/{id} {
-      allow read: if signedIn() && (resource.data.visibility == 'public'
+      allow read: if isPlatformAdmin() || signedIn() && (resource.data.visibility == 'public'
         || resource.data.ownerId == request.auth.uid || isCommunityMember(id));
       allow create: if linkedCommunityAccount() && validCommunityRootCreate(id)
         && validCommunityMemberAndCopy(id, request.auth.uid, 'owner')
@@ -2054,7 +2095,7 @@ service cloud.firestore {
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memberCount'])
           && request.resource.data.memberCount == resource.data.memberCount - 1
           && validCommunityRootMemberCountProjection(id)
-          && (isCommunityOwner(id)
+          && (isCommunityOwner(id) || validAdminMemberRemoval(id)
             || (request.auth.uid != resource.data.ownerId
               && exists(communityMemberPath(id, request.auth.uid))
               && !existsAfter(communityMemberPath(id, request.auth.uid)))))
@@ -2075,9 +2116,9 @@ service cloud.firestore {
       match /members/{uid} {
         allow get: if communityExists(id)
           && ((linkedCommunityAccount() && own(uid))
-            || isCommunityMember(id) || isCommunityOwner(id));
+            || isCommunityMember(id) || canModerateCommunity(id));
         allow list: if communityExists(id)
-          && (isCommunityMember(id) || isCommunityOwner(id));
+          && (isCommunityMember(id) || canModerateCommunity(id));
         allow create: if (linkedCommunityAccount() && own(uid)
           && communityAfter(id).data.get('deletionStatus','active') != 'deleting'
           && request.resource.data.role == (communityAfter(id).data.ownerId == uid ? 'owner' : 'member')
@@ -2091,7 +2132,9 @@ service cloud.firestore {
           || validCommunityRewardMemberUpdate(id, uid)
           || validCommunityAskCooldownMemberUpdate(id, uid);
         allow delete: if communityDeletingOwner(id)
-          || (isCommunityOwner(id) && uid != request.auth.uid
+          || (canModerateCommunity(id) && uid != request.auth.uid
+            && uid != communityDoc(id).data.ownerId
+            && !existsAfter(userCommunityPath(uid, id))
             && communityActive(id)
             && communityProjectionAbsent(id, uid)
             && communityAfter(id).data.memberCount == communityDoc(id).data.memberCount - 1)
@@ -2102,9 +2145,10 @@ service cloud.firestore {
       }
       match /bans/{uid} {
         allow get: if communityExists(id)
-          && (isCommunityOwner(id) || (linkedCommunityAccount() && own(uid)));
-        allow list: if communityExists(id) && isCommunityOwner(id);
-        allow create: if isCommunityOwner(id) && uid != request.auth.uid
+          && (canModerateCommunity(id) || (linkedCommunityAccount() && own(uid)));
+        allow list: if communityExists(id) && canModerateCommunity(id);
+        allow create: if canModerateCommunity(id) && uid != request.auth.uid
+          && uid != communityDoc(id).data.ownerId
           && request.resource.data.keys().hasOnly(['userId','displayName','photoUrl','bannedBy','bannedAt'])
           && request.resource.data.userId == uid
           && validText(request.resource.data.displayName, 1, 25)
@@ -2113,10 +2157,11 @@ service cloud.firestore {
           && request.resource.data.bannedAt == request.time
           && communityProjectionAbsent(id, uid)
           && !existsAfter(communityMemberPath(id, uid));
-        allow delete: if isCommunityOwner(id);
+        allow delete: if canModerateCommunity(id)
+          && uid != request.auth.uid && uid != communityDoc(id).data.ownerId;
       }
       match /messages/{messageId} {
-        allow read: if communityDeletingOwner(id);
+        allow read: if communityDeletingOwner(id) || (isPlatformAdmin() && communityActive(id));
         allow read: if isCommunityMember(id)
           && resource.data.createdAt >= get(/databases/$(database)/documents/communities/$(id)/members/$(request.auth.uid)).data.joinedAt;
         allow create: if isCommunityMember(id) && communityActive(id)
@@ -2129,6 +2174,7 @@ service cloud.firestore {
           && validText(request.resource.data.senderName, 1, 25)
           && validText(request.resource.data.text, 1, 2000)
           && request.resource.data.createdAt == request.time;
+        allow update: if validContentModeration(id);
         allow update: if isCommunityMember(id) && communityActive(id)
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['senderId','senderName'])
           && validIdentityAnonymization(resource.data.senderId, resource.data.senderName,
@@ -2136,6 +2182,8 @@ service cloud.firestore {
         allow delete: if communityDeletingOwner(id);
       }
       match /asks/{askId} {
+        allow read: if isPlatformAdmin() && communityActive(id);
+        allow update: if validContentModeration(id);
         allow get: if isCommunityMember(id) && communityActive(id)
           && (!exists(/databases/$(database)/documents/communities/$(id)/asks/$(askId))
             || resource.data.status in ['active','resolved']);
@@ -2183,6 +2231,8 @@ service cloud.firestore {
             && (resource.data.status != 'active'
               || !existsAfter(communityActiveAskSlotPath(id, request.auth.uid))));
         match /answers/{answerId} {
+          allow read: if isPlatformAdmin() && communityActive(id);
+          allow update: if validContentModeration(id);
           allow read: if communityDeletingOwner(id)
             || (isCommunityMember(id) && communityActive(id)
               && get(communityAskPath(id, askId)).data.status in ['active','resolved']);
@@ -2242,8 +2292,8 @@ service cloud.firestore {
       }
       match /joinRequests/{uid} {
         allow get: if communityExists(id)
-          && ((linkedCommunityAccount() && own(uid)) || isCommunityOwner(id));
-        allow list: if communityExists(id) && isCommunityOwner(id);
+          && ((linkedCommunityAccount() && own(uid)) || canModerateCommunity(id));
+        allow list: if communityExists(id) && canModerateCommunity(id);
         allow create: if linkedCommunityAccount() && own(uid)
           && communityActive(id)
           && communityJoiningAllowed(id)
@@ -2256,7 +2306,8 @@ service cloud.firestore {
           && request.resource.data.status == 'pending'
           && request.resource.data.createdAt == request.time;
         allow update: if validCommunityApprovalRequest(id, uid)
-          || (isCommunityOwner(id)
+          || (canModerateCommunity(id)
+            && uid != request.auth.uid && uid != communityDoc(id).data.ownerId
             && resource.data.status == 'pending'
             && request.resource.data.keys().hasOnly([
               'userId','displayName','status','createdAt','resolvedAt','resolvedBy'
@@ -2291,7 +2342,7 @@ service cloud.firestore {
           || communityDeletingOwner(id);
       }
       match /membershipMutations/{mutationId} {
-        allow create, update: if false;
+        allow create, update: if mutationId == 'admin' && validAdminMemberRemoval(id);
         allow read, delete: if communityDeletingOwner(id);
       }
     }
@@ -2364,6 +2415,10 @@ service cloud.firestore {
       allow update: if signedIn()
         && validModerationTargetUpdate(targetKey);
       allow delete: if false;
+    }
+    match /platformAdmins/{uid} {
+      allow get: if own(uid);
+      allow list, create, update, delete: if false;
     }
     match /platformRestrictions/{uid} {
       allow get: if own(uid);

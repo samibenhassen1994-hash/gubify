@@ -697,6 +697,7 @@ class CommunityRepository {
   Future<void> removeCommunityMember({
     required String communityId,
     required String userId,
+    bool isPlatformAdmin = false,
     required String actorId,
   }) async {
     final communityReference = _communities.doc(communityId);
@@ -726,7 +727,7 @@ class CommunityRepository {
       if (ownerId == userId) {
         return 'The Community owner cannot leave their own Community.';
       }
-      if (actorId != userId && actorId != ownerId) {
+      if (actorId != userId && actorId != ownerId && !isPlatformAdmin) {
         return 'Only the Community owner can remove members.';
       }
       final memberCount =
@@ -735,6 +736,17 @@ class CommunityRepository {
       final updatedMemberCount = (memberCount - 1)
           .clamp(1, memberCount)
           .toInt();
+      if (isPlatformAdmin && actorId != community.data()?['ownerId']) {
+        transaction.set(
+          communityReference.collection('membershipMutations').doc('admin'),
+          {
+            'action': 'remove',
+            'userId': userId,
+            'actorId': actorId,
+            'createdAt': FieldValue.serverTimestamp(),
+          },
+        );
+      }
       transaction.delete(memberReference);
       transaction.delete(userCommunityReference);
       transaction.update(communityReference, {
@@ -761,6 +773,7 @@ class CommunityRepository {
   Future<void> banCommunityMember({
     required String communityId,
     required String userId,
+    bool isPlatformAdmin = false,
     required String ownerId,
   }) async {
     final communityReference = _communities.doc(communityId);
@@ -781,9 +794,10 @@ class CommunityRepository {
       final member = await transaction.get(memberReference);
       final progress = await transaction.get(progressReference);
       if (!community.exists ||
-          community.data()?['ownerId'] != ownerId ||
+          (community.data()?['ownerId'] != ownerId && !isPlatformAdmin) ||
           !member.exists ||
-          userId == ownerId) {
+          userId == ownerId ||
+          userId == community.data()?['ownerId']) {
         return 'This member cannot be banned.';
       }
       final count = (community.data()?['memberCount'] as num?)?.toInt() ?? 1;
@@ -796,6 +810,17 @@ class CommunityRepository {
         'bannedBy': ownerId,
         'bannedAt': FieldValue.serverTimestamp(),
       });
+      if (isPlatformAdmin && ownerId != community.data()?['ownerId']) {
+        transaction.set(
+          communityReference.collection('membershipMutations').doc('admin'),
+          {
+            'action': 'remove',
+            'userId': userId,
+            'actorId': ownerId,
+            'createdAt': FieldValue.serverTimestamp(),
+          },
+        );
+      }
       transaction.delete(memberReference);
       transaction.delete(copyReference);
       transaction.update(communityReference, {
@@ -1667,6 +1692,7 @@ class CommunityRepository {
     required String communityId,
     required String ownerId,
     required String userId,
+    bool isPlatformAdmin = false,
   }) async {
     final communityReference = _communities.doc(communityId);
     final requestReference = communityReference
@@ -1679,7 +1705,7 @@ class CommunityRepository {
       final requestSnapshot = await transaction.get(requestReference);
       if (!communitySnapshot.exists) return "Community not found.";
       final community = CommunityModel.fromFirestore(communitySnapshot);
-      if (community.ownerId != ownerId) {
+      if (community.ownerId != ownerId && !isPlatformAdmin) {
         return "Only the Community owner can approve requests.";
       }
       if (community.deletionStatus == "deleting") {
@@ -1704,6 +1730,7 @@ class CommunityRepository {
     required String communityId,
     required String ownerId,
     required String userId,
+    bool isPlatformAdmin = false,
   }) async {
     final communityReference = _communities.doc(communityId);
     final requestReference = communityReference
@@ -1714,7 +1741,8 @@ class CommunityRepository {
     ) async {
       final community = await transaction.get(communityReference);
       final request = await transaction.get(requestReference);
-      if (!community.exists || community.data()?["ownerId"] != ownerId) {
+      if (!community.exists ||
+          (community.data()?["ownerId"] != ownerId && !isPlatformAdmin)) {
         return "Only the Community owner can reject requests.";
       }
       if (!request.exists ||

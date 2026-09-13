@@ -8,12 +8,14 @@ import '../services/community_service.dart';
 
 class CommunityJoinRequestsScreen extends StatefulWidget {
   final CommunityModel community;
+  final bool confirmBeforeResolve;
   final Future<List<CommunityAccessRequestModel>> Function(String communityId)?
   pendingRequestsLoader;
 
   const CommunityJoinRequestsScreen({
     super.key,
     required this.community,
+    this.confirmBeforeResolve = false,
     this.pendingRequestsLoader,
   });
 
@@ -49,6 +51,28 @@ class _CommunityJoinRequestsScreenState
     CommunityAccessRequestModel request, {
     required bool approve,
   }) async {
+    if (_processingUserIds.contains(request.userId)) return;
+    if (widget.confirmBeforeResolve) {
+      final action = approve ? 'Approve' : 'Reject';
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text('$action request?'),
+          content: Text('$action the request from ${request.displayName}?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: Text(action),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true || !mounted) return;
+    }
     if (!_processingUserIds.add(request.userId)) return;
     setState(() {});
     try {
@@ -65,11 +89,16 @@ class _CommunityJoinRequestsScreenState
       }
       if (!mounted) return;
       setState(_reload);
+      if (widget.confirmBeforeResolve)
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(approve ? 'Request approved.' : 'Request rejected.'),
+          ),
+        );
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(error.toString())));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(error.toString())));
       setState(_reload);
     } finally {
       _processingUserIds.remove(request.userId);
