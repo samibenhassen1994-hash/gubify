@@ -42,6 +42,11 @@ class AccountDeletionRepository implements AccountDeletionRepositoryContract {
   ];
 
   @visibleForTesting
+  static const externalCollectionGroupsForDeletion = <String>[
+    'joinRequests',
+  ];
+
+  @visibleForTesting
   static AccountDeletionMemberships mergeMembershipIds({
     required String userId,
     required Iterable<String> privateCopyIds,
@@ -400,6 +405,7 @@ class AccountDeletionRepository implements AccountDeletionRepositoryContract {
 
   @override
   Future<void> deleteProfile(String userId) async {
+    await _deleteExternalUserDocuments(userId);
     final userReference = _firestore.collection('users').doc(userId);
     for (final collection in profileSubcollectionsForDeletion) {
       await _deleteCollection(userReference.collection(collection));
@@ -410,6 +416,25 @@ class AccountDeletionRepository implements AccountDeletionRepositoryContract {
       batch.delete(_firestore.collection(collection).doc(userId));
     }
     await batch.commit();
+  }
+
+  Future<void> _deleteExternalUserDocuments(String userId) async {
+    for (final collectionGroup in externalCollectionGroupsForDeletion) {
+      while (true) {
+        final page = await _firestore
+            .collectionGroup(collectionGroup)
+            .where('userId', isEqualTo: userId)
+            .limit(_deletePageSize)
+            .get(const GetOptions(source: Source.server));
+        if (page.docs.isEmpty) break;
+
+        final batch = _firestore.batch();
+        for (final document in page.docs) {
+          batch.delete(document.reference);
+        }
+        await batch.commit();
+      }
+    }
   }
 
   Future<void> _deleteCollection(

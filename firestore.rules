@@ -885,6 +885,20 @@ service cloud.firestore {
           && !existsAfter(communityMemberPath(id, uid))
           || deletionCleanup);
     }
+    function validCommunityRewardReferenceCleanup(uid) {
+      let id = resource.data.get('lastRewardCommunityId', '');
+      let after = request.resource.data;
+      return linkedCommunityAccount()
+        && id is string && id.size() > 0
+        && communityDeletingOwner(id)
+        && validCommunityProgressSchema(after)
+        && after.diff(resource.data).affectedKeys().hasOnly([
+          'lastRewardCommunityId','lastRewardAskId','lastRewardRole'
+        ])
+        && !after.keys().hasAny([
+          'lastRewardCommunityId','lastRewardAskId','lastRewardRole'
+        ]);
+    }
     function validCommunityProjectionVersion(uid) {
       let after = request.resource.data;
       return linkedCommunityAccount() && own(uid)
@@ -1653,7 +1667,8 @@ service cloud.firestore {
       allow create, update: if validCommunityProgressReward(uid)
         || validCommunityProjectionJoin(uid)
         || validCommunityProjectionVersion(uid);
-      allow update: if validCommunityProjectionRemoval(uid);
+      allow update: if validCommunityProjectionRemoval(uid)
+        || validCommunityRewardReferenceCleanup(uid);
       allow delete: if own(uid)
         && !existsAfter(/databases/$(database)/documents/users/$(uid));
     }
@@ -1739,6 +1754,11 @@ service cloud.firestore {
 
     match /{path=**}/members/{memberId} {
       allow list: if signedIn() && resource.data.uid == request.auth.uid;
+    }
+
+    match /{path=**}/joinRequests/{uid} {
+      allow list: if linkedCommunityAccount()
+        && resource.data.userId == request.auth.uid;
     }
 
     match /inviteTokens/{canonicalCode} {
@@ -1919,7 +1939,8 @@ service cloud.firestore {
             && getAfter(/databases/$(database)/documents/gubs/$(id)/posts/$(postId)).data.lastCommentId == commentId
             && getAfter(/databases/$(database)/documents/gubs/$(id)/posts/$(postId)).data.comments
               == get(/databases/$(database)/documents/gubs/$(id)/posts/$(postId)).data.comments + 1;
-          allow update, delete: if false;
+          allow update: if false;
+          allow delete: if gubDeletingOwner(id);
         }
 
         match /likes/{uid} {
@@ -1931,9 +1952,10 @@ service cloud.firestore {
             && getAfter(/databases/$(database)/documents/gubs/$(id)/posts/$(postId)).data.likes
               == get(/databases/$(database)/documents/gubs/$(id)/posts/$(postId)).data.likes + 1;
           allow update: if false;
-          allow delete: if own(uid) && isGubMember(id) && gubActive(id)
+          allow delete: if (own(uid) && isGubMember(id) && gubActive(id)
             && getAfter(/databases/$(database)/documents/gubs/$(id)/posts/$(postId)).data.likes
-              == get(/databases/$(database)/documents/gubs/$(id)/posts/$(postId)).data.likes - 1;
+              == get(/databases/$(database)/documents/gubs/$(id)/posts/$(postId)).data.likes - 1)
+            || gubDeletingOwner(id);
         }
       }
       match /tasks/{taskId} {
@@ -2286,7 +2308,8 @@ service cloud.firestore {
               && !exists(communityMemberPath(id, uid))
               && existsAfter(communityMemberPath(id, uid))
               && currentCommunityGuidelinesAccepted(uid))
-            || (!existsAfter(/databases/$(database)/documents/users/$(uid))
+            || ((!existsAfter(/databases/$(database)/documents/users/$(uid))
+                  || !exists(communityMemberPath(id, uid)))
               && resource.data.status in ['approved','rejected'])))
           || communityDeletingOwner(id);
       }

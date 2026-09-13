@@ -26,6 +26,13 @@ class CommunityRepository {
   static const int _membershipCleanupPageSize = 150;
   static const String _deletionMembersSubcollection = "deletionMembers";
 
+  @visibleForTesting
+  static const List<String> rewardReferenceFieldsForDeletion = [
+    'lastRewardCommunityId',
+    'lastRewardAskId',
+    'lastRewardRole',
+  ];
+
   // Community deletion is client-side for Firebase Spark compatibility.
   // Every future Community subcollection must be added to this cleanup list.
   static const List<String> _knownCommunitySubcollections = [
@@ -880,6 +887,10 @@ class CommunityRepository {
             communityReference: communityReference,
           );
 
+          deletionStep = 'delete_reward_references';
+          deletionPath = 'communityUserProgress/*';
+          await _deleteCommunityRewardReferences(normalizedCommunityId);
+
           deletionStep = 'delete_ask_answers';
           deletionPath = 'communities/*/asks/*/answers';
           await _deleteCommunityAsksAndAnswers(communityReference);
@@ -1099,6 +1110,26 @@ class CommunityRepository {
           }, SetOptions(merge: true));
         }
         batch.delete(marker.reference);
+      }
+      await batch.commit();
+    }
+  }
+
+  Future<void> _deleteCommunityRewardReferences(String communityId) async {
+    while (true) {
+      final page = await _firestore
+          .collection('communityUserProgress')
+          .where('lastRewardCommunityId', isEqualTo: communityId)
+          .limit(_batchSize)
+          .get();
+      if (page.docs.isEmpty) return;
+
+      final batch = _firestore.batch();
+      for (final document in page.docs) {
+        batch.update(document.reference, {
+          for (final field in rewardReferenceFieldsForDeletion)
+            field: FieldValue.delete(),
+        });
       }
       await batch.commit();
     }
