@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:gubify/modules/community/repositories/community_repository.dart';
 import 'package:gubify/modules/profile/repositories/account_deletion_repository.dart';
 import 'package:gubify/repositories/gub_deletion_repository.dart';
 
@@ -8,6 +9,12 @@ void main() {
       'gubs',
       'communities',
       'blockedUsers',
+    ]);
+  });
+
+  test('account deletion discovers external user join requests', () {
+    expect(AccountDeletionRepository.externalCollectionGroupsForDeletion, [
+      'joinRequests',
     ]);
   });
 
@@ -32,5 +39,13 @@ void main() {
       'goals': ['members'],
       'posts': ['comments', 'likes'],
     });
+  });
+
+  test('Community deletion clears reward pointers to deleted content', () {
+    expect(CommunityRepository.rewardReferenceFieldsForDeletion, [
+      'lastRewardCommunityId',
+      'lastRewardAskId',
+      'lastRewardRole',
+    ]);
   });
 }
