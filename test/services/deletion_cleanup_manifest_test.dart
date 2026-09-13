@@ -5,6 +5,8 @@ import 'package:gubify/repositories/gub_deletion_repository.dart';
 void main() {
   test('account deletion removes user-owned nested state before profile root', () {
     expect(AccountDeletionRepository.profileSubcollectionsForDeletion, [
+      'gubs',
+      'communities',
       'blockedUsers',
     ]);
   });
