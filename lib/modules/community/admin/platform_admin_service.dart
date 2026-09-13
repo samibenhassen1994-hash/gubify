@@ -57,8 +57,9 @@ class PlatformAdminService extends ChangeNotifier {
   bool get isAdmin => _isAdmin;
   String? get adminUid => _isAdmin ? _uid : null;
   void requireAdmin() {
-    if (!isAdmin)
+    if (!isAdmin) {
       throw StateError('Community moderation access is unavailable.');
+    }
   }
 
   void _invalidate() {
