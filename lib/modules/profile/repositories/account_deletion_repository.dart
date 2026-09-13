@@ -42,9 +42,7 @@ class AccountDeletionRepository implements AccountDeletionRepositoryContract {
   ];
 
   @visibleForTesting
-  static const externalCollectionGroupsForDeletion = <String>[
-    'joinRequests',
-  ];
+  static const externalCollectionGroupsForDeletion = <String>['joinRequests'];
 
   @visibleForTesting
   static AccountDeletionMemberships mergeMembershipIds({

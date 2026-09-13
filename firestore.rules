@@ -1757,7 +1757,7 @@ service cloud.firestore {
     }
 
     match /{path=**}/joinRequests/{uid} {
-      allow list: if linkedCommunityAccount()
+      allow list: if signedIn()
         && resource.data.userId == request.auth.uid;
     }
 
