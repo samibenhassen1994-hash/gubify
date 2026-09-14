@@ -102,6 +102,10 @@ class AccountDeletionService {
             communityIds: communityIds,
           ),
         );
+        await _atStage(
+          'cleanupActiveAskSlots',
+          () => _repository.deleteCommunityActiveAskSlots(uid),
+        );
         await _atStage('deleteUserRoot', () => _repository.deleteUserRoot(uid));
         await _atStage(
           'deleteDetachedIdentityDocuments',
@@ -164,10 +168,6 @@ class AccountDeletionService {
     }
 
     for (final communityId in communityIds) {
-      await _atStage(
-        'cleanupActiveAskSlot',
-        () => _repository.deleteCommunityActiveAskSlot(communityId, uid),
-      );
       try {
         await _repository.deleteCommunityJoinRequest(communityId, uid);
       } on FirebaseException catch (error) {

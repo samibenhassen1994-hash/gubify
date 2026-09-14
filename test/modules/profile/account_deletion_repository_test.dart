@@ -64,6 +64,10 @@ void main() {
       assignments[1],
     ]);
     expect(assignments[0], containsPair('userId', 'deleting-user'));
+    expect(AccountDeletionRepository.organizedEventAssignmentUserIds(result), [
+      '__deleted_user__',
+      'surviving-user',
+    ]);
   });
 
   test('stale Gub copy without canonical membership is anonymized', () {

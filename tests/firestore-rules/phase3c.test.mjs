@@ -74,6 +74,7 @@ const organizedEvent = (id = 'organized1') => ({
   createdAt: ts(), status: 'active', completedAt: null, sourceType: 'manual',
   sourceId: null, sourcePreview: null, originUserId: null, sourceAuthorName: null,
   assignments: [assignment(uid.secondMember)],
+  assignmentUserIds: [uid.secondMember],
 });
 const proposal = (id = 'proposal1') => ({
   gubId: 'g1', proposalId: id, title: 'Proposal', description: 'Details', creatorId: uid.memberGub,

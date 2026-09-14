@@ -138,11 +138,11 @@ void main() {
       'begin-deletion-state',
       'membership-index',
       'anonymize-shared',
+      'community-slots',
       'delete-user-root',
       'delete-detached-identities',
       'private-reads:g1',
       'leave-gub:g1',
-      'community-slot:c1',
       'community-request:c1',
       'leave-community:c1',
       'delete-profile',
@@ -499,10 +499,8 @@ class _Repository implements AccountDeletionRepositoryContract {
   ) async => events.add('community-request:$communityId');
 
   @override
-  Future<void> deleteCommunityActiveAskSlot(
-    String communityId,
-    String userId,
-  ) async => events.add('community-slot:$communityId');
+  Future<void> deleteCommunityActiveAskSlots(String userId) async =>
+      events.add('community-slots');
 
   @override
   Future<void> deletePrivateCopy(String gubId, String userId) async =>

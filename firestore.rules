@@ -274,12 +274,14 @@ service cloud.firestore {
     function deletedUserId() { return '__deleted_user__'; }
     function deletedUserName() { return 'Deleted user'; }
     function validIdentityAnonymization(beforeId, beforeName, afterId, afterName) {
-      return beforeId == request.auth.uid
+      return accountDeletionStarted(request.auth.uid)
+        && beforeId == request.auth.uid
         && afterId == deletedUserId()
         && afterName == deletedUserName();
     }
     function validIdAnonymization(beforeId, afterId) {
-      return beforeId == request.auth.uid && afterId == deletedUserId();
+      return accountDeletionStarted(request.auth.uid)
+        && beforeId == request.auth.uid && afterId == deletedUserId();
     }
     function validDeletionAnonymizationContext(id) {
       return (isGubMember(id) && gubActive(id))
@@ -319,24 +321,30 @@ service cloud.firestore {
       let changed = after.diff(before).affectedKeys();
       return changed.hasOnly(['userId','userName'])
         && changed.hasAny(['userId'])
+        && accountDeletionStarted(request.auth.uid)
         && before.userId == request.auth.uid
         && after.userId == deletedUserId()
         && after.userName == deletedUserName();
     }
     function validOrganizedAssignmentAnonymizationAt(index) {
       return resource.data.assignments.size() <= index
-        || request.resource.data.assignments[index] == resource.data.assignments[index]
-        || validOrganizedAssignmentIdentityAnonymization(
-          resource.data.assignments[index], request.resource.data.assignments[index]);
+        || ((request.resource.data.assignments[index] == resource.data.assignments[index]
+            || validOrganizedAssignmentIdentityAnonymization(
+              resource.data.assignments[index], request.resource.data.assignments[index]))
+          && request.resource.data.assignmentUserIds[index]
+            == request.resource.data.assignments[index].userId);
     }
     function validOrganizedAssignmentsAnonymization(id) {
       let changed = request.resource.data.diff(resource.data).affectedKeys();
       return validDeletionAnonymizationContext(id)
-        && changed.hasOnly(['assignments'])
+        && changed.hasOnly(['assignments','assignmentUserIds'])
         && changed.hasAny(['assignments'])
         && resource.data.assignments is list
         && request.resource.data.assignments is list
         && request.resource.data.assignments.size() == resource.data.assignments.size()
+        && request.resource.data.assignmentUserIds is list
+        && request.resource.data.assignmentUserIds.size()
+          == request.resource.data.assignments.size()
         && request.resource.data.assignments.size() <= 20
         && validOrganizedAssignmentAnonymizationAt(0)
         && validOrganizedAssignmentAnonymizationAt(1)
@@ -358,6 +366,10 @@ service cloud.firestore {
         && validOrganizedAssignmentAnonymizationAt(17)
         && validOrganizedAssignmentAnonymizationAt(18)
         && validOrganizedAssignmentAnonymizationAt(19);
+    }
+    function validOrganizedAssignmentUserIdAt(data, index) {
+      return data.assignments.size() <= index
+        || data.assignmentUserIds[index] == data.assignments[index].userId;
     }
     function validProposalAnonymization(id) {
       let changed = request.resource.data.diff(resource.data).affectedKeys();
@@ -460,7 +472,7 @@ service cloud.firestore {
       return data.keys().hasOnly([
           'eventId','gubId','title','description','location','scheduledAt','createdBy',
           'createdByName','createdAt','status','completedAt','sourceType','sourceId',
-          'sourcePreview','originUserId','sourceAuthorName','assignments'
+          'sourcePreview','originUserId','sourceAuthorName','assignments','assignmentUserIds'
         ])
         && data.eventId == eventId && data.gubId == id
         && data.title is string && validNullableString(data.description)
@@ -469,7 +481,29 @@ service cloud.firestore {
         && validNullableString(data.createdByName)
         && data.createdAt is timestamp && data.status == 'active' && data.completedAt == null
         && validSource(data, id)
-        && data.assignments is list && data.assignments.size() > 0;
+        && data.assignments is list && data.assignments.size() > 0
+        && data.assignmentUserIds is list
+        && data.assignmentUserIds.size() == data.assignments.size()
+        && validOrganizedAssignmentUserIdAt(data, 0)
+        && validOrganizedAssignmentUserIdAt(data, 1)
+        && validOrganizedAssignmentUserIdAt(data, 2)
+        && validOrganizedAssignmentUserIdAt(data, 3)
+        && validOrganizedAssignmentUserIdAt(data, 4)
+        && validOrganizedAssignmentUserIdAt(data, 5)
+        && validOrganizedAssignmentUserIdAt(data, 6)
+        && validOrganizedAssignmentUserIdAt(data, 7)
+        && validOrganizedAssignmentUserIdAt(data, 8)
+        && validOrganizedAssignmentUserIdAt(data, 9)
+        && validOrganizedAssignmentUserIdAt(data, 10)
+        && validOrganizedAssignmentUserIdAt(data, 11)
+        && validOrganizedAssignmentUserIdAt(data, 12)
+        && validOrganizedAssignmentUserIdAt(data, 13)
+        && validOrganizedAssignmentUserIdAt(data, 14)
+        && validOrganizedAssignmentUserIdAt(data, 15)
+        && validOrganizedAssignmentUserIdAt(data, 16)
+        && validOrganizedAssignmentUserIdAt(data, 17)
+        && validOrganizedAssignmentUserIdAt(data, 18)
+        && validOrganizedAssignmentUserIdAt(data, 19);
     }
     function changedOwnAssignmentAt(data, index) {
       return data.assignments.size() > index
@@ -2189,8 +2223,9 @@ service cloud.firestore {
       match /organizedEvents/{eventId} {
         allow read: if isGubMember(id) || gubDeletingOwner(id)
           || (accountDeletionStarted(request.auth.uid)
-            && (resource.data.createdBy == request.auth.uid
-              || resource.data.originUserId == request.auth.uid));
+            && (resource.data.get('createdBy', '') == request.auth.uid
+              || resource.data.get('originUserId', '') == request.auth.uid
+              || resource.data.get('assignmentUserIds', []).hasAny([request.auth.uid])));
         allow create: if accountActive() && isGubMember(id) && gubActive(id) && validOrganizedEventCreate(id, eventId);
         allow update: if (accountActive() && validOrganizedCompletion(id))
           || validOrganizedEventAnonymization(id)
@@ -2399,7 +2434,8 @@ service cloud.firestore {
       match /asks/{askId} {
         allow read: if isPlatformAdmin() && communityActive(id);
         allow read: if accountDeletionStarted(request.auth.uid)
-          && resource.data.authorId == request.auth.uid;
+          && (resource.data.authorId == request.auth.uid
+            || resource.data.get('bestAnswerAuthorId', '') == request.auth.uid);
         allow update: if validContentModeration(id);
         allow get: if isCommunityMember(id) && communityActive(id)
           && (!exists(/databases/$(database)/documents/communities/$(id)/asks/$(askId))
@@ -2503,7 +2539,10 @@ service cloud.firestore {
       match /activeAskSlots/{uid} {
         allow get: if communityDeletingOwner(id)
           || (isCommunityMember(id) && communityActive(id) && uid == request.auth.uid);
-        allow list: if communityDeletingOwner(id);
+        allow list: if communityDeletingOwner(id)
+          || (accountDeletionStarted(request.auth.uid)
+            && uid == request.auth.uid
+            && resource.data.authorId == request.auth.uid);
         allow create: if accountActive() && isCommunityMember(id) && communityActive(id)
           && uid == request.auth.uid
           && !exists(communityActiveAskSlotPath(id, uid))
@@ -2582,12 +2621,25 @@ service cloud.firestore {
     }
 
     match /{path=**}/asks/{askId} {
-      allow list: if linkedCommunityAccount()
-        && ((resource.data.authorId == request.auth.uid)
+      allow list: if (accountDeletionStarted(request.auth.uid)
+          && (resource.data.get('authorId', '') == request.auth.uid
+            || resource.data.get('bestAnswerAuthorId', '') == request.auth.uid))
+        || (linkedCommunityAccount()
+        && ((resource.data.get('authorId', '') == request.auth.uid)
           || (resource.data.communityId is string
             && isCommunityMember(resource.data.communityId)
             && communityActive(resource.data.communityId)
-            && resource.data.status in ['active', 'resolved']));
+            && resource.data.status in ['active', 'resolved'])));
+    }
+
+    match /{path=**}/organizedEvents/{eventId} {
+      allow list: if accountDeletionStarted(request.auth.uid)
+        && resource.data.get('assignmentUserIds', []).hasAny([request.auth.uid]);
+    }
+
+    match /{path=**}/activeAskSlots/{uid} {
+      allow list: if accountDeletionStarted(request.auth.uid)
+        && resource.data.get('authorId', '') == request.auth.uid;
     }
 
     match /{path=**}/comments/{commentId} {

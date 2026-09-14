@@ -1357,6 +1357,9 @@ describe('Phase F irreversible shared identity anonymization', () => {
       const seedDb = context.firestore();
       await setDoc(doc(seedDb, 'gubs', 'g1', 'members', ids.member), member(ids.member));
       await setDoc(doc(seedDb, 'users', ids.member, 'gubs', 'g1'), copy(ids.member));
+      await setDoc(doc(seedDb, 'accountDeletionStates', ids.member), {
+        userId: ids.member, status: 'deleting', startedAt: now(),
+      });
       await setDoc(doc(seedDb, 'gubs', 'g1', 'messages', 'm1'), {
         messageId: 'm1', gubId: 'g1', senderId: ids.member,
         senderName: 'Original Name', text: 'Shared content', createdAt: now(),
@@ -1432,7 +1435,7 @@ describe('Phase F irreversible shared identity anonymization', () => {
         sourceAuthorName: null, assignments: [{
           userId: ids.second, userName: 'Surviving User', taskText: 'Keep task',
           isCompleted: false, completedAt: null,
-        }], status: 'active', createdAt: now(),
+        }], assignmentUserIds: [ids.second], status: 'active', createdAt: now(),
       });
       await setDoc(doc(seedDb, 'gubs', 'g1', 'goals', 'goal1'), {
         goalId: 'goal1', gubId: 'g1', title: 'Budget', ownerId: ids.second,
@@ -1479,7 +1482,7 @@ describe('Phase F irreversible shared identity anonymization', () => {
             userId: ids.second, userName: 'Surviving User', taskText: 'Keep other task',
             isCompleted: false, completedAt: null,
           },
-        ], status: 'active', createdAt: now(),
+        ], assignmentUserIds: [ids.member, ids.second], status: 'active', createdAt: now(),
       });
     });
 
@@ -1496,7 +1499,7 @@ describe('Phase F irreversible shared identity anonymization', () => {
           userId: ids.second, userName: 'Surviving User', taskText: 'Keep other task',
           isCompleted: false, completedAt: null,
         },
-      ],
+      ], assignmentUserIds: ['__deleted_user__', ids.second],
     }));
     const event = (await getDoc(reference)).data();
     assert.equal(event.title, 'Keep event');
@@ -1521,7 +1524,7 @@ describe('Phase F irreversible shared identity anonymization', () => {
         sourceAuthorName: null, assignments: [{
           userId: ids.second, userName: 'Surviving User', taskText: 'Keep task',
           isCompleted: false, completedAt: null,
-        }], status: 'active', createdAt: now(),
+        }], assignmentUserIds: [ids.second], status: 'active', createdAt: now(),
       });
     });
 
@@ -1530,7 +1533,7 @@ describe('Phase F irreversible shared identity anonymization', () => {
       { assignments: [{
         userId: '__deleted_user__', userName: 'Deleted user', taskText: 'Keep task',
         isCompleted: false, completedAt: null,
-      }] },
+      }], assignmentUserIds: ['__deleted_user__'] },
     ));
   });
 
@@ -1545,7 +1548,7 @@ describe('Phase F irreversible shared identity anonymization', () => {
           sourceAuthorName: null, assignments: [{
             userId: ids.member, userName: 'Deleting User', taskText: 'Original task',
             isCompleted: false, completedAt: null,
-          }], status: 'active', createdAt: now(),
+          }], assignmentUserIds: [ids.member], status: 'active', createdAt: now(),
         },
       );
     });
@@ -1555,7 +1558,7 @@ describe('Phase F irreversible shared identity anonymization', () => {
       { assignments: [{
         userId: '__deleted_user__', userName: 'Deleted user', taskText: 'Changed task',
         isCompleted: false, completedAt: null,
-      }] },
+      }], assignmentUserIds: ['__deleted_user__'] },
     ));
   });
 
@@ -1626,6 +1629,8 @@ describe('Phase F irreversible shared identity anonymization', () => {
 
   test('production Private Chat anonymization query proves joinedAt boundary', async () => {
     await seedIdentityDocuments();
+    await env.withSecurityRulesDisabled((context) =>
+      deleteDoc(doc(context.firestore(), 'accountDeletionStates', ids.member)));
     const productionQuery = query(
       collection(db(ids.member), 'gubs', 'g1', 'messages'),
       where('senderId', '==', ids.member),

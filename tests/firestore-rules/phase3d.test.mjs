@@ -98,7 +98,7 @@ beforeEach(async () => {
     batch.set(doc(d, 'gubs', 'g1', 'tasks', 'task1'), task('g1'));
     batch.set(doc(d, 'gubs', 'g2', 'tasks', 'foreignTask'), task('g2', 'foreignTask'));
     batch.set(doc(d, 'gubs', 'g1', 'events', 'event1'), { gubId: 'g1', eventId: 'event1', proposalId: 'proposal1', title: 'Proposal', description: 'Description', type: 'custom', creatorId: uid.member, creatorName: uid.member, eventDate: new Date('2026-03-01T00:00:00Z'), createdAt: now(), status: 'scheduled' });
-    batch.set(doc(d, 'gubs', 'g1', 'organizedEvents', 'organized1'), { eventId: 'organized1', gubId: 'g1', title: 'Organized', description: null, location: null, scheduledAt: null, createdBy: uid.member, createdByName: uid.member, createdAt: now(), status: 'active', completedAt: null, sourceType: 'manual', sourceId: null, sourcePreview: null, originUserId: null, sourceAuthorName: null, assignments: [{ userId: uid.second, userName: uid.second, taskText: 'Work', isCompleted: false, completedAt: null }] });
+    batch.set(doc(d, 'gubs', 'g1', 'organizedEvents', 'organized1'), { eventId: 'organized1', gubId: 'g1', title: 'Organized', description: null, location: null, scheduledAt: null, createdBy: uid.member, createdByName: uid.member, createdAt: now(), status: 'active', completedAt: null, sourceType: 'manual', sourceId: null, sourcePreview: null, originUserId: null, sourceAuthorName: null, assignments: [{ userId: uid.second, userName: uid.second, taskText: 'Work', isCompleted: false, completedAt: null }], assignmentUserIds: [uid.second] });
     batch.set(doc(d, 'gubs', 'g1', 'proposals', 'proposal1'), proposal('g1', 'proposal1', { status: 'approved', yesVotes: 3, resultProcessed: true }));
     batch.set(doc(d, 'gubs', 'g1', 'proposals', 'proposal1', 'votes', uid.member), { uid: uid.member, vote: 'yes', votedAt: now() });
     batch.set(doc(d, 'gubs', 'g1', 'goals', 'goal1'), goal());
@@ -195,14 +195,30 @@ describe('cross-module and cross-resource isolation', () => {
 describe('account deletion personal-data cleanup', () => {
   const deletionState = (userId) => ({ userId, status: 'deleting', startedAt: serverTimestamp() });
 
+  test('normal accounts cannot self-anonymize identity fields', async () => {
+    const memberDb = db(uid.member);
+    await assertFails(updateDoc(doc(memberDb, 'gubs', 'g1', 'messages', 'm1'), {
+      senderId: '__deleted_user__', senderName: 'Deleted user',
+    }));
+    await assertFails(updateDoc(doc(memberDb, 'gubs', 'g1', 'posts', 'post1', 'comments', 'comment1'), {
+      authorId: '__deleted_user__', authorName: 'Deleted user',
+    }));
+    const communityDb = db(uid.communityMember);
+    await assertFails(updateDoc(doc(communityDb, 'communities', 'c1', 'messages', 'cm1'), {
+      senderId: '__deleted_user__', senderName: 'Deleted user',
+    }));
+  });
+
   test('anonymizes authored Gub comments and Community Ask history', async () => {
     const memberDb = db(uid.member);
+    await assertSucceeds(setDoc(doc(memberDb, 'accountDeletionStates', uid.member), deletionState(uid.member)));
     await assertSucceeds(getDocs(query(collectionGroup(memberDb, 'comments'), where('authorId', '==', uid.member))));
     await assertSucceeds(updateDoc(doc(memberDb, 'gubs', 'g1', 'posts', 'post1', 'comments', 'comment1'), {
       authorId: '__deleted_user__', authorName: 'Deleted user',
     }));
 
     const ownerDb = db(uid.communityOwner);
+    await assertSucceeds(setDoc(doc(ownerDb, 'accountDeletionStates', uid.communityOwner), deletionState(uid.communityOwner)));
     await assertSucceeds(getDocs(query(collectionGroup(ownerDb, 'asks'), where('authorId', '==', uid.communityOwner))));
     await assertSucceeds(updateDoc(doc(ownerDb, 'communities', 'c1', 'asks', 'ask1'), {
       authorId: '__deleted_user__', authorDisplayName: 'Deleted user',
@@ -336,6 +352,86 @@ describe('account deletion personal-data cleanup', () => {
     const memberDb = db(uid.communityMember);
     await assertSucceeds(setDoc(doc(memberDb, 'accountDeletionStates', uid.communityMember), deletionState(uid.communityMember)));
     await assertSucceeds(deleteDoc(doc(memberDb, 'communities', 'c1', 'activeAskSlots', uid.communityMember)));
+  });
+
+  test('deletion state discovers only its orphan Community Ask slots', async () => {
+    await env.withSecurityRulesDisabled(async (context) => {
+      const d = context.firestore();
+      await deleteDoc(doc(d, 'communities', 'c1', 'members', uid.communityMember));
+      await deleteDoc(doc(d, 'users', uid.communityMember, 'communities', 'c1'));
+      await setDoc(doc(d, 'communities', 'c1', 'activeAskSlots', uid.communityMember), {
+        askId: 'orphan-active', authorId: uid.communityMember, createdAt: now(),
+      });
+      await setDoc(doc(d, 'communities', 'c1', 'activeAskSlots', uid.second), {
+        askId: 'other-active', authorId: uid.second, createdAt: now(),
+      });
+    });
+    const memberDb = db(uid.communityMember);
+    await assertSucceeds(setDoc(doc(memberDb, 'accountDeletionStates', uid.communityMember), deletionState(uid.communityMember)));
+    const ownSlots = query(collectionGroup(memberDb, 'activeAskSlots'), where('authorId', '==', uid.communityMember));
+    const snapshot = await assertSucceeds(getDocs(ownSlots));
+    assert.equal(snapshot.size, 1);
+    await assertFails(getDocs(collectionGroup(memberDb, 'activeAskSlots')));
+    await assertSucceeds(deleteDoc(snapshot.docs[0].ref));
+    assert.equal((await getDocs(ownSlots)).empty, true);
+  });
+
+  test('stale assignee-only organized events remain identity scoped and retryable', async () => {
+    await env.withSecurityRulesDisabled(async (context) => {
+      const d = context.firestore();
+      await deleteDoc(doc(d, 'gubs', 'g1', 'members', uid.member));
+      await setDoc(doc(d, 'gubs', 'g1', 'organizedEvents', 'assigned-only'), {
+        eventId: 'assigned-only', gubId: 'g1', title: 'Assigned', createdBy: uid.second,
+        createdByName: uid.second, originUserId: null, sourceAuthorName: null,
+        assignments: [{ userId: uid.member, userName: uid.member, taskText: 'Keep', isCompleted: false, completedAt: null }],
+        assignmentUserIds: [uid.member], status: 'active', createdAt: now(),
+      });
+    });
+    const memberDb = db(uid.member);
+    await assertSucceeds(setDoc(doc(memberDb, 'accountDeletionStates', uid.member), deletionState(uid.member)));
+    const ownAssignments = query(collection(memberDb, 'gubs', 'g1', 'organizedEvents'), where('assignmentUserIds', 'array-contains', uid.member));
+    const snapshot = await assertSucceeds(getDocs(ownAssignments));
+    assert.equal(snapshot.size, 1);
+    await assertFails(getDocs(collection(memberDb, 'gubs', 'g1', 'organizedEvents')));
+    await assertSucceeds(updateDoc(snapshot.docs[0].ref, {
+      assignments: [{ userId: '__deleted_user__', userName: 'Deleted user', taskText: 'Keep', isCompleted: false, completedAt: null }],
+      assignmentUserIds: ['__deleted_user__'],
+    }));
+    assert.equal((await getDocs(ownAssignments)).empty, true);
+  });
+
+  test('stale Community Answer migration can read only its Best Answer Ask', async () => {
+    await env.withSecurityRulesDisabled(async (context) => {
+      const d = context.firestore();
+      await deleteDoc(doc(d, 'communities', 'c1', 'members', uid.communityMember));
+      await deleteDoc(doc(d, 'users', uid.communityMember, 'communities', 'c1'));
+      await setDoc(doc(d, 'communities', 'c1', 'asks', 'unrelated'), {
+        askId: 'unrelated', communityId: 'c1', authorId: uid.second,
+        authorDisplayName: uid.second, type: 'help', text: 'Unrelated',
+        createdAt: now(), status: 'active',
+      });
+    });
+    const memberDb = db(uid.communityMember);
+    await assertSucceeds(setDoc(doc(memberDb, 'accountDeletionStates', uid.communityMember), deletionState(uid.communityMember)));
+    const ownAnswers = query(collectionGroup(memberDb, 'answers'), where('authorId', '==', uid.communityMember));
+    assert.equal((await getDocs(ownAnswers)).size, 1);
+    const bestAsks = query(collectionGroup(memberDb, 'asks'), where('bestAnswerAuthorId', '==', uid.communityMember));
+    assert.equal((await getDocs(bestAsks)).size, 1);
+    await assertFails(getDoc(doc(memberDb, 'communities', 'c1', 'asks', 'unrelated')));
+
+    const oldAnswer = doc(memberDb, 'communities', 'c1', 'asks', 'ask1', 'answers', uid.communityMember);
+    const replacementId = 'stale-anonymous-answer';
+    await assertSucceeds(updateDoc(oldAnswer, { deletionReplacementAnswerId: replacementId }));
+    const migration = writeBatch(memberDb);
+    migration.set(doc(memberDb, 'communities', 'c1', 'asks', 'ask1', 'answers', replacementId), {
+      answerId: replacementId, authorId: '__deleted_user__', authorDisplayName: 'Deleted user', text: 'Answer', createdAt: now(),
+    });
+    migration.update(doc(memberDb, 'communities', 'c1', 'asks', 'ask1'), {
+      bestAnswerId: replacementId, bestAnswerAuthorId: '__deleted_user__',
+    });
+    migration.delete(oldAnswer);
+    await assertSucceeds(migration.commit());
+    assert.equal((await getDocs(ownAnswers)).empty, true);
   });
 
   test('secondary UID references are anonymized without changing history', async () => {

@@ -137,6 +137,7 @@ const organizedEventData = (eventId = 'organized1', creatorId = uid.creatorTask,
   originUserId: null,
   sourceAuthorName: null,
   assignments: [assignment(uid.assigneeTask), assignment(uid.secondMember)],
+  assignmentUserIds: [uid.assigneeTask, uid.secondMember],
   ...overrides,
 });
 const proposalData = (proposalId = 'proposal1', creatorId = uid.creatorTask, overrides = {}) => ({

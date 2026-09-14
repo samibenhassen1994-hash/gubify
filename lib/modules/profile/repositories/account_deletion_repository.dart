@@ -16,7 +16,7 @@ abstract interface class AccountDeletionRepositoryContract {
   Future<void> deleteDetachedIdentityDocuments(String userId);
   Future<void> deletePrivateReadState(String gubId, String userId);
   Future<void> deleteCommunityJoinRequest(String communityId, String userId);
-  Future<void> deleteCommunityActiveAskSlot(String communityId, String userId);
+  Future<void> deleteCommunityActiveAskSlots(String userId);
   Future<void> deletePrivateCopy(String gubId, String userId);
   Future<void> deleteCommunityCopy(String communityId, String userId);
   Future<void> deleteProfile(String userId);
@@ -92,6 +92,15 @@ class AccountDeletionRepository implements AccountDeletionRepositoryContract {
         updated['userName'] = deletedUserName;
         return updated;
       })
+      .toList(growable: false);
+
+  @visibleForTesting
+  static List<String> organizedEventAssignmentUserIds(
+    List<Object?> assignments,
+  ) => assignments
+      .whereType<Map>()
+      .map((assignment) => assignment['userId'])
+      .whereType<String>()
       .toList(growable: false);
 
   @visibleForTesting
@@ -400,9 +409,9 @@ class AccountDeletionRepository implements AccountDeletionRepositoryContract {
     CollectionReference<Map<String, dynamic>> collection,
     String userId,
   ) async {
-    final snapshot = await collection.get(
-      const GetOptions(source: Source.server),
-    );
+    final snapshot = await collection
+        .where('assignmentUserIds', arrayContains: userId)
+        .get(const GetOptions(source: Source.server));
     for (final document in snapshot.docs) {
       final assignments = document.data()['assignments'];
       if (assignments is! List) continue;
@@ -415,7 +424,12 @@ class AccountDeletionRepository implements AccountDeletionRepositoryContract {
         userId,
       );
       if (changed) {
-        await document.reference.update({'assignments': updatedAssignments});
+        await document.reference.update({
+          'assignments': updatedAssignments,
+          'assignmentUserIds': organizedEventAssignmentUserIds(
+            updatedAssignments,
+          ),
+        });
       }
     }
   }
@@ -436,6 +450,13 @@ class AccountDeletionRepository implements AccountDeletionRepositoryContract {
   }
 
   Future<void> _anonymizeCommunityAnswers(String userId) async {
+    final bestAnswerAsks = await _firestore
+        .collectionGroup('asks')
+        .where('bestAnswerAuthorId', isEqualTo: userId)
+        .get(const GetOptions(source: Source.server));
+    final bestAnswerAskPaths = bestAnswerAsks.docs
+        .map((document) => document.reference.path)
+        .toSet();
     final snapshot = await _firestore
         .collectionGroup('answers')
         .where('authorId', isEqualTo: userId)
@@ -443,9 +464,6 @@ class AccountDeletionRepository implements AccountDeletionRepositoryContract {
     for (final answer in snapshot.docs) {
       final ask = answer.reference.parent.parent;
       if (ask == null || answer.id != userId) continue;
-      final askSnapshot = await ask.get(
-        const GetOptions(source: Source.server),
-      );
       var sourceData = answer.data();
       var replacementId = sourceData['deletionReplacementAnswerId'];
       if (replacementId is! String || replacementId.isEmpty) {
@@ -466,7 +484,7 @@ class AccountDeletionRepository implements AccountDeletionRepositoryContract {
         ..remove('deletionReplacementAnswerId');
       final batch = _firestore.batch();
       batch.set(replacement, data);
-      if (askSnapshot.data()?['bestAnswerId'] == answer.id) {
+      if (bestAnswerAskPaths.contains(ask.path)) {
         batch.update(ask, {
           'bestAnswerId': replacement.id,
           'bestAnswerAuthorId': deletedUserId,
@@ -563,15 +581,21 @@ class AccountDeletionRepository implements AccountDeletionRepositoryContract {
   }
 
   @override
-  Future<void> deleteCommunityActiveAskSlot(
-    String communityId,
-    String userId,
-  ) => _firestore
-      .collection('communities')
-      .doc(communityId)
-      .collection('activeAskSlots')
-      .doc(userId)
-      .delete();
+  Future<void> deleteCommunityActiveAskSlots(String userId) async {
+    while (true) {
+      final snapshot = await _firestore
+          .collectionGroup('activeAskSlots')
+          .where('authorId', isEqualTo: userId)
+          .limit(_deletePageSize)
+          .get(const GetOptions(source: Source.server));
+      if (snapshot.docs.isEmpty) return;
+      final batch = _firestore.batch();
+      for (final document in snapshot.docs) {
+        batch.delete(document.reference);
+      }
+      await batch.commit();
+    }
+  }
 
   @override
   Future<void> deletePrivateCopy(String gubId, String userId) => _firestore
