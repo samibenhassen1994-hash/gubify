@@ -84,6 +84,10 @@ class AccountDeletionService {
           'persistRecoveryMarker',
           () => _markerStore.writeUserId(uid),
         );
+        await _atStage(
+          'beginDeletionState',
+          () => _repository.beginDeletionState(uid),
+        );
         final memberships = await _atStage(
           'cleanupPersonalCopies',
           () => _repository.loadMemberships(uid),

@@ -18,6 +18,7 @@ import {
   limit,
   orderBy,
   query,
+  serverTimestamp,
   setDoc,
   updateDoc,
   where,
@@ -105,8 +106,8 @@ beforeEach(async () => {
     batch.set(doc(d, 'gubs', 'g1', 'notifications', 'notification1'), { notificationId: 'notification1', title: 'Task', body: 'Created', type: 'task_created', senderId: uid.member, senderName: uid.member, createdAt: now(), readBy: [uid.member], data: { module: 'tasks', gubId: 'g1', taskId: 'task1' } });
     batch.set(doc(d, 'gubs', 'g1', 'creationCooldowns', `${uid.member}_task`), { creatorId: uid.member, moduleType: 'task', deletedItemId: 'old', deletedBy: uid.member, deletedAt: now(), availableAt: now() });
     batch.set(doc(d, 'communities', 'c1', 'messages', 'cm1'), { messageId: 'cm1', communityId: 'c1', senderId: uid.communityMember, senderName: uid.communityMember, text: 'Community', createdAt: now() });
-    batch.set(doc(d, 'communities', 'c1', 'asks', 'ask1'), { askId: 'ask1', communityId: 'c1', authorId: uid.communityMember, authorDisplayName: uid.communityMember, type: 'help', text: 'Ask', createdAt: now(), status: 'resolved' });
-    batch.set(doc(d, 'communities', 'c1', 'asks', 'ask1', 'answers', 'answer1'), { answerId: 'answer1', authorId: uid.communityMember, authorDisplayName: uid.communityMember, text: 'Answer', createdAt: now() });
+    batch.set(doc(d, 'communities', 'c1', 'asks', 'ask1'), { askId: 'ask1', communityId: 'c1', authorId: uid.communityOwner, authorDisplayName: uid.communityOwner, type: 'help', text: 'Ask', createdAt: now(), status: 'resolved', bestAnswerId: uid.communityMember, bestAnswerAuthorId: uid.communityMember, resolvedAt: now(), xpAwarded: true });
+    batch.set(doc(d, 'communities', 'c1', 'asks', 'ask1', 'answers', uid.communityMember), { answerId: uid.communityMember, authorId: uid.communityMember, authorDisplayName: uid.communityMember, text: 'Answer', createdAt: now() });
     await batch.commit();
   });
 });
@@ -192,6 +193,8 @@ describe('cross-module and cross-resource isolation', () => {
 });
 
 describe('account deletion personal-data cleanup', () => {
+  const deletionState = (userId) => ({ userId, status: 'deleting', startedAt: serverTimestamp() });
+
   test('anonymizes authored Gub comments and Community Ask history', async () => {
     const memberDb = db(uid.member);
     await assertSucceeds(getDocs(query(collectionGroup(memberDb, 'comments'), where('authorId', '==', uid.member))));
@@ -199,18 +202,35 @@ describe('account deletion personal-data cleanup', () => {
       authorId: '__deleted_user__', authorName: 'Deleted user',
     }));
 
+    const ownerDb = db(uid.communityOwner);
+    await assertSucceeds(getDocs(query(collectionGroup(ownerDb, 'asks'), where('authorId', '==', uid.communityOwner))));
+    await assertSucceeds(updateDoc(doc(ownerDb, 'communities', 'c1', 'asks', 'ask1'), {
+      authorId: '__deleted_user__', authorDisplayName: 'Deleted user',
+    }));
+
     const communityDb = db(uid.communityMember);
-    await assertSucceeds(getDocs(query(collectionGroup(communityDb, 'asks'), where('authorId', '==', uid.communityMember))));
     await assertSucceeds(getDocs(query(collectionGroup(communityDb, 'answers'), where('authorId', '==', uid.communityMember))));
-    await assertSucceeds(updateDoc(doc(communityDb, 'communities', 'c1', 'asks', 'ask1'), {
-      authorId: '__deleted_user__', authorDisplayName: 'Deleted user',
+    await assertSucceeds(setDoc(doc(communityDb, 'accountDeletionStates', uid.communityMember), deletionState(uid.communityMember)));
+    const replacementId = 'anonymous-answer';
+    await assertSucceeds(updateDoc(doc(communityDb, 'communities', 'c1', 'asks', 'ask1', 'answers', uid.communityMember), {
+      deletionReplacementAnswerId: replacementId,
     }));
-    await assertSucceeds(updateDoc(doc(communityDb, 'communities', 'c1', 'asks', 'ask1', 'answers', 'answer1'), {
-      authorId: '__deleted_user__', authorDisplayName: 'Deleted user',
-    }));
+    const migration = writeBatch(communityDb);
+    migration.set(doc(communityDb, 'communities', 'c1', 'asks', 'ask1', 'answers', replacementId), {
+      answerId: replacementId, authorId: '__deleted_user__', authorDisplayName: 'Deleted user', text: 'Answer', createdAt: now(),
+    });
+    migration.update(doc(communityDb, 'communities', 'c1', 'asks', 'ask1'), {
+      bestAnswerId: replacementId, bestAnswerAuthorId: '__deleted_user__',
+    });
+    migration.delete(doc(communityDb, 'communities', 'c1', 'asks', 'ask1', 'answers', uid.communityMember));
+    await assertSucceeds(migration.commit());
+    const askAfter = (await getDoc(doc(communityDb, 'communities', 'c1', 'asks', 'ask1'))).data();
+    assert.equal(askAfter.bestAnswerId, replacementId);
+    assert.equal(askAfter.bestAnswerAuthorId, '__deleted_user__');
+    assert.equal((await getDoc(doc(communityDb, 'communities', 'c1', 'asks', 'ask1', 'answers', uid.communityMember))).exists(), false);
   });
 
-  test('detached identity leaves are removable only after own profile deletion', async () => {
+  test('profile absence alone never unlocks detached identity cleanup', async () => {
     const memberDb = db(uid.member);
     const like = doc(memberDb, 'gubs', 'g1', 'posts', 'post1', 'likes', uid.member);
     const vote = doc(memberDb, 'gubs', 'g1', 'proposals', 'proposal1', 'votes', uid.member);
@@ -220,15 +240,51 @@ describe('account deletion personal-data cleanup', () => {
     await assertFails(deleteDoc(vote));
     await assertFails(deleteDoc(contribution));
     await assertSucceeds(deleteDoc(doc(memberDb, 'users', uid.member)));
-    await assertSucceeds(getDocs(query(collectionGroup(memberDb, 'likes'), where('userId', '==', uid.member))));
-    await assertSucceeds(getDocs(query(collectionGroup(memberDb, 'votes'), where('uid', '==', uid.member))));
-    await assertSucceeds(getDocs(query(collectionGroup(memberDb, 'members'), where('uid', '==', uid.member))));
-    await assertSucceeds(deleteDoc(like));
-    await assertSucceeds(deleteDoc(vote));
-    await assertSucceeds(deleteDoc(contribution));
+    await assertFails(deleteDoc(like));
+    await assertFails(deleteDoc(vote));
+    await assertFails(deleteDoc(contribution));
+  });
+
+  test('irreversible deletion state unlocks cleanup only after profile deletion', async () => {
+    const memberDb = db(uid.member);
+    const state = doc(memberDb, 'accountDeletionStates', uid.member);
+    await assertSucceeds(setDoc(state, deletionState(uid.member)));
+    await assertFails(deleteDoc(state));
+    await assertSucceeds(deleteDoc(doc(memberDb, 'users', uid.member)));
+    await assertFails(setDoc(doc(memberDb, 'users', uid.member), profile(uid.member)));
+    await assertSucceeds(deleteDoc(doc(memberDb, 'gubs', 'g1', 'posts', 'post1', 'likes', uid.member)));
+    await assertSucceeds(deleteDoc(doc(memberDb, 'gubs', 'g1', 'proposals', 'proposal1', 'votes', uid.member)));
+    await assertSucceeds(deleteDoc(doc(memberDb, 'gubs', 'g1', 'goals', 'goal1', 'members', uid.member)));
+  });
+
+  test('deletion state blocks new likes and votes', async () => {
+    const memberDb = db(uid.second);
+    await assertSucceeds(setDoc(doc(memberDb, 'accountDeletionStates', uid.second), deletionState(uid.second)));
+    const likeBatch = writeBatch(memberDb);
+    likeBatch.update(doc(memberDb, 'gubs', 'g1', 'posts', 'post1'), { likes: 1 });
+    likeBatch.set(doc(memberDb, 'gubs', 'g1', 'posts', 'post1', 'likes', uid.second), { userId: uid.second, createdAt: now() });
+    await assertFails(likeBatch.commit());
+    const voteBatch = writeBatch(memberDb);
+    voteBatch.update(doc(memberDb, 'gubs', 'g1', 'proposals', 'proposal1'), { yesVotes: 4 });
+    voteBatch.set(doc(memberDb, 'gubs', 'g1', 'proposals', 'proposal1', 'votes', uid.second), { uid: uid.second, vote: 'yes', votedAt: now() });
+    await assertFails(voteBatch.commit());
+    await assertFails(setDoc(doc(memberDb, 'gubs', 'g1', 'messages', 'late-message'), {
+      messageId: 'late-message', gubId: 'g1', senderId: uid.second, senderName: uid.second, text: 'Too late', createdAt: now(),
+    }));
 
     assert.equal((await getDoc(doc(memberDb, 'gubs', 'g1', 'posts', 'post1'))).data().likes, 0);
     assert.equal((await getDoc(doc(memberDb, 'gubs', 'g1', 'proposals', 'proposal1'))).data().yesVotes, 3);
     assert.equal((await getDoc(doc(memberDb, 'gubs', 'g1', 'goals', 'goal1'))).data().currentAmount, 0);
+  });
+
+  test('deletion state disables Platform Admin authority', async () => {
+    await env.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), 'platformAdmins', uid.member), { active: true });
+    });
+    const memberDb = db(uid.member);
+    await assertSucceeds(setDoc(doc(memberDb, 'accountDeletionStates', uid.member), deletionState(uid.member)));
+    await assertFails(updateDoc(doc(memberDb, 'communities', 'c1', 'asks', 'ask1'), {
+      moderationHidden: true, moderatedBy: uid.member, moderatedAt: now(),
+    }));
   });
 });

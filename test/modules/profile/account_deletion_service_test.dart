@@ -135,6 +135,7 @@ void main() {
     expect(events, [
       'preflight',
       'marker-write:uid',
+      'begin-deletion-state',
       'membership-index',
       'anonymize-shared',
       'delete-user-root',
@@ -189,6 +190,25 @@ void main() {
 
     expect((await service.deleteAccount()).isSuccess, isTrue);
     expect(repository.events, contains('private-copy:gone'));
+  });
+
+  test('stale Gub and Community copies do not fail account deletion', () async {
+    final repository = _Repository()
+      ..privateIds = ['stale-gub']
+      ..communityIds = ['stale-community'];
+    final service = AccountDeletionService(
+      authService: _AuthService(),
+      repository: repository,
+      markerStore: _MarkerStore(repository.events),
+      leavePrivateGub: (_) async => throw StateError('missing membership'),
+      leaveCommunity: (_) async => throw StateError('missing membership'),
+      clearUserCache: () {},
+      clearLocalProfileState: () async {},
+    );
+
+    expect((await service.deleteAccount()).isSuccess, isTrue);
+    expect(repository.events, contains('private-copy:stale-gub'));
+    expect(repository.events, contains('community-copy:stale-community'));
   });
 
   test(
@@ -423,6 +443,11 @@ class _Repository implements AccountDeletionRepositoryContract {
   final Map<String, Map<String, Object?>> profiles = {};
   final List<String> anonymizedUserIds = [];
   final List<String> deletedProfileUserIds = [];
+
+  @override
+  Future<void> beginDeletionState(String userId) async {
+    events.add('begin-deletion-state');
+  }
 
   @override
   Future<void> anonymizeSharedContent({

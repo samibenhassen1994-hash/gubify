@@ -65,4 +65,22 @@ void main() {
     ]);
     expect(assignments[0], containsPair('userId', 'deleting-user'));
   });
+
+  test('stale Gub copy without canonical membership is skipped', () {
+    expect(
+      AccountDeletionRepository.shouldAnonymizeScopedContent(
+        membershipJoinedAt: null,
+      ),
+      isFalse,
+    );
+  });
+
+  test('stale Community copy without canonical membership is skipped', () {
+    expect(
+      AccountDeletionRepository.shouldAnonymizeScopedContent(
+        membershipJoinedAt: null,
+      ),
+      isFalse,
+    );
+  });
 }

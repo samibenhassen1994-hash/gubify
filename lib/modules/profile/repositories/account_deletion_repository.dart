@@ -6,6 +6,7 @@ import '../models/account_deletion_model.dart';
 abstract interface class AccountDeletionRepositoryContract {
   Future<AccountDeletionPreflight> loadPreflight(String userId);
   Future<AccountDeletionMemberships> loadMemberships(String userId);
+  Future<void> beginDeletionState(String userId);
   Future<void> anonymizeSharedContent({
     required String userId,
     required List<String> privateGubIds,
@@ -92,6 +93,27 @@ class AccountDeletionRepository implements AccountDeletionRepositoryContract {
       })
       .toList(growable: false);
 
+  @visibleForTesting
+  static bool shouldAnonymizeScopedContent({
+    required Object? membershipJoinedAt,
+  }) => membershipJoinedAt != null;
+
+  @override
+  Future<void> beginDeletionState(String userId) async {
+    final reference = _firestore
+        .collection('accountDeletionStates')
+        .doc(userId);
+    final existing = await reference.get(
+      const GetOptions(source: Source.server),
+    );
+    if (existing.exists) return;
+    await reference.set({
+      'userId': userId,
+      'status': 'deleting',
+      'startedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
   @override
   Future<AccountDeletionPreflight> loadPreflight(String userId) async {
     final results = await Future.wait([
@@ -158,11 +180,12 @@ class AccountDeletionRepository implements AccountDeletionRepositoryContract {
   }) async {
     for (final gubId in privateGubIds) {
       final gub = _firestore.collection('gubs').doc(gubId);
-      final joinedAt = await _membershipJoinedAt(
+      final joinedAt = await _membershipJoinedAtOrNull(
         rootCollection: 'gubs',
         rootId: gubId,
         userId: userId,
       );
+      if (!shouldAnonymizeScopedContent(membershipJoinedAt: joinedAt)) continue;
       await _anonymizeQuery(
         gub
             .collection('messages')
@@ -223,11 +246,12 @@ class AccountDeletionRepository implements AccountDeletionRepositoryContract {
     }
     for (final communityId in communityIds) {
       final community = _firestore.collection('communities').doc(communityId);
-      final joinedAt = await _membershipJoinedAt(
+      final joinedAt = await _membershipJoinedAtOrNull(
         rootCollection: 'communities',
         rootId: communityId,
         userId: userId,
       );
+      if (!shouldAnonymizeScopedContent(membershipJoinedAt: joinedAt)) continue;
       await _anonymizeQuery(
         community
             .collection('messages')
@@ -249,15 +273,7 @@ class AccountDeletionRepository implements AccountDeletionRepositoryContract {
         'authorDisplayName': deletedUserName,
       },
     );
-    await _anonymizeQuery(
-      _firestore
-          .collectionGroup('answers')
-          .where('authorId', isEqualTo: userId),
-      (_) => const {
-        'authorId': deletedUserId,
-        'authorDisplayName': deletedUserName,
-      },
-    );
+    await _anonymizeCommunityAnswers(userId);
   }
 
   @override
@@ -355,7 +371,7 @@ class AccountDeletionRepository implements AccountDeletionRepositoryContract {
     }
   }
 
-  Future<Timestamp> _membershipJoinedAt({
+  Future<Timestamp?> _membershipJoinedAtOrNull({
     required String rootCollection,
     required String rootId,
     required String userId,
@@ -367,10 +383,49 @@ class AccountDeletionRepository implements AccountDeletionRepositoryContract {
         .doc(userId)
         .get(const GetOptions(source: Source.server));
     final joinedAt = snapshot.data()?['joinedAt'];
-    if (joinedAt is! Timestamp) {
-      throw StateError('The current membership has no valid joinedAt.');
+    return joinedAt is Timestamp ? joinedAt : null;
+  }
+
+  Future<void> _anonymizeCommunityAnswers(String userId) async {
+    final snapshot = await _firestore
+        .collectionGroup('answers')
+        .where('authorId', isEqualTo: userId)
+        .get(const GetOptions(source: Source.server));
+    for (final answer in snapshot.docs) {
+      final ask = answer.reference.parent.parent;
+      if (ask == null || answer.id != userId) continue;
+      final askSnapshot = await ask.get(
+        const GetOptions(source: Source.server),
+      );
+      var sourceData = answer.data();
+      var replacementId = sourceData['deletionReplacementAnswerId'];
+      if (replacementId is! String || replacementId.isEmpty) {
+        replacementId = answer.reference.parent.doc().id;
+        await answer.reference.update({
+          'deletionReplacementAnswerId': replacementId,
+        });
+        sourceData = {
+          ...sourceData,
+          'deletionReplacementAnswerId': replacementId,
+        };
+      }
+      final replacement = answer.reference.parent.doc(replacementId);
+      final data = Map<String, Object?>.from(sourceData)
+        ..['answerId'] = replacement.id
+        ..['authorId'] = deletedUserId
+        ..['authorDisplayName'] = deletedUserName
+        ..remove('deletionReplacementAnswerId');
+      final batch = _firestore.batch();
+      batch.set(replacement, data);
+      if (askSnapshot.data()?['bestAnswerId'] == answer.id) {
+        batch.update(ask, {
+          'bestAnswerId': replacement.id,
+          'bestAnswerAuthorId': deletedUserId,
+        });
+      }
+      batch.delete(answer.reference);
+      await batch.commit();
     }
-    return joinedAt;
   }
 
   Map<String, Object?> _identityUpdate(String idField, String? nameField) {

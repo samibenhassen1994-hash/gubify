@@ -457,6 +457,10 @@ describe('Approval requests', () => {
       resolvedAt: now(),
       resolvedBy: uid.owner,
     });
+    await assertSucceeds(setDoc(
+      doc(db(uid.requester), 'accountDeletionStates', uid.requester),
+      { userId: uid.requester, status: 'deleting', startedAt: serverTimestamp() },
+    ));
     await env.withSecurityRulesDisabled((context) =>
       deleteDoc(doc(context.firestore(), 'users', uid.requester)),
     );
