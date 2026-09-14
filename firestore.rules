@@ -482,6 +482,7 @@ service cloud.firestore {
         && data.createdAt is timestamp && data.status == 'active' && data.completedAt == null
         && validSource(data, id)
         && data.assignments is list && data.assignments.size() > 0
+        && data.assignments.size() <= 20
         && data.assignmentUserIds is list
         && data.assignmentUserIds.size() == data.assignments.size()
         && validOrganizedAssignmentUserIdAt(data, 0)

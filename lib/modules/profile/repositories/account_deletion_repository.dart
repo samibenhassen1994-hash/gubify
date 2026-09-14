@@ -252,6 +252,7 @@ class AccountDeletionRepository implements AccountDeletionRepositoryContract {
       await _anonymizeOrganizedEventAssignments(
         gub.collection('organizedEvents'),
         userId,
+        includeLegacyDocuments: joinedAt != null,
       );
       await _anonymizeIdentityPairs(gub.collection('proposals'), userId, const [
         ('creatorId', 'creatorName'),
@@ -407,11 +408,14 @@ class AccountDeletionRepository implements AccountDeletionRepositoryContract {
 
   Future<void> _anonymizeOrganizedEventAssignments(
     CollectionReference<Map<String, dynamic>> collection,
-    String userId,
-  ) async {
-    final snapshot = await collection
-        .where('assignmentUserIds', arrayContains: userId)
-        .get(const GetOptions(source: Source.server));
+    String userId, {
+    required bool includeLegacyDocuments,
+  }) async {
+    final snapshot = includeLegacyDocuments
+        ? await collection.get(const GetOptions(source: Source.server))
+        : await collection
+              .where('assignmentUserIds', arrayContains: userId)
+              .get(const GetOptions(source: Source.server));
     for (final document in snapshot.docs) {
       final assignments = document.data()['assignments'];
       if (assignments is! List) continue;

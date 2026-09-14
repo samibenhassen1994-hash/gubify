@@ -400,6 +400,30 @@ describe('account deletion personal-data cleanup', () => {
     assert.equal((await getDocs(ownAssignments)).empty, true);
   });
 
+  test('current member can migrate a legacy assignee-only Organized Event', async () => {
+    await env.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), 'gubs', 'g1', 'organizedEvents', 'legacy-assignment'), {
+        eventId: 'legacy-assignment', gubId: 'g1', title: 'Legacy assignment',
+        createdBy: uid.second, createdByName: uid.second, originUserId: null,
+        sourceAuthorName: null,
+        assignments: [{ userId: uid.member, userName: uid.member, taskText: 'Keep', isCompleted: false, completedAt: null }],
+        status: 'active', createdAt: now(),
+      });
+    });
+    const memberDb = db(uid.member);
+    await assertSucceeds(setDoc(doc(memberDb, 'accountDeletionStates', uid.member), deletionState(uid.member)));
+    const events = await assertSucceeds(getDocs(collection(memberDb, 'gubs', 'g1', 'organizedEvents')));
+    const legacy = events.docs.find((event) => event.id === 'legacy-assignment');
+    assert.ok(legacy);
+    await assertSucceeds(updateDoc(legacy.ref, {
+      assignments: [{ userId: '__deleted_user__', userName: 'Deleted user', taskText: 'Keep', isCompleted: false, completedAt: null }],
+      assignmentUserIds: ['__deleted_user__'],
+    }));
+    const migrated = await getDoc(legacy.ref);
+    assert.deepEqual(migrated.data().assignmentUserIds, ['__deleted_user__']);
+    assert.equal(migrated.data().assignments[0].userId, '__deleted_user__');
+  });
+
   test('stale Community Answer migration can read only its Best Answer Ask', async () => {
     await env.withSecurityRulesDisabled(async (context) => {
       const d = context.firestore();

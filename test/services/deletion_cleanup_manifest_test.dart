@@ -1,9 +1,72 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gubify/modules/community/repositories/community_repository.dart';
 import 'package:gubify/modules/profile/repositories/account_deletion_repository.dart';
 import 'package:gubify/repositories/gub_deletion_repository.dart';
 
 void main() {
+  test('account deletion collection-group queries have explicit indexes', () {
+    final repositorySource = File(
+      'lib/modules/profile/repositories/account_deletion_repository.dart',
+    ).readAsStringSync();
+    expect('.collectionGroup('.allMatches(repositorySource), hasLength(8));
+
+    const requiredIndexes = <(String, String)>[
+      ('members', 'uid'),
+      ('comments', 'authorId'),
+      ('asks', 'authorId'),
+      ('likes', 'userId'),
+      ('votes', 'uid'),
+      ('asks', 'bestAnswerAuthorId'),
+      ('answers', 'authorId'),
+      ('activeAskSlots', 'authorId'),
+      ('joinRequests', 'userId'),
+    ];
+    final manifest =
+        jsonDecode(File('firestore.indexes.json').readAsStringSync())
+            as Map<String, dynamic>;
+    final overrides = (manifest['fieldOverrides'] as List)
+        .cast<Map<String, dynamic>>();
+
+    for (final (collectionGroup, fieldPath) in requiredIndexes) {
+      final override = overrides.singleWhere(
+        (entry) =>
+            entry['collectionGroup'] == collectionGroup &&
+            entry['fieldPath'] == fieldPath,
+      );
+      final indexes = (override['indexes'] as List)
+          .cast<Map<String, dynamic>>();
+      for (final scope in const ['COLLECTION', 'COLLECTION_GROUP']) {
+        for (final order in const ['ASCENDING', 'DESCENDING']) {
+          expect(
+            indexes.any(
+              (index) =>
+                  index['order'] == order && index['queryScope'] == scope,
+            ),
+            isTrue,
+            reason: '$collectionGroup.$fieldPath needs $scope $order',
+          );
+        }
+      }
+    }
+  });
+
+  test('legacy Organized Event fallback is limited to current members', () {
+    final repositorySource = File(
+      'lib/modules/profile/repositories/account_deletion_repository.dart',
+    ).readAsStringSync();
+    expect(
+      repositorySource,
+      contains('includeLegacyDocuments: joinedAt != null'),
+    );
+    expect(
+      repositorySource,
+      contains(".where('assignmentUserIds', arrayContains: userId)"),
+    );
+  });
+
   test(
     'account deletion removes nested profile state and external requests',
     () {
