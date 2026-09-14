@@ -5,6 +5,7 @@ import { pathToFileURL } from 'node:url';
 export function assignmentUserIdsBackfillFor(data) {
   const assignments = data.assignments;
   if (!Array.isArray(assignments)) return null;
+  if (assignments.length > 20) return null;
   const assignmentUserIds = assignments.map((assignment) => assignment?.userId);
   if (assignmentUserIds.some((userId) => typeof userId !== 'string')) return null;
   const current = data.assignmentUserIds;
@@ -14,6 +15,10 @@ export function assignmentUserIdsBackfillFor(data) {
     return null;
   }
   return assignmentUserIds;
+}
+
+export function countOversizedLegacyEvent(data) {
+  return Array.isArray(data.assignments) && data.assignments.length > 20 ? 1 : 0;
 }
 
 async function main() {
@@ -29,6 +34,7 @@ async function main() {
   let cursor;
   let scanned = 0;
   let changed = 0;
+  let oversized = 0;
 
   while (true) {
     let query = firestore
@@ -42,7 +48,9 @@ async function main() {
     const updates = [];
     for (const document of page.docs) {
       scanned += 1;
-      const assignmentUserIds = assignmentUserIdsBackfillFor(document.data());
+      const data = document.data();
+      oversized += countOversizedLegacyEvent(data);
+      const assignmentUserIds = assignmentUserIdsBackfillFor(data);
       if (assignmentUserIds) updates.push([document.ref, assignmentUserIds]);
     }
 
@@ -58,6 +66,7 @@ async function main() {
   }
 
   console.log(`${apply ? 'Updated' : 'Would update'} ${changed} of ${scanned} Organized Events.`);
+  console.log(`Legacy events with more than 20 assignments: ${oversized}`);
   if (!apply) console.log('Dry run only. Re-run with --apply after reviewing the count.');
 }
 

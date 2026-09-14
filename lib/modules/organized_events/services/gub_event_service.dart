@@ -14,6 +14,10 @@ import '../models/gub_event_model.dart';
 import '../repositories/gub_event_repository.dart';
 
 class GubEventService {
+  static const maxAssignments = 20;
+  static const assignmentLimitMessage =
+      'You can assign tasks to up to 20 members per event.';
+
   GubEventService._();
   static final instance = GubEventService._();
   final _db = FirebaseFirestore.instance;
@@ -91,6 +95,7 @@ class GubEventService {
     String? originUserId,
     String? sourceAuthorName,
   }) async {
+    validateAssignmentCount(assignments.length);
     await GubRepository.instance.ensureActive(gubId);
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
@@ -173,6 +178,12 @@ class GubEventService {
       );
     } finally {
       _creationsInProgress.remove(creationKey);
+    }
+  }
+
+  static void validateAssignmentCount(int count) {
+    if (count > maxAssignments) {
+      throw StateError(assignmentLimitMessage);
     }
   }
 
