@@ -2643,6 +2643,11 @@ service cloud.firestore {
         && resource.data.get('authorId', '') == request.auth.uid;
     }
 
+    match /{path=**}/joinRequests/{uid} {
+      allow list: if accountDeletionStarted(request.auth.uid)
+        && resource.data.userId == request.auth.uid;
+    }
+
     match /{path=**}/comments/{commentId} {
       allow list: if signedIn() && resource.data.authorId == request.auth.uid;
     }

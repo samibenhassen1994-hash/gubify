@@ -195,6 +195,42 @@ describe('cross-module and cross-resource isolation', () => {
 describe('account deletion personal-data cleanup', () => {
   const deletionState = (userId) => ({ userId, status: 'deleting', startedAt: serverTimestamp() });
 
+  test('deletion state can list only its own Community join requests', async () => {
+    await env.withSecurityRulesDisabled(async (context) => {
+      const d = context.firestore();
+      await setDoc(doc(d, 'communities', 'c1', 'joinRequests', uid.member), {
+        userId: uid.member, displayName: uid.member, status: 'rejected', createdAt: now(),
+      });
+      await setDoc(doc(d, 'communities', 'c2', 'joinRequests', uid.member), {
+        userId: uid.member, displayName: uid.member, status: 'approved', createdAt: now(),
+      });
+      await setDoc(doc(d, 'communities', 'c1', 'joinRequests', uid.second), {
+        userId: uid.second, displayName: uid.second, status: 'pending', createdAt: now(),
+      });
+    });
+
+    const ownDb = db(uid.member);
+    const ownRequests = query(
+      collectionGroup(ownDb, 'joinRequests'),
+      where('userId', '==', uid.member),
+    );
+    await assertFails(getDocs(ownRequests));
+    await assertSucceeds(setDoc(
+      doc(ownDb, 'accountDeletionStates', uid.member),
+      deletionState(uid.member),
+    ));
+    const snapshot = await assertSucceeds(getDocs(ownRequests));
+    assert.equal(snapshot.size, 2);
+    assert.ok(snapshot.docs.every((request) => request.data().userId === uid.member));
+
+    const outsiderTargetQuery = query(
+      collectionGroup(db(uid.outsider), 'joinRequests'),
+      where('userId', '==', uid.member),
+    );
+    await assertFails(getDocs(outsiderTargetQuery));
+    await assertFails(getDocs(collectionGroup(ownDb, 'joinRequests')));
+  });
+
   test('normal accounts cannot self-anonymize identity fields', async () => {
     const memberDb = db(uid.member);
     await assertFails(updateDoc(doc(memberDb, 'gubs', 'g1', 'messages', 'm1'), {
@@ -271,6 +307,39 @@ describe('account deletion personal-data cleanup', () => {
     await assertSucceeds(deleteDoc(doc(memberDb, 'gubs', 'g1', 'posts', 'post1', 'likes', uid.member)));
     await assertSucceeds(deleteDoc(doc(memberDb, 'gubs', 'g1', 'proposals', 'proposal1', 'votes', uid.member)));
     await assertSucceeds(deleteDoc(doc(memberDb, 'gubs', 'g1', 'goals', 'goal1', 'members', uid.member)));
+  });
+
+  test('deletion repository detached identity queries remain identity scoped', async () => {
+    const memberDb = db(uid.member);
+    await assertSucceeds(setDoc(
+      doc(memberDb, 'accountDeletionStates', uid.member),
+      deletionState(uid.member),
+    ));
+    await assertSucceeds(deleteDoc(doc(memberDb, 'users', uid.member)));
+
+    for (const [group, field] of [
+      ['likes', 'userId'],
+      ['votes', 'uid'],
+      ['members', 'uid'],
+    ]) {
+      const ownDocuments = query(
+        collectionGroup(memberDb, group),
+        where(field, '==', uid.member),
+        orderBy(documentId()),
+        limit(300),
+      );
+      const snapshot = await assertSucceeds(getDocs(ownDocuments));
+      assert.ok(snapshot.docs.every((document) => document.data()[field] === uid.member));
+      await assertFails(getDocs(collectionGroup(memberDb, group)));
+
+      const outsiderTargetQuery = query(
+        collectionGroup(db(uid.outsider), group),
+        where(field, '==', uid.member),
+        orderBy(documentId()),
+        limit(300),
+      );
+      await assertFails(getDocs(outsiderTargetQuery));
+    }
   });
 
   test('deletion state blocks new likes and votes', async () => {
