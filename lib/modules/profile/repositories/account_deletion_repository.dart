@@ -16,6 +16,7 @@ abstract interface class AccountDeletionRepositoryContract {
   Future<void> deleteDetachedIdentityDocuments(String userId);
   Future<void> deletePrivateReadState(String gubId, String userId);
   Future<void> deleteCommunityJoinRequest(String communityId, String userId);
+  Future<void> deleteCommunityActiveAskSlot(String communityId, String userId);
   Future<void> deletePrivateCopy(String gubId, String userId);
   Future<void> deleteCommunityCopy(String communityId, String userId);
   Future<void> deleteProfile(String userId);
@@ -96,7 +97,19 @@ class AccountDeletionRepository implements AccountDeletionRepositoryContract {
   @visibleForTesting
   static bool shouldAnonymizeScopedContent({
     required Object? membershipJoinedAt,
-  }) => membershipJoinedAt != null;
+  }) => true;
+
+  @visibleForTesting
+  static Map<String, Object?> notificationDataUpdate(
+    Map<String, dynamic> data,
+    String userId,
+  ) {
+    final nested = data['data'];
+    if (nested is! Map || nested['memberId'] != userId) return const {};
+    return {
+      'data': Map<String, Object?>.from(nested)..['memberId'] = deletedUserId,
+    };
+  }
 
   @override
   Future<void> beginDeletionState(String userId) async {
@@ -185,12 +198,17 @@ class AccountDeletionRepository implements AccountDeletionRepositoryContract {
         rootId: gubId,
         userId: userId,
       );
-      if (!shouldAnonymizeScopedContent(membershipJoinedAt: joinedAt)) continue;
+      Query<Map<String, dynamic>> messages = gub
+          .collection('messages')
+          .where('senderId', isEqualTo: userId);
+      if (joinedAt != null) {
+        messages = messages.where(
+          'createdAt',
+          isGreaterThanOrEqualTo: joinedAt,
+        );
+      }
       await _anonymizeQuery(
-        gub
-            .collection('messages')
-            .where('senderId', isEqualTo: userId)
-            .where('createdAt', isGreaterThanOrEqualTo: joinedAt),
+        messages,
         (_) => const {'senderId': deletedUserId, 'senderName': deletedUserName},
       );
       await _anonymizeQuery(
@@ -200,6 +218,10 @@ class AccountDeletionRepository implements AccountDeletionRepositoryContract {
           'authorName': deletedUserName,
           'authorPhoto': null,
         },
+      );
+      await _anonymizeQuery(
+        gub.collection('posts').where('lastCommentAuthorId', isEqualTo: userId),
+        (_) => const {'lastCommentAuthorId': deletedUserId},
       );
       await _anonymizeIdentityPairs(gub.collection('tasks'), userId, const [
         ('creatorId', 'creatorName'),
@@ -225,23 +247,45 @@ class AccountDeletionRepository implements AccountDeletionRepositoryContract {
       await _anonymizeIdentityPairs(gub.collection('proposals'), userId, const [
         ('creatorId', 'creatorName'),
         ('originUserId', 'sourceAuthorName'),
+        ('deletedBy', null),
       ]);
       await _anonymizeIdentityPairs(gub.collection('goals'), userId, const [
         ('originUserId', 'sourceAuthorName'),
       ]);
+      Query<Map<String, dynamic>> sentNotifications = gub
+          .collection('notifications')
+          .where('senderId', isEqualTo: userId);
+      Query<Map<String, dynamic>> readNotifications = gub
+          .collection('notifications')
+          .where('readBy', arrayContains: userId);
+      if (joinedAt != null) {
+        sentNotifications = sentNotifications.where(
+          'createdAt',
+          isGreaterThanOrEqualTo: joinedAt,
+        );
+        readNotifications = readNotifications.where(
+          'createdAt',
+          isGreaterThanOrEqualTo: joinedAt,
+        );
+      }
       await _anonymizeQuery(
-        gub
-            .collection('notifications')
-            .where('senderId', isEqualTo: userId)
-            .where('createdAt', isGreaterThanOrEqualTo: joinedAt),
+        sentNotifications,
         (data) => _notificationUpdate(data, userId, anonymizeSender: true),
+      );
+      await _anonymizeQuery(
+        readNotifications,
+        (data) => _notificationUpdate(data, userId, anonymizeSender: false),
       );
       await _anonymizeQuery(
         gub
             .collection('notifications')
-            .where('readBy', arrayContains: userId)
-            .where('createdAt', isGreaterThanOrEqualTo: joinedAt),
-        (data) => _notificationUpdate(data, userId, anonymizeSender: false),
+            .where('data.memberId', isEqualTo: userId),
+        (data) => notificationDataUpdate(data, userId),
+      );
+      await _anonymizeIdentityPairs(
+        gub.collection('creationCooldowns'),
+        userId,
+        const [('creatorId', null), ('deletedBy', null)],
       );
     }
     for (final communityId in communityIds) {
@@ -251,12 +295,17 @@ class AccountDeletionRepository implements AccountDeletionRepositoryContract {
         rootId: communityId,
         userId: userId,
       );
-      if (!shouldAnonymizeScopedContent(membershipJoinedAt: joinedAt)) continue;
+      Query<Map<String, dynamic>> messages = community
+          .collection('messages')
+          .where('senderId', isEqualTo: userId);
+      if (joinedAt != null) {
+        messages = messages.where(
+          'createdAt',
+          isGreaterThanOrEqualTo: joinedAt,
+        );
+      }
       await _anonymizeQuery(
-        community
-            .collection('messages')
-            .where('senderId', isEqualTo: userId)
-            .where('createdAt', isGreaterThanOrEqualTo: joinedAt),
+        messages,
         (_) => const {'senderId': deletedUserId, 'senderName': deletedUserName},
       );
     }
@@ -512,6 +561,17 @@ class AccountDeletionRepository implements AccountDeletionRepositoryContract {
       await reference.delete();
     }
   }
+
+  @override
+  Future<void> deleteCommunityActiveAskSlot(
+    String communityId,
+    String userId,
+  ) => _firestore
+      .collection('communities')
+      .doc(communityId)
+      .collection('activeAskSlots')
+      .doc(userId)
+      .delete();
 
   @override
   Future<void> deletePrivateCopy(String gubId, String userId) => _firestore

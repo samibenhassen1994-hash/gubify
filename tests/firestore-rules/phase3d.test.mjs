@@ -287,4 +287,135 @@ describe('account deletion personal-data cleanup', () => {
       moderationHidden: true, moderatedBy: uid.member, moderatedAt: now(),
     }));
   });
+
+  test('stale copies permit only exact authored-content anonymization', async () => {
+    await env.withSecurityRulesDisabled(async (context) => {
+      const d = context.firestore();
+      await deleteDoc(doc(d, 'gubs', 'g1', 'members', uid.member));
+      await deleteDoc(doc(d, 'communities', 'c1', 'members', uid.communityMember));
+    });
+    const gubDb = db(uid.member);
+    await assertSucceeds(setDoc(doc(gubDb, 'accountDeletionStates', uid.member), deletionState(uid.member)));
+    await assertSucceeds(getDocs(query(collection(gubDb, 'gubs', 'g1', 'messages'), where('senderId', '==', uid.member))));
+    await assertSucceeds(updateDoc(doc(gubDb, 'gubs', 'g1', 'messages', 'm1'), {
+      senderId: '__deleted_user__', senderName: 'Deleted user',
+    }));
+
+    const communityDb = db(uid.communityMember);
+    await assertSucceeds(setDoc(doc(communityDb, 'accountDeletionStates', uid.communityMember), deletionState(uid.communityMember)));
+    await assertSucceeds(getDocs(query(collection(communityDb, 'communities', 'c1', 'messages'), where('senderId', '==', uid.communityMember))));
+    await assertSucceeds(updateDoc(doc(communityDb, 'communities', 'c1', 'messages', 'cm1'), {
+      senderId: '__deleted_user__', senderName: 'Deleted user',
+    }));
+    await assertFails(getDocs(collection(communityDb, 'communities', 'c1', 'messages')));
+  });
+
+  test('deletion state blocks task completion and notification reads', async () => {
+    const memberDb = db(uid.member);
+    await assertSucceeds(setDoc(doc(memberDb, 'accountDeletionStates', uid.member), deletionState(uid.member)));
+    await assertFails(updateDoc(doc(memberDb, 'gubs', 'g1', 'tasks', 'task1'), {
+      status: 'completed', completedAt: now(), completedBy: uid.member,
+    }));
+    await assertFails(updateDoc(doc(memberDb, 'gubs', 'g1', 'notifications', 'notification1'), {
+      readBy: [uid.member, uid.second],
+    }));
+  });
+
+  test('deletion state can remove an active Community Ask slot', async () => {
+    await env.withSecurityRulesDisabled(async (context) => {
+      const d = context.firestore();
+      await setDoc(doc(d, 'communities', 'c1', 'activeAskSlots', uid.communityMember), {
+        askId: 'active-ask', authorId: uid.communityMember, createdAt: now(),
+      });
+      await setDoc(doc(d, 'communities', 'c1', 'asks', 'active-ask'), {
+        askId: 'active-ask', communityId: 'c1', authorId: uid.communityMember,
+        authorDisplayName: uid.communityMember, type: 'help', text: 'Active',
+        createdAt: now(), status: 'active',
+      });
+    });
+    const memberDb = db(uid.communityMember);
+    await assertSucceeds(setDoc(doc(memberDb, 'accountDeletionStates', uid.communityMember), deletionState(uid.communityMember)));
+    await assertSucceeds(deleteDoc(doc(memberDb, 'communities', 'c1', 'activeAskSlots', uid.communityMember)));
+  });
+
+  test('secondary UID references are anonymized without changing history', async () => {
+    await env.withSecurityRulesDisabled(async (context) => {
+      const d = context.firestore();
+      await updateDoc(doc(d, 'gubs', 'g1', 'posts', 'post1'), {
+        lastCommentAuthorId: uid.member, lastCommentId: 'comment1',
+      });
+      await updateDoc(doc(d, 'gubs', 'g1', 'proposals', 'proposal1'), {
+        deletedBy: uid.member, deletedAt: now(), status: 'deleted',
+      });
+      await setDoc(doc(d, 'gubs', 'g1', 'notifications', 'goal-member'), {
+        notificationId: 'goal-member', title: 'Goal', body: 'Submitted',
+        type: 'goal_submitted', senderId: uid.second, senderName: uid.second,
+        createdAt: now(), readBy: [],
+        data: { goalId: 'goal1', memberId: uid.member, amount: 10 },
+      });
+    });
+    const memberDb = db(uid.member);
+    await assertSucceeds(setDoc(doc(memberDb, 'accountDeletionStates', uid.member), deletionState(uid.member)));
+    await assertSucceeds(updateDoc(doc(memberDb, 'gubs', 'g1', 'posts', 'post1'), {
+      lastCommentAuthorId: '__deleted_user__',
+    }));
+    await assertSucceeds(updateDoc(doc(memberDb, 'gubs', 'g1', 'proposals', 'proposal1'), {
+      deletedBy: '__deleted_user__',
+    }));
+    await assertSucceeds(updateDoc(doc(memberDb, 'gubs', 'g1', 'creationCooldowns', `${uid.member}_task`), {
+      creatorId: '__deleted_user__', deletedBy: '__deleted_user__',
+    }));
+    await assertSucceeds(updateDoc(doc(memberDb, 'gubs', 'g1', 'notifications', 'goal-member'), {
+      data: { goalId: 'goal1', memberId: '__deleted_user__', amount: 10 },
+    }));
+    const postAfter = (await getDoc(doc(memberDb, 'gubs', 'g1', 'posts', 'post1'))).data();
+    assert.equal(postAfter.comments, 0);
+    assert.equal(postAfter.message, 'Post');
+    const proposalAfter = (await getDoc(doc(memberDb, 'gubs', 'g1', 'proposals', 'proposal1'))).data();
+    assert.equal(proposalAfter.resultProcessed, true);
+    assert.equal(proposalAfter.title, 'Proposal');
+  });
+
+  test('moderated Answer migration preserves moderation fields exactly', async () => {
+    await env.withSecurityRulesDisabled(async (context) => {
+      await updateDoc(doc(context.firestore(), 'communities', 'c1', 'asks', 'ask1', 'answers', uid.communityMember), {
+        moderationHidden: true, moderatedBy: uid.communityOwner, moderatedAt: now(),
+      });
+    });
+    const memberDb = db(uid.communityMember);
+    await assertSucceeds(setDoc(doc(memberDb, 'accountDeletionStates', uid.communityMember), deletionState(uid.communityMember)));
+    const replacementId = 'moderated-anonymous-answer';
+    await assertSucceeds(updateDoc(doc(memberDb, 'communities', 'c1', 'asks', 'ask1', 'answers', uid.communityMember), {
+      deletionReplacementAnswerId: replacementId,
+    }));
+    const migration = writeBatch(memberDb);
+    migration.set(doc(memberDb, 'communities', 'c1', 'asks', 'ask1', 'answers', replacementId), {
+      answerId: replacementId, authorId: '__deleted_user__', authorDisplayName: 'Deleted user',
+      text: 'Answer', createdAt: now(), moderationHidden: true,
+      moderatedBy: uid.communityOwner, moderatedAt: now(),
+    });
+    migration.update(doc(memberDb, 'communities', 'c1', 'asks', 'ask1'), {
+      bestAnswerId: replacementId, bestAnswerAuthorId: '__deleted_user__',
+    });
+    migration.delete(doc(memberDb, 'communities', 'c1', 'asks', 'ask1', 'answers', uid.communityMember));
+    await assertSucceeds(migration.commit());
+
+    await env.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), 'communities', 'c1', 'asks', 'forged', 'answers', uid.second), {
+        answerId: uid.second, authorId: uid.second, authorDisplayName: uid.second,
+        text: 'Answer', createdAt: now(), moderationHidden: true,
+        moderatedBy: uid.owner, moderatedAt: now(), deletionReplacementAnswerId: 'forged-replacement',
+      });
+    });
+    const secondDb = db(uid.second);
+    await assertSucceeds(setDoc(doc(secondDb, 'accountDeletionStates', uid.second), deletionState(uid.second)));
+    const forged = writeBatch(secondDb);
+    forged.set(doc(secondDb, 'communities', 'c1', 'asks', 'forged', 'answers', 'forged-replacement'), {
+      answerId: 'forged-replacement', authorId: '__deleted_user__', authorDisplayName: 'Deleted user',
+      text: 'Answer', createdAt: now(), moderationHidden: false,
+      moderatedBy: uid.second, moderatedAt: now(),
+    });
+    forged.delete(doc(secondDb, 'communities', 'c1', 'asks', 'forged', 'answers', uid.second));
+    await assertFails(forged.commit());
+  });
 });

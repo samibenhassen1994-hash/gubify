@@ -142,6 +142,7 @@ void main() {
       'delete-detached-identities',
       'private-reads:g1',
       'leave-gub:g1',
+      'community-slot:c1',
       'community-request:c1',
       'leave-community:c1',
       'delete-profile',
@@ -496,6 +497,12 @@ class _Repository implements AccountDeletionRepositoryContract {
     String communityId,
     String userId,
   ) async => events.add('community-request:$communityId');
+
+  @override
+  Future<void> deleteCommunityActiveAskSlot(
+    String communityId,
+    String userId,
+  ) async => events.add('community-slot:$communityId');
 
   @override
   Future<void> deletePrivateCopy(String gubId, String userId) async =>

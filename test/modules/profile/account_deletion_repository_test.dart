@@ -66,21 +66,39 @@ void main() {
     expect(assignments[0], containsPair('userId', 'deleting-user'));
   });
 
-  test('stale Gub copy without canonical membership is skipped', () {
+  test('stale Gub copy without canonical membership is anonymized', () {
     expect(
       AccountDeletionRepository.shouldAnonymizeScopedContent(
         membershipJoinedAt: null,
       ),
-      isFalse,
+      isTrue,
     );
   });
 
-  test('stale Community copy without canonical membership is skipped', () {
+  test('stale Community copy without canonical membership is anonymized', () {
     expect(
       AccountDeletionRepository.shouldAnonymizeScopedContent(
         membershipJoinedAt: null,
       ),
-      isFalse,
+      isTrue,
     );
   });
+
+  test(
+    'notification member identity is replaced without changing other data',
+    () {
+      expect(
+        AccountDeletionRepository.notificationDataUpdate(const {
+          'data': {'goalId': 'goal-1', 'memberId': 'user-a', 'amount': 25},
+        }, 'user-a'),
+        {
+          'data': {
+            'goalId': 'goal-1',
+            'memberId': '__deleted_user__',
+            'amount': 25,
+          },
+        },
+      );
+    },
+  );
 }

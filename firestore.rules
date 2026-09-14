@@ -281,9 +281,13 @@ service cloud.firestore {
     function validIdAnonymization(beforeId, afterId) {
       return beforeId == request.auth.uid && afterId == deletedUserId();
     }
+    function validDeletionAnonymizationContext(id) {
+      return (isGubMember(id) && gubActive(id))
+        || accountDeletionStarted(request.auth.uid);
+    }
     function validTaskAnonymization(id) {
       let changed = request.resource.data.diff(resource.data).affectedKeys();
-      return isGubMember(id) && gubActive(id)
+      return validDeletionAnonymizationContext(id)
         && changed.hasOnly(['creatorId','creatorName','assignedUserId','assignedUserName',
           'originUserId','sourceAuthorName','completedBy'])
         && changed.hasAny(['creatorId','assignedUserId','originUserId','completedBy'])
@@ -301,7 +305,7 @@ service cloud.firestore {
     }
     function validOrganizedEventAnonymization(id) {
       let changed = request.resource.data.diff(resource.data).affectedKeys();
-      return isGubMember(id) && gubActive(id)
+      return validDeletionAnonymizationContext(id)
         && changed.hasOnly(['createdBy','createdByName','originUserId','sourceAuthorName'])
         && changed.hasAny(['createdBy','originUserId'])
         && (!changed.hasAny(['createdBy','createdByName'])
@@ -327,7 +331,7 @@ service cloud.firestore {
     }
     function validOrganizedAssignmentsAnonymization(id) {
       let changed = request.resource.data.diff(resource.data).affectedKeys();
-      return isGubMember(id) && gubActive(id)
+      return validDeletionAnonymizationContext(id)
         && changed.hasOnly(['assignments'])
         && changed.hasAny(['assignments'])
         && resource.data.assignments is list
@@ -357,15 +361,17 @@ service cloud.firestore {
     }
     function validProposalAnonymization(id) {
       let changed = request.resource.data.diff(resource.data).affectedKeys();
-      return isGubMember(id) && gubActive(id)
-        && changed.hasOnly(['creatorId','creatorName','originUserId','sourceAuthorName'])
-        && changed.hasAny(['creatorId','originUserId'])
+      return validDeletionAnonymizationContext(id)
+        && changed.hasOnly(['creatorId','creatorName','originUserId','sourceAuthorName','deletedBy'])
+        && changed.hasAny(['creatorId','originUserId','deletedBy'])
         && (!changed.hasAny(['creatorId','creatorName'])
           || validIdentityAnonymization(resource.data.creatorId, resource.data.creatorName,
             request.resource.data.creatorId, request.resource.data.creatorName))
         && (!changed.hasAny(['originUserId','sourceAuthorName'])
           || validIdentityAnonymization(resource.data.originUserId, resource.data.sourceAuthorName,
-            request.resource.data.originUserId, request.resource.data.sourceAuthorName));
+            request.resource.data.originUserId, request.resource.data.sourceAuthorName))
+        && (!changed.hasAny(['deletedBy'])
+          || validIdAnonymization(resource.data.deletedBy, request.resource.data.deletedBy));
     }
     function validChatSource(data, id) {
       let message = get(messagePath(id, data.sourceId)).data;
@@ -745,13 +751,34 @@ service cloud.firestore {
     }
     function validNotificationIdentityAnonymization(id) {
       let changed = request.resource.data.diff(resource.data).affectedKeys();
-      return isGubMember(id) && gubActive(id)
+      return validDeletionAnonymizationContext(id)
         && changed.hasOnly(['senderId','senderName','body','readBy'])
         && changed.hasAny(['senderId'])
         && validIdentityAnonymization(resource.data.senderId, resource.data.senderName,
           request.resource.data.senderId, request.resource.data.senderName)
         && (!changed.hasAny(['body']) || validDeletedNotificationBody(id))
         && (!changed.hasAny(['readBy']) || validOwnNotificationReadRemoval());
+    }
+    function validNotificationMemberIdAnonymization(id) {
+      let changed = request.resource.data.diff(resource.data).affectedKeys();
+      return accountDeletionStarted(request.auth.uid)
+        && changed.hasOnly(['data'])
+        && resource.data.data is map
+        && request.resource.data.data is map
+        && resource.data.data.memberId == request.auth.uid
+        && request.resource.data.data.diff(resource.data.data).affectedKeys()
+          .hasOnly(['memberId'])
+        && request.resource.data.data.memberId == deletedUserId();
+    }
+    function validCooldownIdentityAnonymization(id) {
+      let changed = request.resource.data.diff(resource.data).affectedKeys();
+      return accountDeletionStarted(request.auth.uid)
+        && changed.hasOnly(['creatorId','deletedBy'])
+        && changed.hasAny(['creatorId','deletedBy'])
+        && (!changed.hasAny(['creatorId'])
+          || validIdAnonymization(resource.data.creatorId, request.resource.data.creatorId))
+        && (!changed.hasAny(['deletedBy'])
+          || validIdAnonymization(resource.data.deletedBy, request.resource.data.deletedBy));
     }
 
     function communityPath(id) { return /databases/$(database)/documents/communities/$(id); }
@@ -973,7 +1000,8 @@ service cloud.firestore {
           'answerId','authorId','authorDisplayName','text','createdAt'
         ])
         && request.resource.data.keys().hasOnly([
-          'answerId','authorId','authorDisplayName','text','createdAt','updatedAt'
+          'answerId','authorId','authorDisplayName','text','createdAt','updatedAt',
+          'moderationHidden','moderatedBy','moderatedAt'
         ])
         && request.resource.data.answerId == answerId
         && request.resource.data.authorId == '__deleted_user__'
@@ -982,6 +1010,12 @@ service cloud.firestore {
         && request.resource.data.createdAt == oldAnswer.createdAt
         && (!oldAnswer.keys().hasAny(['updatedAt'])
           || request.resource.data.updatedAt == oldAnswer.updatedAt)
+        && request.resource.data.get('moderationHidden', null)
+          == oldAnswer.get('moderationHidden', null)
+        && request.resource.data.get('moderatedBy', null)
+          == oldAnswer.get('moderatedBy', null)
+        && request.resource.data.get('moderatedAt', null)
+          == oldAnswer.get('moderatedAt', null)
         && !existsAfter(communityAnswerPath(id, askId, request.auth.uid));
     }
 
@@ -2000,7 +2034,9 @@ service cloud.firestore {
         allow delete: if isGubOwner(id);
       }
       match /messages/{messageId} {
-        allow read: if gubDeletingOwner(id);
+        allow read: if gubDeletingOwner(id)
+          || (accountDeletionStarted(request.auth.uid)
+            && resource.data.senderId == request.auth.uid);
         allow read: if isGubMember(id)
           && resource.data.createdAt >= get(/databases/$(database)/documents/gubs/$(id)/members/$(request.auth.uid)).data.joinedAt;
         allow create: if accountActive() && isGubMember(id) && gubActive(id)
@@ -2011,7 +2047,7 @@ service cloud.firestore {
           && request.resource.data.senderName == get(gubMemberPath(id, request.auth.uid)).data.displayName
           && request.resource.data.text is string
           && request.resource.data.createdAt is timestamp;
-        allow update: if isGubMember(id) && gubActive(id)
+        allow update: if validDeletionAnonymizationContext(id)
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['senderId','senderName'])
           && validIdentityAnonymization(resource.data.senderId, resource.data.senderName,
             request.resource.data.senderId, request.resource.data.senderName);
@@ -2036,7 +2072,10 @@ service cloud.firestore {
           || gubDeletingOwner(id);
       }
       match /posts/{postId} {
-        allow read: if isGubMember(id) || gubDeletingOwner(id);
+        allow read: if isGubMember(id) || gubDeletingOwner(id)
+          || (accountDeletionStarted(request.auth.uid)
+            && (resource.data.authorId == request.auth.uid
+              || resource.data.get('lastCommentAuthorId', '') == request.auth.uid));
         allow create: if accountActive() && isGubMember(id) && gubActive(id)
           && request.resource.data.keys().hasOnly([
             'gubId','authorId','authorName','authorPhoto','message','likes','comments','createdAt','updatedAt'
@@ -2050,12 +2089,13 @@ service cloud.firestore {
           && request.resource.data.comments == 0
           && request.resource.data.createdAt is timestamp
           && request.resource.data.updatedAt is timestamp;
-        allow update: if isGubMember(id) && gubActive(id)
+        allow update: if validDeletionAnonymizationContext(id)
           && ((request.resource.data.diff(resource.data).affectedKeys().hasOnly(['authorId','authorName','authorPhoto'])
               && validIdentityAnonymization(resource.data.authorId, resource.data.authorName,
                 request.resource.data.authorId, request.resource.data.authorName)
               && request.resource.data.authorPhoto == null)
-            || (request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            || (accountActive()
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
                 'comments','updatedAt','lastCommentAuthorId','lastCommentId'
               ])
               && request.resource.data.comments == resource.data.comments + 1
@@ -2063,18 +2103,26 @@ service cloud.firestore {
               && request.resource.data.lastCommentAuthorId == request.auth.uid
               && request.resource.data.lastCommentId is string
               && getAfter(/databases/$(database)/documents/gubs/$(id)/posts/$(postId)/comments/$(request.resource.data.lastCommentId)).data.authorId == request.auth.uid)
-            || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes'])
+            || (accountActive()
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes'])
               && ((request.resource.data.likes == resource.data.likes + 1
                     && existsAfter(/databases/$(database)/documents/gubs/$(id)/posts/$(postId)/likes/$(request.auth.uid))
                     && !exists(/databases/$(database)/documents/gubs/$(id)/posts/$(postId)/likes/$(request.auth.uid)))
                 || (request.resource.data.likes == resource.data.likes - 1
                     && request.resource.data.likes >= 0
                     && exists(/databases/$(database)/documents/gubs/$(id)/posts/$(postId)/likes/$(request.auth.uid))
-                    && !existsAfter(/databases/$(database)/documents/gubs/$(id)/posts/$(postId)/likes/$(request.auth.uid))))));
+                    && !existsAfter(/databases/$(database)/documents/gubs/$(id)/posts/$(postId)/likes/$(request.auth.uid)))))
+            || (accountDeletionStarted(request.auth.uid)
+              && request.resource.data.diff(resource.data).affectedKeys()
+                .hasOnly(['lastCommentAuthorId'])
+              && resource.data.lastCommentAuthorId == request.auth.uid
+              && request.resource.data.lastCommentAuthorId == deletedUserId()));
         allow delete: if gubDeletingOwner(id);
 
         match /comments/{commentId} {
-          allow read: if gubDeletingOwner(id);
+          allow read: if gubDeletingOwner(id)
+            || (accountDeletionStarted(request.auth.uid)
+              && resource.data.authorId == request.auth.uid);
           allow read: if isGubMember(id)
             && resource.data.createdAt >= get(gubMemberPath(id, request.auth.uid)).data.joinedAt;
           allow create: if accountActive() && isGubMember(id) && gubActive(id)
@@ -2113,17 +2161,25 @@ service cloud.firestore {
         }
       }
       match /tasks/{taskId} {
-        allow read: if isGubMember(id) || gubDeletingOwner(id);
+        allow read: if isGubMember(id) || gubDeletingOwner(id)
+          || (accountDeletionStarted(request.auth.uid)
+            && (resource.data.creatorId == request.auth.uid
+              || resource.data.assignedUserId == request.auth.uid
+              || resource.data.originUserId == request.auth.uid
+              || resource.data.completedBy == request.auth.uid));
         allow create: if accountActive() && isGubMember(id) && gubActive(id) && validTaskCreate(id, taskId);
-        allow update: if validTaskCompletion(id) || validTaskSelfUnassignment(id)
+        allow update: if (accountActive()
+          && (validTaskCompletion(id) || validTaskSelfUnassignment(id)))
           || validTaskAnonymization(id);
         allow delete: if validHardDeleteWithCooldown(id, resource.data.creatorId, 'task', taskId)
           || gubDeletingOwner(id);
       }
       match /events/{eventId} {
-        allow read: if isGubMember(id) || gubDeletingOwner(id);
+        allow read: if isGubMember(id) || gubDeletingOwner(id)
+          || (accountDeletionStarted(request.auth.uid)
+            && resource.data.creatorId == request.auth.uid);
         allow create: if accountActive() && isGubMember(id) && gubActive(id) && validCalendarEventCreate(id, eventId);
-        allow update: if isGubMember(id) && gubActive(id)
+        allow update: if validDeletionAnonymizationContext(id)
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['creatorId','creatorName'])
           && validIdentityAnonymization(resource.data.creatorId, resource.data.creatorName,
             request.resource.data.creatorId, request.resource.data.creatorName);
@@ -2131,22 +2187,29 @@ service cloud.firestore {
           || gubDeletingOwner(id);
       }
       match /organizedEvents/{eventId} {
-        allow read: if isGubMember(id) || gubDeletingOwner(id);
+        allow read: if isGubMember(id) || gubDeletingOwner(id)
+          || (accountDeletionStarted(request.auth.uid)
+            && (resource.data.createdBy == request.auth.uid
+              || resource.data.originUserId == request.auth.uid));
         allow create: if accountActive() && isGubMember(id) && gubActive(id) && validOrganizedEventCreate(id, eventId);
-        allow update: if validOrganizedCompletion(id)
+        allow update: if (accountActive() && validOrganizedCompletion(id))
           || validOrganizedEventAnonymization(id)
           || validOrganizedAssignmentsAnonymization(id);
         allow delete: if validHardDeleteWithCooldown(id, resource.data.createdBy, 'organizedEvent', eventId)
           || gubDeletingOwner(id);
       }
       match /proposals/{proposalId} {
-        allow read: if isGubMember(id) || gubDeletingOwner(id);
+        allow read: if isGubMember(id) || gubDeletingOwner(id)
+          || (accountDeletionStarted(request.auth.uid)
+            && (resource.data.creatorId == request.auth.uid
+              || resource.data.originUserId == request.auth.uid
+              || resource.data.deletedBy == request.auth.uid));
         allow create: if accountActive() && isGubMember(id) && gubActive(id) && validProposalCreate(id, proposalId);
-        allow update: if isGubMember(id) && gubActive(id)
-          && (validVoteAggregate(id, proposalId)
+        allow update: if validDeletionAnonymizationContext(id)
+          && ((accountActive() && (validVoteAggregate(id, proposalId)
             || validProposalResult()
             || validProposalEventFlag()
-            || validSoftDelete(id, resource.data.creatorId, 'proposal', proposalId)
+            || validSoftDelete(id, resource.data.creatorId, 'proposal', proposalId)))
             || validProposalAnonymization(id));
         allow delete: if gubDeletingOwner(id);
       }
@@ -2162,12 +2225,14 @@ service cloud.firestore {
         allow delete: if deletingOwnAccount(uid) || gubDeletingOwner(id);
       }
       match /goals/{goalId} {
-        allow read: if isGubMember(id) || gubDeletingOwner(id);
+        allow read: if isGubMember(id) || gubDeletingOwner(id)
+          || (accountDeletionStarted(request.auth.uid)
+            && resource.data.originUserId == request.auth.uid);
         allow create: if accountActive() && isGubMember(id) && gubActive(id) && validGoalCreate(id, goalId);
         allow update: if gubActive(id)
-          && (validGoalProgress(id)
+          && ((accountActive() && (validGoalProgress(id)
             || validGoalMemberDepartureProgress(id, goalId)
-            || validSoftDelete(id, resource.data.ownerId, 'sharedBudget', goalId)
+            || validSoftDelete(id, resource.data.ownerId, 'sharedBudget', goalId)))
             || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['originUserId','sourceAuthorName'])
               && validIdentityAnonymization(resource.data.originUserId, resource.data.sourceAuthorName,
                 request.resource.data.originUserId, request.resource.data.sourceAuthorName)));
@@ -2177,7 +2242,7 @@ service cloud.firestore {
         allow read: if isGubMember(id) || gubDeletingOwner(id);
         allow create: if !accountDeletionStarted(request.auth.uid)
           && gubActive(id) && validGoalMemberCreate(id, goalId, uid);
-        allow update: if gubActive(id)
+        allow update: if accountActive() && gubActive(id)
           && (validOwnContribution(id, goalId, uid) || validOwnerConfirmation(id));
         allow delete: if deletingOwnAccount(uid)
           || (gubActive(id) && isGubOwner(id) && uid != request.auth.uid)
@@ -2185,7 +2250,11 @@ service cloud.firestore {
           || gubDeletingOwner(id);
       }
       match /notifications/{notificationId} {
-        allow read: if gubDeletingOwner(id);
+        allow read: if gubDeletingOwner(id)
+          || (accountDeletionStarted(request.auth.uid)
+            && (resource.data.senderId == request.auth.uid
+              || resource.data.readBy.toSet().hasAny([request.auth.uid])
+              || resource.data.data.get('memberId', '') == request.auth.uid));
         allow read: if isGubMember(id)
           && resource.data.createdAt >= get(gubMemberPath(id, request.auth.uid)).data.joinedAt;
         allow create: if accountActive() && isGubMember(id) && gubActive(id)
@@ -2194,19 +2263,24 @@ service cloud.firestore {
           && ((resource.data.createdAt is timestamp
               && get(gubMemberPath(id, request.auth.uid)).data.joinedAt is timestamp
               && resource.data.createdAt >= get(gubMemberPath(id, request.auth.uid)).data.joinedAt
-              && validReadByUpdate())
+              && accountActive() && validReadByUpdate())
             || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['senderId','senderName'])
               && validIdentityAnonymization(resource.data.senderId, resource.data.senderName,
                 request.resource.data.senderId, request.resource.data.senderName))
             || validNotificationIdentityAnonymization(id)
+            || validNotificationMemberIdAnonymization(id)
             || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readBy'])
               && validOwnNotificationReadRemoval()));
         allow delete: if gubDeletingOwner(id);
       }
       match /creationCooldowns/{cooldownId} {
-        allow read: if isGubMember(id) || gubDeletingOwner(id);
+        allow read: if isGubMember(id) || gubDeletingOwner(id)
+          || (accountDeletionStarted(request.auth.uid)
+            && (resource.data.creatorId == request.auth.uid
+              || resource.data.deletedBy == request.auth.uid));
         allow create, update: if accountActive() && isGubMember(id) && gubActive(id)
           && validCooldownCause(id, cooldownId);
+        allow update: if validCooldownIdentityAnonymization(id);
         allow delete: if gubDeletingOwner(id);
       }
     }
@@ -2299,7 +2373,9 @@ service cloud.firestore {
           && uid != request.auth.uid && uid != communityDoc(id).data.ownerId;
       }
       match /messages/{messageId} {
-        allow read: if communityDeletingOwner(id) || (isPlatformAdmin() && communityActive(id));
+        allow read: if communityDeletingOwner(id) || (isPlatformAdmin() && communityActive(id))
+          || (accountDeletionStarted(request.auth.uid)
+            && resource.data.senderId == request.auth.uid);
         allow read: if isCommunityMember(id)
           && resource.data.createdAt >= get(/databases/$(database)/documents/communities/$(id)/members/$(request.auth.uid)).data.joinedAt;
         allow create: if accountActive() && isCommunityMember(id) && communityActive(id)
@@ -2313,7 +2389,8 @@ service cloud.firestore {
           && validText(request.resource.data.text, 1, 2000)
           && request.resource.data.createdAt == request.time;
         allow update: if validContentModeration(id);
-        allow update: if isCommunityMember(id) && communityActive(id)
+        allow update: if (isCommunityMember(id) && communityActive(id)
+            || accountDeletionStarted(request.auth.uid))
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['senderId','senderName'])
           && validIdentityAnonymization(resource.data.senderId, resource.data.senderName,
             request.resource.data.senderId, request.resource.data.senderName);
@@ -2321,6 +2398,8 @@ service cloud.firestore {
       }
       match /asks/{askId} {
         allow read: if isPlatformAdmin() && communityActive(id);
+        allow read: if accountDeletionStarted(request.auth.uid)
+          && resource.data.authorId == request.auth.uid;
         allow update: if validContentModeration(id);
         allow get: if isCommunityMember(id) && communityActive(id)
           && (!exists(/databases/$(database)/documents/communities/$(id)/asks/$(askId))
@@ -2376,6 +2455,8 @@ service cloud.firestore {
               || !existsAfter(communityActiveAskSlotPath(id, request.auth.uid))));
         match /answers/{answerId} {
           allow read: if isPlatformAdmin() && communityActive(id);
+          allow read: if accountDeletionStarted(request.auth.uid)
+            && resource.data.authorId == request.auth.uid;
           allow update: if validContentModeration(id);
           allow read: if communityDeletingOwner(id)
             || (isCommunityMember(id) && communityActive(id)
@@ -2429,6 +2510,7 @@ service cloud.firestore {
           && validCommunityActiveAskSlot(id, request.resource.data.askId, uid);
         allow update: if false;
         allow delete: if communityDeletingOwner(id)
+          || (own(uid) && accountDeletionStarted(uid))
           || (isCommunityMember(id) && communityActive(id)
             && uid == request.auth.uid
             && resource.data.authorId == request.auth.uid
