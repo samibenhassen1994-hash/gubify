@@ -43,6 +43,11 @@ class GubDeletionRepository {
   ];
 
   @visibleForTesting
+  static List<GubDeletionPhase> phasesToRunFromForTesting(
+    GubDeletionPhase currentPhase,
+  ) => GubDeletionPhase.values.skip(currentPhase.index).toList(growable: false);
+
+  @visibleForTesting
   static Future<void> drainMemberCleanupForTesting({
     required Future<List<String>> Function(int limit) loadPage,
     required Future<void> Function(List<String> uids) deletePage,
@@ -88,12 +93,15 @@ class GubDeletionRepository {
       ownerId: ownerId,
       confirmedName: confirmedName,
     );
-
-    onPhase(GubDeletionPhase.preparing);
-    await _completePhase(gubReference, ownerId, GubDeletionPhase.preparing);
-
     final phase = _phaseFrom(data['deletionPhase']);
-    if (phase.index <= GubDeletionPhase.nestedCollections.index) {
+    final phasesToRun = phasesToRunFromForTesting(phase);
+
+    if (phasesToRun.contains(GubDeletionPhase.preparing)) {
+      onPhase(GubDeletionPhase.preparing);
+      await _completePhase(gubReference, ownerId, GubDeletionPhase.preparing);
+    }
+
+    if (phasesToRun.contains(GubDeletionPhase.nestedCollections)) {
       onPhase(GubDeletionPhase.nestedCollections);
       for (final entry in nestedCollectionsForDeletion.entries) {
         await _deleteParentsWithChildren(
@@ -108,7 +116,7 @@ class GubDeletionRepository {
       );
     }
 
-    if (phase.index <= GubDeletionPhase.directCollections.index) {
+    if (phasesToRun.contains(GubDeletionPhase.directCollections)) {
       onPhase(GubDeletionPhase.directCollections);
       for (final collection in directCollectionsForDeletion) {
         await _deleteCollection(gubReference.collection(collection));
@@ -120,7 +128,7 @@ class GubDeletionRepository {
       );
     }
 
-    if (phase.index <= GubDeletionPhase.userCopies.index) {
+    if (phasesToRun.contains(GubDeletionPhase.userCopies)) {
       onPhase(GubDeletionPhase.userCopies);
       await _deleteMemberCopies(
         gubReference: gubReference,
@@ -129,10 +137,12 @@ class GubDeletionRepository {
       );
     }
 
-    onPhase(GubDeletionPhase.finalizing);
-    await _deleteInviteTokens(gubId, ownerId);
-    await _completePhase(gubReference, ownerId, GubDeletionPhase.finalizing);
-    await gubReference.delete();
+    if (phasesToRun.contains(GubDeletionPhase.finalizing)) {
+      onPhase(GubDeletionPhase.finalizing);
+      await _deleteInviteTokens(gubId, ownerId);
+      await _completePhase(gubReference, ownerId, GubDeletionPhase.finalizing);
+      await gubReference.delete();
+    }
   }
 
   Future<Map<String, dynamic>> _beginOrResume({
