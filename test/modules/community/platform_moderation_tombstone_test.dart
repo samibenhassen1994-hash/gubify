@@ -8,6 +8,7 @@ import 'package:gubify/modules/community/services/community_user_xp_cache.dart';
 import 'package:gubify/modules/community/models/community_chat_message_model.dart';
 import 'package:gubify/modules/community/widgets/community_ask_card.dart';
 import 'package:gubify/modules/community/widgets/community_chat_message_bubble.dart';
+import 'package:gubify/repositories/user_repository.dart';
 
 void main() {
   testWidgets(
@@ -69,7 +70,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Sensitive original answer'), findsNothing);
       expect(find.text('Removed by moderation'), findsOneWidget);
-      expect(find.text('Best Answer'), findsOneWidget);
+      expect(find.text('✓ Best answer'), findsOneWidget);
       expect(answer.text, 'Sensitive original answer');
       expect(ask.xpAwarded, true);
     },
@@ -91,7 +92,7 @@ void main() {
             body: CommunityChatMessageBubble(
               message: message,
               isCurrentUser: true,
-              profileExists: Stream.value(true),
+              identity: Stream.value(const UserIdentity.existing('Author')),
               xp: 0,
             ),
           ),

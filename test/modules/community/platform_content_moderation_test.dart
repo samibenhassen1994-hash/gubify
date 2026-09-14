@@ -48,8 +48,10 @@ void main() {
   testWidgets(
     'moderator confirms hide and unhide; revocation blocks subsequent mutation',
     (tester) async {
-      final active = StreamController<bool>();
-      final identities = StreamController<PlatformAdminIdentity?>();
+      final active = StreamController<bool>.broadcast(sync: true);
+      final identities = StreamController<PlatformAdminIdentity?>.broadcast(
+        sync: true,
+      );
       final role = PlatformAdminService(
         identities: identities.stream,
         watchActive: (_) => active.stream,

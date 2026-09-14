@@ -9,9 +9,13 @@ void main() {
   late StreamController<PlatformAdminIdentity?> identities;
   late Map<String, StreamController<bool>> roles;
   late PlatformAdminService service;
+  Future<void> tick() => Future<void>.delayed(Duration.zero);
   setUp(() {
-    identities = StreamController<PlatformAdminIdentity?>();
-    roles = {'one': StreamController<bool>(), 'two': StreamController<bool>()};
+    identities = StreamController<PlatformAdminIdentity?>.broadcast(sync: true);
+    roles = {
+      'one': StreamController<bool>.broadcast(sync: true),
+      'two': StreamController<bool>.broadcast(sync: true),
+    };
     service = PlatformAdminService(
       identities: identities.stream,
       watchActive: (uid) => roles[uid]!.stream,
@@ -24,7 +28,6 @@ void main() {
       await role.close();
     }
   });
-  Future<void> tick() => Future<void>.delayed(Duration.zero);
   test(
     'role fails closed on account switch, anonymous account, error and logout',
     () async {
@@ -85,14 +88,14 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Moderation resources'), findsOneWidget);
       roles['one']!.add(false);
-      await tester.pumpAndSettle();
+      await tester.pump();
       expect(find.text('Moderation resources'), findsNothing);
       expect(
         find.text('Community moderation access is unavailable.'),
         findsOneWidget,
       );
       await tester.pageBack();
-      await tester.pumpAndSettle();
+      await tester.pump();
       expect(find.text('Community moderation'), findsNothing);
     },
   );
