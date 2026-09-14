@@ -139,6 +139,21 @@ class GubRepository {
     return controller.stream;
   }
 
+  Stream<List<Map<String, dynamic>>> deletingOwnedGubsStream(String userId) {
+    return _firestore
+        .collection('gubs')
+        .where('ownerId', isEqualTo: userId)
+        .where('deletionStatus', isEqualTo: 'deleting')
+        .where('deletionRequestedBy', isEqualTo: userId)
+        .snapshots()
+        .map(
+          (snapshot) => [
+            for (final document in snapshot.docs)
+              {...document.data(), 'gubId': document.id},
+          ],
+        );
+  }
+
   Map<String, Map<String, dynamic>> _userGubCopies(
     QuerySnapshot<Map<String, dynamic>> snapshot,
   ) {

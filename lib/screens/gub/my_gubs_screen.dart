@@ -23,6 +23,7 @@ class MyGubsScreen extends StatefulWidget {
 
 class _MyGubsScreenState extends State<MyGubsScreen> {
   late Stream<List<Map<String, dynamic>>> _privateGubsStream;
+  late Stream<List<Map<String, dynamic>>> _deletingPrivateGubsStream;
   late Stream<List<CommunityMembershipModel>> _communitiesStream;
   MembershipWindow _selectedWindow = MembershipWindow.privateGubs;
 
@@ -34,6 +35,8 @@ class _MyGubsScreenState extends State<MyGubsScreen> {
 
   void _reload() {
     _privateGubsStream = MyGubsService.instance.privateGubsStream();
+    _deletingPrivateGubsStream = MyGubsService.instance
+        .deletingPrivateGubsStream();
     _communitiesStream = MyGubsService.instance.communitiesStream();
   }
 
@@ -61,6 +64,17 @@ class _MyGubsScreenState extends State<MyGubsScreen> {
           gubId: gubId,
           child: GubScreen(gubId: gubId),
         ),
+      ),
+    );
+  }
+
+  void _resumePrivateGubDeletion(Map<String, dynamic> gub) {
+    final gubId = gub['gubId'] as String?;
+    if (gubId == null || gubId.isEmpty) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => buildGubDeletionRecoveryDestination(gubId),
       ),
     );
   }
@@ -95,44 +109,68 @@ class _MyGubsScreenState extends State<MyGubsScreen> {
               child: StreamBuilder<List<Map<String, dynamic>>>(
                 stream: _privateGubsStream,
                 builder: (context, privateSnapshot) {
-                  return StreamBuilder<List<CommunityMembershipModel>>(
-                    stream: _communitiesStream,
-                    builder: (context, communitySnapshot) {
-                      return Column(
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.fromLTRB(16, 4, 16, 14),
-                            child: MembershipWindowSelector(
-                              selectedWindow: _selectedWindow,
-                              privateCount: privateSnapshot.data?.length,
-                              communityCount: communitySnapshot.data?.length,
-                              onSelected: (window) {
-                                setState(() => _selectedWindow = window);
-                              },
-                            ),
-                          ),
-                          Expanded(
-                            child:
-                                _selectedWindow == MembershipWindow.privateGubs
-                                ? _PrivateGubsWindow(
-                                    snapshot: privateSnapshot,
-                                    onRetry: () => setState(_reload),
-                                    onOpen: _openPrivateGub,
-                                  )
-                                : _CommunitiesWindow(
-                                    snapshot: communitySnapshot,
-                                    onRetry: () => setState(_reload),
-                                    onExplore: () => Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (_) =>
-                                            const CommunityExplorerScreen(),
+                  return StreamBuilder<List<Map<String, dynamic>>>(
+                    stream: _deletingPrivateGubsStream,
+                    builder: (context, recoverySnapshot) {
+                      return StreamBuilder<List<CommunityMembershipModel>>(
+                        stream: _communitiesStream,
+                        builder: (context, communitySnapshot) {
+                          final activeGubs = activePrivateGubsWithoutRecovery(
+                            activeGubs: privateSnapshot.data ?? const [],
+                            recoveryGubs: recoverySnapshot.data ?? const [],
+                          );
+                          return Column(
+                            children: [
+                              Padding(
+                                padding: const EdgeInsets.fromLTRB(
+                                  16,
+                                  4,
+                                  16,
+                                  14,
+                                ),
+                                child: MembershipWindowSelector(
+                                  selectedWindow: _selectedWindow,
+                                  privateCount:
+                                      privateSnapshot.hasData ||
+                                          recoverySnapshot.hasData
+                                      ? activeGubs.length +
+                                            (recoverySnapshot.data?.length ?? 0)
+                                      : null,
+                                  communityCount:
+                                      communitySnapshot.data?.length,
+                                  onSelected: (window) {
+                                    setState(() => _selectedWindow = window);
+                                  },
+                                ),
+                              ),
+                              Expanded(
+                                child:
+                                    _selectedWindow ==
+                                        MembershipWindow.privateGubs
+                                    ? PrivateGubsWindow(
+                                        snapshot: privateSnapshot,
+                                        recoverySnapshot: recoverySnapshot,
+                                        onRetry: () => setState(_reload),
+                                        onOpen: _openPrivateGub,
+                                        onResumeDeletion:
+                                            _resumePrivateGubDeletion,
+                                      )
+                                    : _CommunitiesWindow(
+                                        snapshot: communitySnapshot,
+                                        onRetry: () => setState(_reload),
+                                        onExplore: () => Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (_) =>
+                                                const CommunityExplorerScreen(),
+                                          ),
+                                        ),
+                                        onOpen: _openCommunity,
                                       ),
-                                    ),
-                                    onOpen: _openCommunity,
-                                  ),
-                          ),
-                        ],
+                              ),
+                            ],
+                          );
+                        },
                       );
                     },
                   );
@@ -146,31 +184,57 @@ class _MyGubsScreenState extends State<MyGubsScreen> {
   }
 }
 
-class _PrivateGubsWindow extends StatelessWidget {
+List<Map<String, dynamic>> activePrivateGubsWithoutRecovery({
+  required List<Map<String, dynamic>> activeGubs,
+  required List<Map<String, dynamic>> recoveryGubs,
+}) {
+  final recoveryIds = recoveryGubs
+      .map((gub) => gub['gubId'])
+      .whereType<String>()
+      .toSet();
+  return activeGubs
+      .where((gub) => !recoveryIds.contains(gub['gubId']))
+      .toList(growable: false);
+}
+
+Widget buildGubDeletionRecoveryDestination(String gubId) =>
+    GubScreen(gubId: gubId);
+
+class PrivateGubsWindow extends StatelessWidget {
   final AsyncSnapshot<List<Map<String, dynamic>>> snapshot;
+  final AsyncSnapshot<List<Map<String, dynamic>>> recoverySnapshot;
   final VoidCallback onRetry;
   final ValueChanged<Map<String, dynamic>> onOpen;
+  final ValueChanged<Map<String, dynamic>> onResumeDeletion;
 
-  const _PrivateGubsWindow({
+  const PrivateGubsWindow({
+    super.key,
     required this.snapshot,
+    required this.recoverySnapshot,
     required this.onRetry,
     required this.onOpen,
+    required this.onResumeDeletion,
   });
 
   @override
   Widget build(BuildContext context) {
-    if (snapshot.connectionState == ConnectionState.waiting) {
+    if (snapshot.connectionState == ConnectionState.waiting &&
+        recoverySnapshot.connectionState == ConnectionState.waiting) {
       return const _SectionLoading();
     }
-    if (snapshot.hasError) {
+    if (snapshot.hasError || recoverySnapshot.hasError) {
       return ListView(
         padding: const EdgeInsets.fromLTRB(16, 4, 16, 28),
         children: [_SectionError(onRetry: onRetry)],
       );
     }
 
-    final gubs = snapshot.data ?? const [];
-    if (gubs.isEmpty) {
+    final recoveryGubs = recoverySnapshot.data ?? const [];
+    final activeGubs = activePrivateGubsWithoutRecovery(
+      activeGubs: snapshot.data ?? const [],
+      recoveryGubs: recoveryGubs,
+    );
+    if (activeGubs.isEmpty && recoveryGubs.isEmpty) {
       return ListView(
         padding: const EdgeInsets.fromLTRB(16, 4, 16, 28),
         children: const [_PrivateGubsEmptyState()],
@@ -179,12 +243,48 @@ class _PrivateGubsWindow extends StatelessWidget {
 
     return ListView.separated(
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 28),
-      itemCount: gubs.length,
+      itemCount: recoveryGubs.length + activeGubs.length,
       separatorBuilder: (_, _) => const SizedBox(height: 12),
       itemBuilder: (context, index) {
-        final gub = gubs[index];
+        if (index < recoveryGubs.length) {
+          final gub = recoveryGubs[index];
+          return _GubDeletionRecoveryCard(
+            gub: gub,
+            onTap: () => onResumeDeletion(gub),
+          );
+        }
+        final gub = activeGubs[index - recoveryGubs.length];
         return _PrivateGubCard(gub: gub, onTap: () => onOpen(gub));
       },
+    );
+  }
+}
+
+class _GubDeletionRecoveryCard extends StatelessWidget {
+  final Map<String, dynamic> gub;
+  final VoidCallback onTap;
+
+  const _GubDeletionRecoveryCard({required this.gub, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final name = gub['name'] as String? ?? 'Gub';
+    return GubContentCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Deletion in progress — $name',
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
+          ),
+          const SizedBox(height: 8),
+          FilledButton.icon(
+            onPressed: onTap,
+            icon: const Icon(Icons.delete_forever_outlined),
+            label: const Text('Resume deletion'),
+          ),
+        ],
+      ),
     );
   }
 }

@@ -19,6 +19,14 @@ class MyGubsService {
     return GubRepository.instance.userGubsStream(user.uid);
   }
 
+  Stream<List<Map<String, dynamic>>> deletingPrivateGubsStream() {
+    final user = _auth.currentUser;
+    if (user == null) {
+      return Stream.error(StateError('You must be signed in to view Gubs.'));
+    }
+    return GubRepository.instance.deletingOwnedGubsStream(user.uid);
+  }
+
   Stream<List<CommunityMembershipModel>> communitiesStream() =>
       CommunityService.instance.myCommunityMembershipsStream();
 
