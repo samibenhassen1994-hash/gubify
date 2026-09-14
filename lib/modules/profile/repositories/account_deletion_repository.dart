@@ -321,6 +321,12 @@ class AccountDeletionRepository implements AccountDeletionRepositoryContract {
     }
     await _anonymizeQuery(
       _firestore
+          .collectionGroup('messages')
+          .where('senderId', isEqualTo: userId),
+      (_) => const {'senderId': deletedUserId, 'senderName': deletedUserName},
+    );
+    await _anonymizeQuery(
+      _firestore
           .collectionGroup('comments')
           .where('authorId', isEqualTo: userId),
       (_) => const {'authorId': deletedUserId, 'authorName': deletedUserName},

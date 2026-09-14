@@ -2648,6 +2648,11 @@ service cloud.firestore {
         && resource.data.userId == request.auth.uid;
     }
 
+    match /{path=**}/messages/{messageId} {
+      allow list: if accountDeletionStarted(request.auth.uid)
+        && resource.data.senderId == request.auth.uid;
+    }
+
     match /{path=**}/comments/{commentId} {
       allow list: if signedIn() && resource.data.authorId == request.auth.uid;
     }

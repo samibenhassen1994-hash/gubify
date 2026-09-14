@@ -395,6 +395,50 @@ describe('account deletion personal-data cleanup', () => {
     await assertFails(getDocs(collection(communityDb, 'communities', 'c1', 'messages')));
   });
 
+  test('deletion state can find and anonymize detached Community messages', async () => {
+    await env.withSecurityRulesDisabled(async (context) => {
+      const d = context.firestore();
+      await deleteDoc(doc(d, 'communities', 'c1', 'members', uid.communityMember));
+      await deleteDoc(doc(d, 'users', uid.communityMember, 'communities', 'c1'));
+    });
+
+    const communityDb = db(uid.communityMember);
+    await assertSucceeds(setDoc(
+      doc(communityDb, 'accountDeletionStates', uid.communityMember),
+      deletionState(uid.communityMember),
+    ));
+    const authoredMessages = query(
+      collectionGroup(communityDb, 'messages'),
+      where('senderId', '==', uid.communityMember),
+    );
+    const snapshot = await assertSucceeds(getDocs(authoredMessages));
+    assert.equal(snapshot.size, 1);
+
+    const message = snapshot.docs[0];
+    const original = message.data();
+    await assertSucceeds(updateDoc(message.ref, {
+      senderId: '__deleted_user__',
+      senderName: 'Deleted user',
+    }));
+    let anonymized;
+    await env.withSecurityRulesDisabled(async (context) => {
+      anonymized = (await getDoc(
+        doc(context.firestore(), ...message.ref.path.split('/')),
+      )).data();
+    });
+    assert.equal(anonymized.senderId, '__deleted_user__');
+    assert.equal(anonymized.senderName, 'Deleted user');
+    assert.equal(anonymized.text, original.text);
+    assert.deepEqual(anonymized.createdAt, original.createdAt);
+
+    const outsiderQuery = query(
+      collectionGroup(db(uid.outsider), 'messages'),
+      where('senderId', '==', uid.communityMember),
+    );
+    await assertFails(getDocs(outsiderQuery));
+    await assertFails(getDocs(collectionGroup(communityDb, 'messages')));
+  });
+
   test('deletion state blocks task completion and notification reads', async () => {
     const memberDb = db(uid.member);
     await assertSucceeds(setDoc(doc(memberDb, 'accountDeletionStates', uid.member), deletionState(uid.member)));

@@ -11,7 +11,7 @@ void main() {
     final repositorySource = File(
       'lib/modules/profile/repositories/account_deletion_repository.dart',
     ).readAsStringSync();
-    expect('.collectionGroup('.allMatches(repositorySource), hasLength(8));
+    expect('.collectionGroup('.allMatches(repositorySource), hasLength(9));
 
     const requiredIndexes = <(String, String)>[
       ('members', 'uid'),
@@ -23,6 +23,7 @@ void main() {
       ('answers', 'authorId'),
       ('activeAskSlots', 'authorId'),
       ('joinRequests', 'userId'),
+      ('messages', 'senderId'),
     ];
     final manifest =
         jsonDecode(File('firestore.indexes.json').readAsStringSync())
