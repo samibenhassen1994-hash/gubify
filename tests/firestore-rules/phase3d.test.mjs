@@ -1,4 +1,5 @@
 import { after, before, beforeEach, describe, test } from 'node:test';
+import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
   assertFails,
@@ -7,10 +8,12 @@ import {
 } from '@firebase/rules-unit-testing';
 import {
   collection,
+  collectionGroup,
   deleteDoc,
   doc,
   documentId,
   getCountFromServer,
+  getDoc,
   getDocs,
   limit,
   orderBy,
@@ -89,6 +92,8 @@ beforeEach(async () => {
     batch.set(doc(d, 'gubs', 'g1', 'messages', 'm1'), { messageId: 'm1', gubId: 'g1', senderId: uid.member, senderName: uid.member, text: 'G1 message', createdAt: now() });
     batch.set(doc(d, 'gubs', 'g2', 'messages', 'm2'), { messageId: 'm2', gubId: 'g2', senderId: uid.member, senderName: uid.member, text: 'G2 message', createdAt: now() });
     batch.set(doc(d, 'gubs', 'g1', 'posts', 'post1'), { gubId: 'g1', authorId: uid.member, authorName: uid.member, authorPhoto: null, message: 'Post', likes: 0, comments: 0, createdAt: now(), updatedAt: now() });
+    batch.set(doc(d, 'gubs', 'g1', 'posts', 'post1', 'comments', 'comment1'), { commentId: 'comment1', authorId: uid.member, authorName: uid.member, text: 'Comment', createdAt: now() });
+    batch.set(doc(d, 'gubs', 'g1', 'posts', 'post1', 'likes', uid.member), { userId: uid.member, createdAt: now() });
     batch.set(doc(d, 'gubs', 'g1', 'tasks', 'task1'), task('g1'));
     batch.set(doc(d, 'gubs', 'g2', 'tasks', 'foreignTask'), task('g2', 'foreignTask'));
     batch.set(doc(d, 'gubs', 'g1', 'events', 'event1'), { gubId: 'g1', eventId: 'event1', proposalId: 'proposal1', title: 'Proposal', description: 'Description', type: 'custom', creatorId: uid.member, creatorName: uid.member, eventDate: new Date('2026-03-01T00:00:00Z'), createdAt: now(), status: 'scheduled' });
@@ -96,10 +101,12 @@ beforeEach(async () => {
     batch.set(doc(d, 'gubs', 'g1', 'proposals', 'proposal1'), proposal('g1', 'proposal1', { status: 'approved', yesVotes: 3, resultProcessed: true }));
     batch.set(doc(d, 'gubs', 'g1', 'proposals', 'proposal1', 'votes', uid.member), { uid: uid.member, vote: 'yes', votedAt: now() });
     batch.set(doc(d, 'gubs', 'g1', 'goals', 'goal1'), goal());
-    batch.set(doc(d, 'gubs', 'g1', 'goals', 'goal1', 'members', uid.member), { uid: uid.member, displayName: uid.member, photoUrl: null, amount: 10, confirmed: false, updatedAt: now(), confirmedAt: null });
+    batch.set(doc(d, 'gubs', 'g1', 'goals', 'goal1', 'members', uid.member), { uid: uid.member, displayName: uid.member, photoUrl: null, amount: 10, confirmed: true, updatedAt: now(), confirmedAt: now() });
     batch.set(doc(d, 'gubs', 'g1', 'notifications', 'notification1'), { notificationId: 'notification1', title: 'Task', body: 'Created', type: 'task_created', senderId: uid.member, senderName: uid.member, createdAt: now(), readBy: [uid.member], data: { module: 'tasks', gubId: 'g1', taskId: 'task1' } });
     batch.set(doc(d, 'gubs', 'g1', 'creationCooldowns', `${uid.member}_task`), { creatorId: uid.member, moduleType: 'task', deletedItemId: 'old', deletedBy: uid.member, deletedAt: now(), availableAt: now() });
     batch.set(doc(d, 'communities', 'c1', 'messages', 'cm1'), { messageId: 'cm1', communityId: 'c1', senderId: uid.communityMember, senderName: uid.communityMember, text: 'Community', createdAt: now() });
+    batch.set(doc(d, 'communities', 'c1', 'asks', 'ask1'), { askId: 'ask1', communityId: 'c1', authorId: uid.communityMember, authorDisplayName: uid.communityMember, type: 'help', text: 'Ask', createdAt: now(), status: 'resolved' });
+    batch.set(doc(d, 'communities', 'c1', 'asks', 'ask1', 'answers', 'answer1'), { answerId: 'answer1', authorId: uid.communityMember, authorDisplayName: uid.communityMember, text: 'Answer', createdAt: now() });
     await batch.commit();
   });
 });
@@ -181,5 +188,47 @@ describe('cross-module and cross-resource isolation', () => {
     });
     await assertFails(deleteDoc(doc(db(uid.owner), 'gubs', 'g2', 'tasks', 'foreignTask')));
     await assertFails(deleteDoc(doc(db(uid.outsider), 'communities', 'c1')));
+  });
+});
+
+describe('account deletion personal-data cleanup', () => {
+  test('anonymizes authored Gub comments and Community Ask history', async () => {
+    const memberDb = db(uid.member);
+    await assertSucceeds(getDocs(query(collectionGroup(memberDb, 'comments'), where('authorId', '==', uid.member))));
+    await assertSucceeds(updateDoc(doc(memberDb, 'gubs', 'g1', 'posts', 'post1', 'comments', 'comment1'), {
+      authorId: '__deleted_user__', authorName: 'Deleted user',
+    }));
+
+    const communityDb = db(uid.communityMember);
+    await assertSucceeds(getDocs(query(collectionGroup(communityDb, 'asks'), where('authorId', '==', uid.communityMember))));
+    await assertSucceeds(getDocs(query(collectionGroup(communityDb, 'answers'), where('authorId', '==', uid.communityMember))));
+    await assertSucceeds(updateDoc(doc(communityDb, 'communities', 'c1', 'asks', 'ask1'), {
+      authorId: '__deleted_user__', authorDisplayName: 'Deleted user',
+    }));
+    await assertSucceeds(updateDoc(doc(communityDb, 'communities', 'c1', 'asks', 'ask1', 'answers', 'answer1'), {
+      authorId: '__deleted_user__', authorDisplayName: 'Deleted user',
+    }));
+  });
+
+  test('detached identity leaves are removable only after own profile deletion', async () => {
+    const memberDb = db(uid.member);
+    const like = doc(memberDb, 'gubs', 'g1', 'posts', 'post1', 'likes', uid.member);
+    const vote = doc(memberDb, 'gubs', 'g1', 'proposals', 'proposal1', 'votes', uid.member);
+    const contribution = doc(memberDb, 'gubs', 'g1', 'goals', 'goal1', 'members', uid.member);
+
+    await assertFails(deleteDoc(like));
+    await assertFails(deleteDoc(vote));
+    await assertFails(deleteDoc(contribution));
+    await assertSucceeds(deleteDoc(doc(memberDb, 'users', uid.member)));
+    await assertSucceeds(getDocs(query(collectionGroup(memberDb, 'likes'), where('userId', '==', uid.member))));
+    await assertSucceeds(getDocs(query(collectionGroup(memberDb, 'votes'), where('uid', '==', uid.member))));
+    await assertSucceeds(getDocs(query(collectionGroup(memberDb, 'members'), where('uid', '==', uid.member))));
+    await assertSucceeds(deleteDoc(like));
+    await assertSucceeds(deleteDoc(vote));
+    await assertSucceeds(deleteDoc(contribution));
+
+    assert.equal((await getDoc(doc(memberDb, 'gubs', 'g1', 'posts', 'post1'))).data().likes, 0);
+    assert.equal((await getDoc(doc(memberDb, 'gubs', 'g1', 'proposals', 'proposal1'))).data().yesVotes, 3);
+    assert.equal((await getDoc(doc(memberDb, 'gubs', 'g1', 'goals', 'goal1'))).data().currentAmount, 0);
   });
 });

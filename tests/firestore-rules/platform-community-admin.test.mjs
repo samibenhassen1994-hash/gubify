@@ -16,6 +16,7 @@ beforeEach(async () => {
     const data = {
       'platformAdmins/admin': {active:true},
       'platformAdmins/guest': {active:true},
+      'users/admin': {displayName:'Admin'},
       'communities/c': {communityId:'c',ownerId:'owner',name:'Hidden',visibility:'hidden',accessMode:'approval',memberCount:2,deletionStatus:'active'},
       'communities/c/members/owner': {uid:'owner',displayName:'Owner',role:'owner',joinedAt:at},
       'communities/c/members/member': {uid:'member',displayName:'Member',role:'member',joinedAt:at},
@@ -49,6 +50,11 @@ test('registry is self-readable only, client immutable, strict boolean and nonan
   await assertFails(getDocs(collection(db('guest',true),'communities/c/messages')));
   await env.withSecurityRulesDisabled(c=>updateDoc(doc(c.firestore(),'platformAdmins/admin'),{active:'true'}));
   await assertFails(getDocs(collection(f,'communities/c/messages')));
+});
+test('active registry grants no admin powers after the user profile is deleted',async()=>{
+  await env.withSecurityRulesDisabled(c=>deleteDoc(doc(c.firestore(),'users/admin')));
+  await assertFails(getDoc(doc(db(),'communities/c')));
+  await assertFails(updateDoc(doc(db(),'communities/c/messages/m'),moderation()));
 });
 test('role fields in profiles and membership never grant moderation',async()=>{
   await env.withSecurityRulesDisabled(async c=>{

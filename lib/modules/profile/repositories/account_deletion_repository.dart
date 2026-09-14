@@ -11,6 +11,8 @@ abstract interface class AccountDeletionRepositoryContract {
     required List<String> privateGubIds,
     required List<String> communityIds,
   });
+  Future<void> deleteUserRoot(String userId);
+  Future<void> deleteDetachedIdentityDocuments(String userId);
   Future<void> deletePrivateReadState(String gubId, String userId);
   Future<void> deleteCommunityJoinRequest(String communityId, String userId);
   Future<void> deletePrivateCopy(String gubId, String userId);
@@ -25,6 +27,7 @@ class AccountDeletionRepository implements AccountDeletionRepositoryContract {
   final FirebaseFirestore _firestore;
   static const deletedUserId = '__deleted_user__';
   static const deletedUserName = 'Deleted user';
+  static const _deletePageSize = 300;
 
   @visibleForTesting
   static const profileDocumentCollections = <String>[
@@ -32,6 +35,16 @@ class AccountDeletionRepository implements AccountDeletionRepositoryContract {
     'communityUserProgress',
     'users',
   ];
+
+  @visibleForTesting
+  static const profileSubcollectionsForDeletion = <String>[
+    'gubs',
+    'communities',
+    'blockedUsers',
+  ];
+
+  @visibleForTesting
+  static const externalCollectionGroupsForDeletion = <String>['joinRequests'];
 
   @visibleForTesting
   static AccountDeletionMemberships mergeMembershipIds({
@@ -223,6 +236,78 @@ class AccountDeletionRepository implements AccountDeletionRepositoryContract {
         (_) => const {'senderId': deletedUserId, 'senderName': deletedUserName},
       );
     }
+    await _anonymizeQuery(
+      _firestore
+          .collectionGroup('comments')
+          .where('authorId', isEqualTo: userId),
+      (_) => const {'authorId': deletedUserId, 'authorName': deletedUserName},
+    );
+    await _anonymizeQuery(
+      _firestore.collectionGroup('asks').where('authorId', isEqualTo: userId),
+      (_) => const {
+        'authorId': deletedUserId,
+        'authorDisplayName': deletedUserName,
+      },
+    );
+    await _anonymizeQuery(
+      _firestore
+          .collectionGroup('answers')
+          .where('authorId', isEqualTo: userId),
+      (_) => const {
+        'authorId': deletedUserId,
+        'authorDisplayName': deletedUserName,
+      },
+    );
+  }
+
+  @override
+  Future<void> deleteUserRoot(String userId) =>
+      _firestore.collection('users').doc(userId).delete();
+
+  @override
+  Future<void> deleteDetachedIdentityDocuments(String userId) async {
+    for (final (group, field) in const [
+      ('likes', 'userId'),
+      ('votes', 'uid'),
+      ('members', 'uid'),
+    ]) {
+      DocumentSnapshot<Map<String, dynamic>>? cursor;
+      while (true) {
+        Query<Map<String, dynamic>> query = _firestore
+            .collectionGroup(group)
+            .where(field, isEqualTo: userId)
+            .orderBy(FieldPath.documentId)
+            .limit(_deletePageSize);
+        if (group == 'members' && cursor != null) {
+          query = query.startAfterDocument(cursor);
+        }
+        final page = await query.get(const GetOptions(source: Source.server));
+        if (page.docs.isEmpty) break;
+        final references = page.docs
+            .where(
+              (document) =>
+                  group != 'members' || _isGoalMember(document.reference.path),
+            )
+            .map((document) => document.reference)
+            .toList(growable: false);
+        if (references.isNotEmpty) {
+          final batch = _firestore.batch();
+          for (final reference in references) {
+            batch.delete(reference);
+          }
+          await batch.commit();
+        }
+        if (group == 'members') cursor = page.docs.last;
+      }
+    }
+  }
+
+  bool _isGoalMember(String path) {
+    final segments = path.split('/');
+    return segments.length == 6 &&
+        segments[0] == 'gubs' &&
+        segments[2] == 'goals' &&
+        segments[4] == 'members';
   }
 
   Future<void> _anonymizeIdentityPairs(
@@ -391,12 +476,55 @@ class AccountDeletionRepository implements AccountDeletionRepositoryContract {
           .delete();
 
   @override
-  Future<void> deleteProfile(String userId) {
+  Future<void> deleteProfile(String userId) async {
+    final userReference = _firestore.collection('users').doc(userId);
+    for (final collection in profileSubcollectionsForDeletion) {
+      await _deleteCollection(userReference.collection(collection));
+    }
+
     final batch = _firestore.batch();
     for (final collection in profileDocumentCollections) {
-      batch.delete(_firestore.collection(collection).doc(userId));
+      if (collection != 'users') {
+        batch.delete(_firestore.collection(collection).doc(userId));
+      }
     }
-    return batch.commit();
+    await batch.commit();
+    await _deleteExternalUserDocuments(userId);
+  }
+
+  Future<void> _deleteExternalUserDocuments(String userId) async {
+    for (final collectionGroup in externalCollectionGroupsForDeletion) {
+      while (true) {
+        final page = await _firestore
+            .collectionGroup(collectionGroup)
+            .where('userId', isEqualTo: userId)
+            .limit(_deletePageSize)
+            .get(const GetOptions(source: Source.server));
+        if (page.docs.isEmpty) break;
+        final batch = _firestore.batch();
+        for (final document in page.docs) {
+          batch.delete(document.reference);
+        }
+        await batch.commit();
+      }
+    }
+  }
+
+  Future<void> _deleteCollection(
+    CollectionReference<Map<String, dynamic>> collection,
+  ) async {
+    while (true) {
+      final page = await collection
+          .orderBy(FieldPath.documentId)
+          .limit(_deletePageSize)
+          .get(const GetOptions(source: Source.server));
+      if (page.docs.isEmpty) return;
+      final batch = _firestore.batch();
+      for (final document in page.docs) {
+        batch.delete(document.reference);
+      }
+      await batch.commit();
+    }
   }
 
   String _name(Map<String, dynamic> data, String fallback) {

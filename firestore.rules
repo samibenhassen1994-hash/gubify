@@ -15,6 +15,7 @@ service cloud.firestore {
     function isPlatformAdmin() {
       return linkedCommunityAccount()
         && request.auth.token.firebase.sign_in_provider != 'anonymous'
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
         && exists(/databases/$(database)/documents/platformAdmins/$(request.auth.uid))
         && get(/databases/$(database)/documents/platformAdmins/$(request.auth.uid)).data.active == true;
     }
@@ -909,6 +910,10 @@ service cloud.firestore {
         && exists(communityDeletionMemberPath(id, uid))
         && !existsAfter(communityDeletionMemberPath(id, uid))
         && !existsAfter(userCommunityPath(uid, id));
+      let orphanDeletionCleanup = after.membershipProjectionAction == 'delete'
+        && communityDeletingOwner(id)
+        && !exists(communityMemberPath(id, uid))
+        && !existsAfter(userCommunityPath(uid, id));
       return linkedCommunityAccount()
         && validCommunityProgressSchema(after)
         && id is string && id.size() > 0
@@ -923,7 +928,26 @@ service cloud.firestore {
                 'communityIds','membershipProjectionCommunityId',
                 'membershipProjectionAction','membershipProjectionUpdatedAt'])))
           && !existsAfter(communityMemberPath(id, uid))
-          || deletionCleanup);
+          || deletionCleanup
+          || orphanDeletionCleanup);
+    }
+    function deletingOwnAccount(uid) {
+      return signedIn() && own(uid)
+        && !exists(/databases/$(database)/documents/users/$(uid));
+    }
+    function validCommunityRewardReferenceCleanup(uid) {
+      let id = resource.data.get('lastRewardCommunityId', '');
+      let after = request.resource.data;
+      return linkedCommunityAccount()
+        && id is string && id.size() > 0
+        && communityDeletingOwner(id)
+        && validCommunityProgressSchema(after)
+        && after.diff(resource.data).affectedKeys().hasOnly([
+          'lastRewardCommunityId','lastRewardAskId','lastRewardRole'
+        ])
+        && !after.keys().hasAny([
+          'lastRewardCommunityId','lastRewardAskId','lastRewardRole'
+        ]);
     }
     function validCommunityProjectionVersion(uid) {
       let after = request.resource.data;
@@ -1694,7 +1718,8 @@ service cloud.firestore {
       allow create, update: if validCommunityProgressReward(uid)
         || validCommunityProjectionJoin(uid)
         || validCommunityProjectionVersion(uid);
-      allow update: if validCommunityProjectionRemoval(uid);
+      allow update: if validCommunityProjectionRemoval(uid)
+        || validCommunityRewardReferenceCleanup(uid);
       allow delete: if own(uid)
         && !existsAfter(/databases/$(database)/documents/users/$(uid));
     }
@@ -1782,17 +1807,33 @@ service cloud.firestore {
       allow list: if signedIn() && resource.data.uid == request.auth.uid;
     }
 
+    match /{path=**}/gubs/{copyId} {
+      allow list: if signedIn()
+        && resource.data.gubId is string
+        && resource.data.ownerId == request.auth.uid
+        && gubDeletingOwner(resource.data.gubId);
+    }
+
+    match /{path=**}/communities/{copyId} {
+      allow list: if linkedCommunityAccount()
+        && resource.data.communityId is string
+        && resource.data.ownerId == request.auth.uid
+        && communityDeletingOwner(resource.data.communityId);
+    }
+
     match /inviteTokens/{canonicalCode} {
       allow get: if signedIn() && validInviteTokenCode(canonicalCode);
-      allow list: if false;
+      allow list: if signedIn()
+        && resource.data.gubId is string
+        && gubDeletingOwner(resource.data.gubId)
+        && resource.data.ownerId == request.auth.uid;
       allow create: if !exists(inviteTokenPath(canonicalCode))
         && validInviteTokenCreate(canonicalCode);
       allow update: if validInviteTokenRevocation(canonicalCode)
         || validInviteTokenRegeneration(canonicalCode);
       allow delete: if gubDeletingOwner(resource.data.gubId)
         && resource.data.ownerId == request.auth.uid
-        && resource.data.gubName == gubDoc(resource.data.gubId).data.name
-        && gubDoc(resource.data.gubId).data.inviteTokenId == canonicalCode;
+        && resource.data.gubName == gubDoc(resource.data.gubId).data.name;
     }
 
     match /gubs/{id} {
@@ -1960,7 +2001,12 @@ service cloud.firestore {
             && getAfter(/databases/$(database)/documents/gubs/$(id)/posts/$(postId)).data.lastCommentId == commentId
             && getAfter(/databases/$(database)/documents/gubs/$(id)/posts/$(postId)).data.comments
               == get(/databases/$(database)/documents/gubs/$(id)/posts/$(postId)).data.comments + 1;
-          allow update, delete: if false;
+          allow update: if signedIn()
+            && request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['authorId','authorName'])
+            && validIdentityAnonymization(resource.data.authorId, resource.data.authorName,
+              request.resource.data.authorId, request.resource.data.authorName);
+          allow delete: if gubDeletingOwner(id);
         }
 
         match /likes/{uid} {
@@ -1972,9 +2018,11 @@ service cloud.firestore {
             && getAfter(/databases/$(database)/documents/gubs/$(id)/posts/$(postId)).data.likes
               == get(/databases/$(database)/documents/gubs/$(id)/posts/$(postId)).data.likes + 1;
           allow update: if false;
-          allow delete: if own(uid) && isGubMember(id) && gubActive(id)
+          allow delete: if deletingOwnAccount(uid)
+            || (own(uid) && isGubMember(id) && gubActive(id)
             && getAfter(/databases/$(database)/documents/gubs/$(id)/posts/$(postId)).data.likes
-              == get(/databases/$(database)/documents/gubs/$(id)/posts/$(postId)).data.likes - 1;
+              == get(/databases/$(database)/documents/gubs/$(id)/posts/$(postId)).data.likes - 1)
+            || gubDeletingOwner(id);
         }
       }
       match /tasks/{taskId} {
@@ -2023,7 +2071,7 @@ service cloud.firestore {
           && request.resource.data.uid == uid
           && request.resource.data.vote in ['yes','no']
           && request.resource.data.votedAt is timestamp;
-        allow delete: if gubDeletingOwner(id);
+        allow delete: if deletingOwnAccount(uid) || gubDeletingOwner(id);
       }
       match /goals/{goalId} {
         allow read: if isGubMember(id) || gubDeletingOwner(id);
@@ -2042,7 +2090,8 @@ service cloud.firestore {
         allow create: if gubActive(id) && validGoalMemberCreate(id, goalId, uid);
         allow update: if gubActive(id)
           && (validOwnContribution(id, goalId, uid) || validOwnerConfirmation(id));
-        allow delete: if (gubActive(id) && isGubOwner(id) && uid != request.auth.uid)
+        allow delete: if deletingOwnAccount(uid)
+          || (gubActive(id) && isGubOwner(id) && uid != request.auth.uid)
           || (gubActive(id) && own(uid) && resource.data.confirmed == false)
           || gubDeletingOwner(id);
       }
@@ -2224,7 +2273,12 @@ service cloud.firestore {
                 == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.displayName)
           );
         allow update: if validCommunityAskResolution(id, askId)
-          || validCommunityAskAuthorEdit(id);
+          || validCommunityAskAuthorEdit(id)
+          || (signedIn()
+            && request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['authorId','authorDisplayName'])
+            && validIdentityAnonymization(resource.data.authorId, resource.data.authorDisplayName,
+              request.resource.data.authorId, request.resource.data.authorDisplayName));
         allow delete: if communityDeletingOwner(id)
           || (isCommunityMember(id) && communityActive(id)
             && resource.data.authorId == request.auth.uid
@@ -2250,7 +2304,12 @@ service cloud.firestore {
             && validText(request.resource.data.authorDisplayName, 1, 25)
             && validText(request.resource.data.text, 1, 2000)
             && request.resource.data.createdAt == request.time;
-          allow update: if isCommunityMember(id) && communityActive(id)
+          allow update: if (signedIn()
+            && request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['authorId','authorDisplayName'])
+            && validIdentityAnonymization(resource.data.authorId, resource.data.authorDisplayName,
+              request.resource.data.authorId, request.resource.data.authorDisplayName))
+            || (isCommunityMember(id) && communityActive(id)
             && get(communityAskPath(id, askId)).data.status == 'active'
             && resource.data.answerId == answerId
             && answerId == request.auth.uid
@@ -2258,7 +2317,7 @@ service cloud.firestore {
             && resource.data.get('updatedAt', null) == null
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['text','updatedAt'])
             && validText(request.resource.data.text, 1, 2000)
-            && request.resource.data.updatedAt == request.time;
+            && request.resource.data.updatedAt == request.time);
           allow delete: if communityDeletingOwner(id)
             || (isCommunityMember(id) && communityActive(id)
               && (resource.data.authorId == request.auth.uid
@@ -2349,10 +2408,26 @@ service cloud.firestore {
 
     match /{path=**}/asks/{askId} {
       allow list: if linkedCommunityAccount()
-        && resource.data.communityId is string
-        && isCommunityMember(resource.data.communityId)
-        && communityActive(resource.data.communityId)
-        && resource.data.status in ['active', 'resolved'];
+        && ((resource.data.authorId == request.auth.uid)
+          || (resource.data.communityId is string
+            && isCommunityMember(resource.data.communityId)
+            && communityActive(resource.data.communityId)
+            && resource.data.status in ['active', 'resolved']));
+    }
+
+    match /{path=**}/comments/{commentId} {
+      allow list: if signedIn() && resource.data.authorId == request.auth.uid;
+    }
+    match /{path=**}/answers/{answerId} {
+      allow list: if signedIn() && resource.data.authorId == request.auth.uid;
+    }
+    match /{path=**}/likes/{uid} {
+      allow list: if resource.data.userId == request.auth.uid
+        && deletingOwnAccount(resource.data.userId);
+    }
+    match /{path=**}/votes/{uid} {
+      allow list: if resource.data.uid == request.auth.uid
+        && deletingOwnAccount(resource.data.uid);
     }
 
     match /communitySlugs/{slug} {

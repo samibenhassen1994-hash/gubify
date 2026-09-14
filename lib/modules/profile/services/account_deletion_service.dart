@@ -98,6 +98,11 @@ class AccountDeletionService {
             communityIds: communityIds,
           ),
         );
+        await _atStage('deleteUserRoot', () => _repository.deleteUserRoot(uid));
+        await _atStage(
+          'deleteDetachedIdentityDocuments',
+          () => _repository.deleteDetachedIdentityDocuments(uid),
+        );
         await _cleanMemberships(uid, privateIds, communityIds);
         await _atStage(
           'deleteFirestoreProfile',

@@ -137,6 +137,8 @@ void main() {
       'marker-write:uid',
       'membership-index',
       'anonymize-shared',
+      'delete-user-root',
+      'delete-detached-identities',
       'private-reads:g1',
       'leave-gub:g1',
       'community-request:c1',
@@ -430,6 +432,16 @@ class _Repository implements AccountDeletionRepositoryContract {
   }) async {
     anonymizedUserIds.add(userId);
     events.add('anonymize-shared');
+  }
+
+  @override
+  Future<void> deleteUserRoot(String userId) async {
+    events.add('delete-user-root');
+  }
+
+  @override
+  Future<void> deleteDetachedIdentityDocuments(String userId) async {
+    events.add('delete-detached-identities');
   }
 
   @override
