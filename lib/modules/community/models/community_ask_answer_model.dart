@@ -6,6 +6,7 @@ class CommunityAskAnswerModel {
     required this.authorId,
     required this.authorDisplayName,
     required this.text,
+    this.moderationHidden = false,
     required this.createdAt,
     this.updatedAt,
   });
@@ -14,6 +15,7 @@ class CommunityAskAnswerModel {
   final String authorId;
   final String authorDisplayName;
   final String text;
+  final bool moderationHidden;
   final Timestamp createdAt;
   final Timestamp? updatedAt;
 
@@ -25,6 +27,7 @@ class CommunityAskAnswerModel {
     authorId: data['authorId'] as String? ?? '',
     authorDisplayName: data['authorDisplayName'] as String? ?? 'User',
     text: data['text'] as String? ?? '',
+    moderationHidden: data['moderationHidden'] == true,
     createdAt: data['createdAt'] is Timestamp
         ? data['createdAt'] as Timestamp
         : Timestamp(0, 0),
@@ -49,6 +52,7 @@ class CommunityAskAnswerModel {
       other.authorId == authorId &&
       other.authorDisplayName == authorDisplayName &&
       other.text == text &&
+      other.moderationHidden == moderationHidden &&
       other.createdAt == createdAt &&
       other.updatedAt == updatedAt;
 
@@ -60,5 +64,6 @@ class CommunityAskAnswerModel {
     text,
     createdAt,
     updatedAt,
+    moderationHidden,
   );
 }

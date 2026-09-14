@@ -20,11 +20,10 @@ import 'community_user_xp_scope.dart';
 import 'community_ask_type_sheet.dart';
 
 typedef CommunityChatSend = Future<void> Function(String text);
-typedef CommunityAskCreate =
-    Future<void> Function(
-      CommunityChatMessageModel message,
-      CommunityAskType type,
-    );
+typedef CommunityAskCreate = Future<void> Function(
+  CommunityChatMessageModel message,
+  CommunityAskType type,
+);
 
 class CommunityChatView extends StatefulWidget {
   final String communityId;
@@ -120,9 +119,8 @@ class _CommunityChatViewState extends State<CommunityChatView> {
         await create(message, type);
       }
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Ask created.')));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Ask created.')));
     } on CommunityActiveAskExistsException {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -139,9 +137,8 @@ class _CommunityChatViewState extends State<CommunityChatView> {
       );
     } on CommunityAskCooldownException catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(error.userMessage)));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(error.userMessage)));
     } catch (error, stackTrace) {
       if (kDebugMode) {
         final firebaseError = error is FirebaseException ? error : null;
@@ -168,8 +165,8 @@ class _CommunityChatViewState extends State<CommunityChatView> {
       showCommunityReportDialog(
         context: context,
         title: 'Report message',
-        onSubmit: (reason, details) => CommunityModerationService.instance
-            .reportMessage(
+        onSubmit: (reason, details) =>
+            CommunityModerationService.instance.reportMessage(
               message: message,
               communityName: widget.communityName,
               reason: reason,
@@ -486,6 +483,7 @@ class _CommunityChatViewState extends State<CommunityChatView> {
                                     onProfileTap: () => _openProfile(message),
                                     onCreateAsk:
                                         currentUserId != null &&
+                                            !message.moderationHidden &&
                                             message.senderId == currentUserId &&
                                             !_askCreationMessageIds.contains(
                                               message.messageId,

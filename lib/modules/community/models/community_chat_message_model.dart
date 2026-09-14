@@ -6,6 +6,7 @@ class CommunityChatMessageModel {
   final String senderId;
   final String senderName;
   final String text;
+  final bool moderationHidden;
   final Timestamp createdAt;
 
   const CommunityChatMessageModel({
@@ -14,6 +15,7 @@ class CommunityChatMessageModel {
     required this.senderId,
     required this.senderName,
     required this.text,
+    this.moderationHidden = false,
     required this.createdAt,
   });
 
@@ -26,6 +28,7 @@ class CommunityChatMessageModel {
       senderId: json["senderId"] as String? ?? "",
       senderName: json["senderName"] as String? ?? "User",
       text: json["text"] as String? ?? "",
+      moderationHidden: json['moderationHidden'] == true,
       createdAt: createdAt is Timestamp ? createdAt : Timestamp.now(),
     );
   }

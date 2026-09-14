@@ -84,9 +84,8 @@ class _ActiveAsksContainer extends StatelessWidget {
         Center(
           child: Text(
             'Active Asks',
-            style: Theme.of(
-              context,
-            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+            style: Theme.of(context).textTheme.titleLarge
+                ?.copyWith(fontWeight: FontWeight.w700),
           ),
         ),
         if (message != null) ...[
@@ -146,13 +145,16 @@ class _ActiveAskCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 10),
-            Text(ask.text, maxLines: 3, overflow: TextOverflow.ellipsis),
+            Text(
+              ask.moderationHidden ? 'Removed by moderation' : ask.text,
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+            ),
             const SizedBox(height: 8),
             Text(
               dateLabel,
-              style: Theme.of(
-                context,
-              ).textTheme.bodySmall?.copyWith(color: const Color(0xFF64748B)),
+              style: Theme.of(context).textTheme.bodySmall
+                  ?.copyWith(color: const Color(0xFF64748B)),
             ),
           ],
         ),

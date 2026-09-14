@@ -151,6 +151,7 @@ class _CommunityAskDetailsScreenState extends State<CommunityAskDetailsScreen> {
           authorDisplayName: ask.authorDisplayName,
           type: ask.type,
           text: ask.text,
+          moderationHidden: ask.moderationHidden,
           sourceMessageId: ask.sourceMessageId,
           createdAt: ask.createdAt,
           updatedAt: ask.updatedAt,
@@ -169,9 +170,8 @@ class _CommunityAskDetailsScreenState extends State<CommunityAskDetailsScreen> {
       final message = error is CommunityAskWinnerNotMemberException
           ? 'This member is no longer eligible for a Best Answer.'
           : 'Unable to select this Best Answer.';
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(message)));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(message)));
     } finally {
       if (mounted && _selectingBestAnswerId == answer.answerId) {
         setState(() => _selectingBestAnswerId = null);
@@ -438,6 +438,7 @@ class _CommunityAskDetailsScreenState extends State<CommunityAskDetailsScreen> {
                         authorXp: xpByUserId[ask.authorId],
                         onOpenAuthor: () => _openProfile(ask.authorId),
                         canEdit:
+                            !ask.moderationHidden &&
                             ask.status == CommunityAskStatus.active &&
                             uid == ask.authorId &&
                             !isSelectingBest,
@@ -503,6 +504,7 @@ class _CommunityAskDetailsScreenState extends State<CommunityAskDetailsScreen> {
                           selectionLocked: isSelectingBest,
                           onSelect: () => _select(ask, answer),
                           canEdit:
+                              !answer.moderationHidden &&
                               ask.status == CommunityAskStatus.active &&
                               uid == answer.authorId &&
                               uid == answer.answerId &&
@@ -724,7 +726,10 @@ class _AskThreadCard extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 14),
-            Text(ask.text, style: const TextStyle(fontSize: 16, height: 1.45)),
+            Text(
+              ask.moderationHidden ? 'Removed by moderation' : ask.text,
+              style: const TextStyle(fontSize: 16, height: 1.45),
+            ),
             const SizedBox(height: 12),
             Text(
               ask.updatedAt == null
@@ -838,7 +843,9 @@ class _AnswerCard extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 7),
-            Text(answer.text),
+            Text(
+              answer.moderationHidden ? 'Removed by moderation' : answer.text,
+            ),
             if (answer.updatedAt != null)
               const Padding(
                 padding: EdgeInsets.only(top: 5),

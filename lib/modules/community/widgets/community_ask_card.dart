@@ -76,7 +76,7 @@ class CommunityAskCard extends StatelessWidget {
               ),
               const SizedBox(height: 10),
               Text(
-                ask.text,
+                ask.moderationHidden ? 'Removed by moderation' : ask.text,
                 maxLines: 3,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(height: 1.35),

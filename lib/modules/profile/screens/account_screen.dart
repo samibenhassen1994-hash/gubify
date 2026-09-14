@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../community/admin/platform_admin_gate.dart';
+
 import '../../../services/auth_service.dart';
 import '../../../pages/startup_screen.dart';
 import '../../legal/legal_links.dart';
@@ -136,9 +138,8 @@ class _AccountScreenState extends State<AccountScreen> {
   }
 
   void _showMessage(String message) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _openPrivacyPolicy() async {
@@ -253,6 +254,7 @@ class _AccountScreenState extends State<AccountScreen> {
                     child: const Text('Secure your account'),
                   ),
           ),
+        const PlatformAdminEntry(),
         _AccountCard(
           title: 'Blocked users',
           value: "Manage the people you've blocked.",

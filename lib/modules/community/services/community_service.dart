@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import '../../../config/app_limits.dart';
 import '../../../repositories/user_repository.dart';
 import '../../../services/app_sound_service.dart';
+import '../admin/platform_admin_service.dart';
 import '../models/community_access_request_model.dart';
 import '../models/community_model.dart';
 import '../models/community_name_conflict.dart';
@@ -341,6 +342,7 @@ class CommunityService {
   }) async {
     final owner = _requireUser('remove community members');
     await CommunityRepository.instance.removeCommunityMember(
+      isPlatformAdmin: PlatformAdminService.instance.isAdmin,
       communityId: communityId.trim(),
       userId: userId,
       actorId: owner.uid,
@@ -353,6 +355,7 @@ class CommunityService {
   }) async {
     final owner = _requireUser('ban community members');
     await CommunityRepository.instance.banCommunityMember(
+      isPlatformAdmin: PlatformAdminService.instance.isAdmin,
       communityId: communityId.trim(),
       userId: userId,
       ownerId: owner.uid,
@@ -513,7 +516,8 @@ class CommunityService {
     final community = await CommunityRepository.instance.getCommunity(
       normalizedId,
     );
-    if (community?.ownerId != user.uid) {
+    if (community?.ownerId != user.uid &&
+        !PlatformAdminService.instance.isAdmin) {
       throw StateError("Only the Community owner can manage requests.");
     }
     return CommunityRepository.instance.pendingJoinRequests(
@@ -550,6 +554,7 @@ class CommunityService {
     final owner = _requireUser("approve community requests");
     await _guardAccessOperation("approve/$communityId/$userId", () {
       return CommunityRepository.instance.approveJoinRequest(
+        isPlatformAdmin: PlatformAdminService.instance.isAdmin,
         communityId: communityId,
         ownerId: owner.uid,
         userId: userId,
@@ -564,6 +569,7 @@ class CommunityService {
     final owner = _requireUser("reject community requests");
     await _guardAccessOperation("reject/$communityId/$userId", () {
       return CommunityRepository.instance.rejectJoinRequest(
+        isPlatformAdmin: PlatformAdminService.instance.isAdmin,
         communityId: communityId,
         ownerId: owner.uid,
         userId: userId,

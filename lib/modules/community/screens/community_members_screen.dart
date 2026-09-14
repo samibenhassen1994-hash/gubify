@@ -17,6 +17,7 @@ class CommunityMembersScreen extends StatelessWidget {
   final Stream<List<CommunityMemberModel>>? memberStream;
   final String? currentUserId;
   final bool? isOwner;
+  final bool canModerate;
   final Future<void> Function(String userId)? onRemove;
   final Future<void> Function(String userId)? onBan;
   final Future<UserProfileModel?> Function(String userId)? profileLoader;
@@ -29,6 +30,7 @@ class CommunityMembersScreen extends StatelessWidget {
     this.memberStream,
     this.currentUserId,
     this.isOwner,
+    this.canModerate = false,
     this.onRemove,
     this.onBan,
     this.profileLoader,
@@ -82,8 +84,12 @@ class CommunityMembersScreen extends StatelessWidget {
                     member: members[index],
                     xp: xpByUserId[members[index].userId],
                     isCurrentUser: members[index].userId == currentUserId,
+                    canOpenProfile: !canModerate,
+                    canAssignRole: isOwner,
                     canManage:
-                        isOwner && members[index].userId != currentUserId,
+                        (isOwner || canModerate) &&
+                        members[index].userId != currentUserId &&
+                        members[index].userId != community.ownerId,
                     onRemove: onRemove,
                     onBan: onBan,
                     profileLoader: profileLoader,
@@ -105,6 +111,8 @@ class _CommunityMemberTile extends StatelessWidget {
   final CommunityMemberModel member;
   final int? xp;
   final bool isCurrentUser;
+  final bool canOpenProfile;
+  final bool canAssignRole;
   final bool canManage;
   final Future<void> Function(String userId)? onRemove;
   final Future<void> Function(String userId)? onBan;
@@ -117,6 +125,8 @@ class _CommunityMemberTile extends StatelessWidget {
     required this.member,
     required this.xp,
     required this.isCurrentUser,
+    required this.canOpenProfile,
+    required this.canAssignRole,
     required this.canManage,
     required this.onRemove,
     required this.onBan,
@@ -176,9 +186,8 @@ class _CommunityMemberTile extends StatelessWidget {
       }
     } catch (error) {
       if (context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('$error')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('$error')));
       }
     }
   }
@@ -197,21 +206,23 @@ class _CommunityMemberTile extends StatelessWidget {
           leading: InkWell(
             key: ValueKey('member-avatar-${member.userId}'),
             borderRadius: BorderRadius.circular(28),
-            onTap: () => Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => UserProfileScreen.community(
-                  communityId: community.communityId,
-                  communityName: community.name,
-                  userId: member.userId,
-                  profileFuture: profileLoader?.call(member.userId),
-                  activeAsksStream: profileLoader == null
-                      ? null
-                      : Stream.value(const []),
-                  communityUserXpCache: userXpCache,
-                  userBlockService: userBlockService,
-                ),
-              ),
-            ),
+            onTap: !canOpenProfile
+                ? null
+                : () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => UserProfileScreen.community(
+                        communityId: community.communityId,
+                        communityName: community.name,
+                        userId: member.userId,
+                        profileFuture: profileLoader?.call(member.userId),
+                        activeAsksStream: profileLoader == null
+                            ? null
+                            : Stream.value(const []),
+                        communityUserXpCache: userXpCache,
+                        userBlockService: userBlockService,
+                      ),
+                    ),
+                  ),
             child: CommunityLevelAvatar(
               displayName: member.displayName,
               userId: member.userId,
@@ -261,8 +272,12 @@ class _CommunityMemberTile extends StatelessWidget {
                       _confirmAction(context, value);
                     }
                   },
-                  itemBuilder: (_) => const [
-                    PopupMenuItem(value: 'assign', child: Text('Assign role')),
+                  itemBuilder: (_) => [
+                    if (canAssignRole)
+                      const PopupMenuItem(
+                        value: 'assign',
+                        child: Text('Assign role'),
+                      ),
                     PopupMenuItem(value: 'Remove', child: Text('Remove')),
                     PopupMenuItem(value: 'Ban', child: Text('Ban')),
                   ],

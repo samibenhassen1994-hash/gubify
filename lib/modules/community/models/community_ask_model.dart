@@ -37,6 +37,7 @@ class CommunityAskModel {
     required this.authorDisplayName,
     required this.type,
     required this.text,
+    this.moderationHidden = false,
     this.sourceMessageId,
     required this.createdAt,
     this.updatedAt,
@@ -53,6 +54,7 @@ class CommunityAskModel {
   final String authorDisplayName;
   final CommunityAskType type;
   final String text;
+  final bool moderationHidden;
   final String? sourceMessageId;
   final Timestamp createdAt;
   final Timestamp? updatedAt;
@@ -74,6 +76,7 @@ class CommunityAskModel {
       authorDisplayName: data['authorDisplayName'] as String? ?? 'User',
       type: CommunityAskType.fromValue(data['type'] as String? ?? ''),
       text: data['text'] as String? ?? '',
+      moderationHidden: data['moderationHidden'] == true,
       sourceMessageId: data['sourceMessageId'] as String?,
       createdAt: createdAt is Timestamp ? createdAt : Timestamp(0, 0),
       updatedAt: data['updatedAt'] is Timestamp

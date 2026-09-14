@@ -97,7 +97,9 @@ class CommunityChatMessageBubble extends StatelessWidget {
                 const SizedBox(height: 3),
               ],
               Text(
-                message.text,
+                message.moderationHidden
+                    ? 'Removed by moderation'
+                    : message.text,
                 style: const TextStyle(
                   color: Color(0xFF0F172A),
                   fontSize: 15,
@@ -130,8 +132,7 @@ class CommunityChatMessageBubble extends StatelessWidget {
           ),
         );
 
-        final interactiveBubble =
-            onCreateAsk == null && onReportMessage == null
+        final interactiveBubble = onCreateAsk == null && onReportMessage == null
             ? bubble
             : GestureDetector(
                 onLongPress: () => _showMessageActions(context),
@@ -191,10 +192,8 @@ class CommunityChatMessageBubble extends StatelessWidget {
               ListTile(
                 leading: const Icon(Icons.help_outline_rounded),
                 title: const Text('Create ask'),
-                onTap: () => Navigator.pop(
-                  context,
-                  _CommunityMessageAction.createAsk,
-                ),
+                onTap: () =>
+                    Navigator.pop(context, _CommunityMessageAction.createAsk),
               ),
             if (onReportMessage != null)
               ListTile(
