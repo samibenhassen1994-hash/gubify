@@ -45,6 +45,7 @@ class AccountService {
       await _repository.synchronizeCurrentDisplayName(
         userId: userId,
         displayName: details.displayName,
+        includeCommunityMemberships: !authService.isCurrentUserAnonymous,
       );
     }
     return details;
@@ -83,7 +84,11 @@ class AccountService {
     }
 
     try {
-      await _repository.changeDisplayName(userId: userId, displayName: trimmed);
+      await _repository.changeDisplayName(
+        userId: userId,
+        displayName: trimmed,
+        includeCommunityMemberships: !authService.isCurrentUserAnonymous,
+      );
       return const NameChangeResult(NameChangeStatus.success);
     } on FirebaseException catch (error) {
       if (error.code == 'permission-denied') {

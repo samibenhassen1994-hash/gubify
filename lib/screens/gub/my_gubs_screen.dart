@@ -24,7 +24,8 @@ class MyGubsScreen extends StatefulWidget {
 class _MyGubsScreenState extends State<MyGubsScreen> {
   late Stream<List<Map<String, dynamic>>> _privateGubsStream;
   late Stream<List<Map<String, dynamic>>> _deletingPrivateGubsStream;
-  late Stream<List<CommunityMembershipModel>> _communitiesStream;
+  Stream<List<CommunityMembershipModel>>? _communitiesStream;
+  late bool _isCurrentUserAnonymous;
   MembershipWindow _selectedWindow = MembershipWindow.privateGubs;
 
   @override
@@ -37,7 +38,11 @@ class _MyGubsScreenState extends State<MyGubsScreen> {
     _privateGubsStream = MyGubsService.instance.privateGubsStream();
     _deletingPrivateGubsStream = MyGubsService.instance
         .deletingPrivateGubsStream();
-    _communitiesStream = MyGubsService.instance.communitiesStream();
+    _isCurrentUserAnonymous = MyGubsService.instance.isCurrentUserAnonymous;
+    _communitiesStream = communityMembershipsStreamForAccount(
+      isCurrentUserAnonymous: _isCurrentUserAnonymous,
+      load: MyGubsService.instance.communitiesStream,
+    );
   }
 
   Future<void> _openPrivateGub(Map<String, dynamic> gub) async {
@@ -155,8 +160,10 @@ class _MyGubsScreenState extends State<MyGubsScreen> {
                                         onResumeDeletion:
                                             _resumePrivateGubDeletion,
                                       )
-                                    : _CommunitiesWindow(
+                                    : CommunitiesWindow(
                                         snapshot: communitySnapshot,
+                                        isCurrentUserAnonymous:
+                                            _isCurrentUserAnonymous,
                                         onRetry: () => setState(_reload),
                                         onExplore: () => Navigator.push(
                                           context,
@@ -289,14 +296,17 @@ class _GubDeletionRecoveryCard extends StatelessWidget {
   }
 }
 
-class _CommunitiesWindow extends StatelessWidget {
+class CommunitiesWindow extends StatelessWidget {
   final AsyncSnapshot<List<CommunityMembershipModel>> snapshot;
+  final bool isCurrentUserAnonymous;
   final VoidCallback onRetry;
   final VoidCallback onExplore;
   final ValueChanged<CommunityMembershipModel> onOpen;
 
-  const _CommunitiesWindow({
+  const CommunitiesWindow({
+    super.key,
     required this.snapshot,
+    this.isCurrentUserAnonymous = false,
     required this.onRetry,
     required this.onExplore,
     required this.onOpen,
@@ -304,6 +314,12 @@ class _CommunitiesWindow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (isCurrentUserAnonymous) {
+      return ListView(
+        padding: const EdgeInsets.fromLTRB(16, 4, 16, 28),
+        children: const [_AnonymousCommunitiesState()],
+      );
+    }
     if (snapshot.connectionState == ConnectionState.waiting) {
       return const _SectionLoading();
     }
@@ -335,6 +351,34 @@ class _CommunitiesWindow extends StatelessWidget {
       },
     );
   }
+}
+
+Stream<List<CommunityMembershipModel>>? communityMembershipsStreamForAccount({
+  required bool isCurrentUserAnonymous,
+  required Stream<List<CommunityMembershipModel>> Function() load,
+}) => isCurrentUserAnonymous ? null : load();
+
+class _AnonymousCommunitiesState extends StatelessWidget {
+  const _AnonymousCommunitiesState();
+
+  @override
+  Widget build(BuildContext context) => const GubContentCard(
+    child: Column(
+      children: [
+        Text(
+          'Communities require a connected account',
+          textAlign: TextAlign.center,
+          style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+        ),
+        SizedBox(height: 8),
+        Text(
+          'Connect your account to discover, join, and participate in Communities.',
+          textAlign: TextAlign.center,
+          style: TextStyle(fontSize: 15, color: Colors.black54),
+        ),
+      ],
+    ),
+  );
 }
 
 class _SectionLoading extends StatelessWidget {

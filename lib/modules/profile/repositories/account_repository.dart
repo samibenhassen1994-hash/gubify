@@ -9,11 +9,13 @@ abstract interface class AccountProfileRepository {
   Future<void> synchronizeCurrentDisplayName({
     required String userId,
     required String displayName,
+    required bool includeCommunityMemberships,
   });
 
   Future<void> changeDisplayName({
     required String userId,
     required String displayName,
+    required bool includeCommunityMemberships,
   });
 }
 
@@ -34,8 +36,13 @@ class AccountRepository implements AccountProfileRepository {
   Future<void> changeDisplayName({
     required String userId,
     required String displayName,
+    required bool includeCommunityMemberships,
   }) async {
-    final memberships = await _staleMembershipReferences(userId, displayName);
+    final memberships = await _staleMembershipReferences(
+      userId,
+      displayName,
+      includeCommunityMemberships: includeCommunityMemberships,
+    );
     const batchLimit = 450;
     final firstBatch = _firestore.batch();
     firstBatch.update(_firestore.collection('users').doc(userId), {
@@ -59,19 +66,29 @@ class AccountRepository implements AccountProfileRepository {
   Future<void> synchronizeCurrentDisplayName({
     required String userId,
     required String displayName,
+    required bool includeCommunityMemberships,
   }) async {
-    final memberships = await _staleMembershipReferences(userId, displayName);
+    final memberships = await _staleMembershipReferences(
+      userId,
+      displayName,
+      includeCommunityMemberships: includeCommunityMemberships,
+    );
     await _updateMemberships(memberships, displayName);
   }
 
   Future<List<DocumentReference<Map<String, dynamic>>>>
-  _staleMembershipReferences(String userId, String displayName) async {
+  _staleMembershipReferences(
+    String userId,
+    String displayName, {
+    required bool includeCommunityMemberships,
+  }) async {
     final user = _firestore.collection('users').doc(userId);
     final copies = await Future.wait([
       user.collection('gubs').get(const GetOptions(source: Source.server)),
-      user
-          .collection('communities')
-          .get(const GetOptions(source: Source.server)),
+      if (includeCommunityMemberships)
+        user
+            .collection('communities')
+            .get(const GetOptions(source: Source.server)),
     ]);
     final candidates = <DocumentReference<Map<String, dynamic>>>[
       for (final copy in copies[0].docs)
@@ -80,12 +97,13 @@ class AccountRepository implements AccountProfileRepository {
             .doc(copy.id)
             .collection('members')
             .doc(userId),
-      for (final copy in copies[1].docs)
-        _firestore
-            .collection('communities')
-            .doc(copy.id)
-            .collection('members')
-            .doc(userId),
+      if (includeCommunityMemberships)
+        for (final copy in copies[1].docs)
+          _firestore
+              .collection('communities')
+              .doc(copy.id)
+              .collection('members')
+              .doc(userId),
     ];
     final snapshots = await Future.wait(
       candidates.map(

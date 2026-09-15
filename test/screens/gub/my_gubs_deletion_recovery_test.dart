@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:gubify/modules/community/models/community_model.dart';
 import 'package:gubify/screens/gub/gub_screen.dart';
 import 'package:gubify/screens/gub/my_gubs_screen.dart';
 
@@ -123,6 +124,114 @@ void main() {
 
     expect(destination, isA<GubScreen>());
     expect((destination as GubScreen).gubId, 'gub-1');
+  });
+
+  test('anonymous account does not request the Community stream', () {
+    var loads = 0;
+
+    final stream = communityMembershipsStreamForAccount(
+      isCurrentUserAnonymous: true,
+      load: () {
+        loads++;
+        return Stream.value(const <CommunityMembershipModel>[]);
+      },
+    );
+
+    expect(stream, isNull);
+    expect(loads, 0);
+  });
+
+  testWidgets('anonymous Communities window shows the connected-account state', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: CommunitiesWindow(
+            isCurrentUserAnonymous: true,
+            snapshot: AsyncSnapshot.withError(
+              ConnectionState.active,
+              StateError('Community query must not run'),
+            ),
+            onRetry: _noop,
+            onExplore: _noop,
+            onOpen: (_) {},
+          ),
+        ),
+      ),
+    );
+
+    expect(
+      find.text('Communities require a connected account'),
+      findsOneWidget,
+    );
+    expect(
+      find.text(
+        'Connect your account to discover, join, and participate in Communities.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Unable to load this section.'), findsNothing);
+  });
+
+  testWidgets('linked Communities window still renders memberships', (
+    tester,
+  ) async {
+    const membership = CommunityMembershipModel(
+      community: CommunityModel(
+        communityId: 'community-1',
+        name: 'Linked Community',
+        ownerId: 'owner',
+        memberCount: 2,
+        visibility: CommunityModel.publicVisibility,
+        createdAt: null,
+        type: CommunityModel.defaultType,
+        language: CommunityModel.defaultLanguage,
+        description: 'Description',
+        accessMode: CommunityModel.openAccessMode,
+      ),
+      role: 'member',
+      joinedAt: null,
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: CommunitiesWindow(
+            snapshot: const AsyncSnapshot.withData(ConnectionState.active, [
+              membership,
+            ]),
+            onRetry: _noop,
+            onExplore: _noop,
+            onOpen: (_) {},
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Linked Community'), findsOneWidget);
+    expect(find.text('Communities require a connected account'), findsNothing);
+  });
+
+  testWidgets('linked Communities window preserves the real error state', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: CommunitiesWindow(
+            snapshot: AsyncSnapshot.withError(
+              ConnectionState.active,
+              StateError('real failure'),
+            ),
+            onRetry: _noop,
+            onExplore: _noop,
+            onOpen: (_) {},
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Unable to load this section.'), findsOneWidget);
   });
 }
 
