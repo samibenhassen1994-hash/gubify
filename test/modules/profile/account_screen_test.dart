@@ -36,6 +36,7 @@ void main() {
   testWidgets('pure anonymous account shows secure action', (tester) async {
     await tester.pumpWidget(subject(anonymous: true, providers: const []));
     await tester.pumpAndSettle();
+    expect(find.text('Unable to load account details.'), findsNothing);
     expect(find.text('Anonymous'), findsOneWidget);
     expect(find.text('Google'), findsNothing);
     expect(find.text('Email'), findsOneWidget); // Section title only.
@@ -277,6 +278,28 @@ void main() {
 
       expect(result.isSuccess, isTrue);
       expect(repository.changedNames, ['New Anonymous Name']);
+      expect(repository.gubMembershipSyncs, 1);
+      expect(repository.communityMembershipSyncs, 0);
+    },
+  );
+
+  test(
+    'anonymous Account load synchronizes Gubs but not Communities',
+    () async {
+      final repository = _AccountRepository();
+      final auth = AuthService(
+        authLinkGateway: const _AuthGateway(true, []),
+        authVerificationGateway: _VerificationGateway(),
+      );
+
+      final details = await AccountService(
+        authService: auth,
+        repository: repository,
+      ).load();
+
+      expect(details?.displayName, 'Test User');
+      expect(repository.gubMembershipSyncs, 1);
+      expect(repository.communityMembershipSyncs, 0);
     },
   );
 
@@ -294,12 +317,16 @@ void main() {
 
     expect(details?.displayName, 'Test User');
     expect(repository.synchronizedNames, ['Test User']);
+    expect(repository.gubMembershipSyncs, 1);
+    expect(repository.communityMembershipSyncs, 1);
   });
 }
 
 class _AccountRepository implements AccountProfileRepository {
   final List<String> changedNames = [];
   final List<String> synchronizedNames = [];
+  int gubMembershipSyncs = 0;
+  int communityMembershipSyncs = 0;
   @override
   Future<AccountDetailsModel?> load(String userId) async => AccountDetailsModel(
     displayName: 'Test User',
@@ -310,13 +337,23 @@ class _AccountRepository implements AccountProfileRepository {
   Future<void> changeDisplayName({
     required String userId,
     required String displayName,
-  }) async => changedNames.add(displayName);
+    required bool includeCommunityMemberships,
+  }) async {
+    changedNames.add(displayName);
+    gubMembershipSyncs++;
+    if (includeCommunityMemberships) communityMembershipSyncs++;
+  }
 
   @override
   Future<void> synchronizeCurrentDisplayName({
     required String userId,
     required String displayName,
-  }) async => synchronizedNames.add(displayName);
+    required bool includeCommunityMemberships,
+  }) async {
+    synchronizedNames.add(displayName);
+    gubMembershipSyncs++;
+    if (includeCommunityMemberships) communityMembershipSyncs++;
+  }
 }
 
 class _AuthGateway implements AuthLinkGateway {
