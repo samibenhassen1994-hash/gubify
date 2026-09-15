@@ -137,6 +137,7 @@ const organizedEventData = (eventId = 'organized1', creatorId = uid.creatorTask,
   originUserId: null,
   sourceAuthorName: null,
   assignments: [assignment(uid.assigneeTask), assignment(uid.secondMember)],
+  assignmentUserIds: [uid.assigneeTask, uid.secondMember],
   ...overrides,
 });
 const proposalData = (proposalId = 'proposal1', creatorId = uid.creatorTask, overrides = {}) => ({
@@ -419,6 +420,10 @@ describe('Organized Events', () => {
     ['unknown source', { sourceType: 'proposal' }],
     ['completed initial status', { status: 'completed' }],
     ['arbitrary field', { isAdmin: true }],
+    ['21 assignments', {
+      assignments: Array.from({ length: 21 }, (_, index) => assignment(uid.assigneeTask, { taskText: `Assignment ${index}` })),
+      assignmentUserIds: Array.from({ length: 21 }, () => uid.assigneeTask),
+    }],
   ]) {
     test(`rejects Organized Event create with ${name}`, () => assertFails(setDoc(doc(db(uid.creatorTask), 'gubs', 'g1', 'organizedEvents', `bad-${name}`), organizedEventData(`bad-${name}`, uid.creatorTask, overrides))));
   }

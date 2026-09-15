@@ -6,13 +6,17 @@ import '../models/account_deletion_model.dart';
 abstract interface class AccountDeletionRepositoryContract {
   Future<AccountDeletionPreflight> loadPreflight(String userId);
   Future<AccountDeletionMemberships> loadMemberships(String userId);
+  Future<void> beginDeletionState(String userId);
   Future<void> anonymizeSharedContent({
     required String userId,
     required List<String> privateGubIds,
     required List<String> communityIds,
   });
+  Future<void> deleteUserRoot(String userId);
+  Future<void> deleteDetachedIdentityDocuments(String userId);
   Future<void> deletePrivateReadState(String gubId, String userId);
   Future<void> deleteCommunityJoinRequest(String communityId, String userId);
+  Future<void> deleteCommunityActiveAskSlots(String userId);
   Future<void> deletePrivateCopy(String gubId, String userId);
   Future<void> deleteCommunityCopy(String communityId, String userId);
   Future<void> deleteProfile(String userId);
@@ -25,6 +29,7 @@ class AccountDeletionRepository implements AccountDeletionRepositoryContract {
   final FirebaseFirestore _firestore;
   static const deletedUserId = '__deleted_user__';
   static const deletedUserName = 'Deleted user';
+  static const _deletePageSize = 300;
 
   @visibleForTesting
   static const profileDocumentCollections = <String>[
@@ -32,6 +37,16 @@ class AccountDeletionRepository implements AccountDeletionRepositoryContract {
     'communityUserProgress',
     'users',
   ];
+
+  @visibleForTesting
+  static const profileSubcollectionsForDeletion = <String>[
+    'gubs',
+    'communities',
+    'blockedUsers',
+  ];
+
+  @visibleForTesting
+  static const externalCollectionGroupsForDeletion = <String>['joinRequests'];
 
   @visibleForTesting
   static AccountDeletionMemberships mergeMembershipIds({
@@ -78,6 +93,48 @@ class AccountDeletionRepository implements AccountDeletionRepositoryContract {
         return updated;
       })
       .toList(growable: false);
+
+  @visibleForTesting
+  static List<String> organizedEventAssignmentUserIds(
+    List<Object?> assignments,
+  ) => assignments
+      .whereType<Map>()
+      .map((assignment) => assignment['userId'])
+      .whereType<String>()
+      .toList(growable: false);
+
+  @visibleForTesting
+  static bool shouldAnonymizeScopedContent({
+    required Object? membershipJoinedAt,
+  }) => true;
+
+  @visibleForTesting
+  static Map<String, Object?> notificationDataUpdate(
+    Map<String, dynamic> data,
+    String userId,
+  ) {
+    final nested = data['data'];
+    if (nested is! Map || nested['memberId'] != userId) return const {};
+    return {
+      'data': Map<String, Object?>.from(nested)..['memberId'] = deletedUserId,
+    };
+  }
+
+  @override
+  Future<void> beginDeletionState(String userId) async {
+    final reference = _firestore
+        .collection('accountDeletionStates')
+        .doc(userId);
+    final existing = await reference.get(
+      const GetOptions(source: Source.server),
+    );
+    if (existing.exists) return;
+    await reference.set({
+      'userId': userId,
+      'status': 'deleting',
+      'startedAt': FieldValue.serverTimestamp(),
+    });
+  }
 
   @override
   Future<AccountDeletionPreflight> loadPreflight(String userId) async {
@@ -145,16 +202,22 @@ class AccountDeletionRepository implements AccountDeletionRepositoryContract {
   }) async {
     for (final gubId in privateGubIds) {
       final gub = _firestore.collection('gubs').doc(gubId);
-      final joinedAt = await _membershipJoinedAt(
+      final joinedAt = await _membershipJoinedAtOrNull(
         rootCollection: 'gubs',
         rootId: gubId,
         userId: userId,
       );
+      Query<Map<String, dynamic>> messages = gub
+          .collection('messages')
+          .where('senderId', isEqualTo: userId);
+      if (joinedAt != null) {
+        messages = messages.where(
+          'createdAt',
+          isGreaterThanOrEqualTo: joinedAt,
+        );
+      }
       await _anonymizeQuery(
-        gub
-            .collection('messages')
-            .where('senderId', isEqualTo: userId)
-            .where('createdAt', isGreaterThanOrEqualTo: joinedAt),
+        messages,
         (_) => const {'senderId': deletedUserId, 'senderName': deletedUserName},
       );
       await _anonymizeQuery(
@@ -164,6 +227,10 @@ class AccountDeletionRepository implements AccountDeletionRepositoryContract {
           'authorName': deletedUserName,
           'authorPhoto': null,
         },
+      );
+      await _anonymizeQuery(
+        gub.collection('posts').where('lastCommentAuthorId', isEqualTo: userId),
+        (_) => const {'lastCommentAuthorId': deletedUserId},
       );
       await _anonymizeIdentityPairs(gub.collection('tasks'), userId, const [
         ('creatorId', 'creatorName'),
@@ -185,44 +252,143 @@ class AccountDeletionRepository implements AccountDeletionRepositoryContract {
       await _anonymizeOrganizedEventAssignments(
         gub.collection('organizedEvents'),
         userId,
+        includeLegacyDocuments: joinedAt != null,
       );
       await _anonymizeIdentityPairs(gub.collection('proposals'), userId, const [
         ('creatorId', 'creatorName'),
         ('originUserId', 'sourceAuthorName'),
+        ('deletedBy', null),
       ]);
       await _anonymizeIdentityPairs(gub.collection('goals'), userId, const [
         ('originUserId', 'sourceAuthorName'),
       ]);
+      Query<Map<String, dynamic>> sentNotifications = gub
+          .collection('notifications')
+          .where('senderId', isEqualTo: userId);
+      Query<Map<String, dynamic>> readNotifications = gub
+          .collection('notifications')
+          .where('readBy', arrayContains: userId);
+      if (joinedAt != null) {
+        sentNotifications = sentNotifications.where(
+          'createdAt',
+          isGreaterThanOrEqualTo: joinedAt,
+        );
+        readNotifications = readNotifications.where(
+          'createdAt',
+          isGreaterThanOrEqualTo: joinedAt,
+        );
+      }
       await _anonymizeQuery(
-        gub
-            .collection('notifications')
-            .where('senderId', isEqualTo: userId)
-            .where('createdAt', isGreaterThanOrEqualTo: joinedAt),
+        sentNotifications,
         (data) => _notificationUpdate(data, userId, anonymizeSender: true),
+      );
+      await _anonymizeQuery(
+        readNotifications,
+        (data) => _notificationUpdate(data, userId, anonymizeSender: false),
       );
       await _anonymizeQuery(
         gub
             .collection('notifications')
-            .where('readBy', arrayContains: userId)
-            .where('createdAt', isGreaterThanOrEqualTo: joinedAt),
-        (data) => _notificationUpdate(data, userId, anonymizeSender: false),
+            .where('data.memberId', isEqualTo: userId),
+        (data) => notificationDataUpdate(data, userId),
+      );
+      await _anonymizeIdentityPairs(
+        gub.collection('creationCooldowns'),
+        userId,
+        const [('creatorId', null), ('deletedBy', null)],
       );
     }
     for (final communityId in communityIds) {
       final community = _firestore.collection('communities').doc(communityId);
-      final joinedAt = await _membershipJoinedAt(
+      final joinedAt = await _membershipJoinedAtOrNull(
         rootCollection: 'communities',
         rootId: communityId,
         userId: userId,
       );
+      Query<Map<String, dynamic>> messages = community
+          .collection('messages')
+          .where('senderId', isEqualTo: userId);
+      if (joinedAt != null) {
+        messages = messages.where(
+          'createdAt',
+          isGreaterThanOrEqualTo: joinedAt,
+        );
+      }
       await _anonymizeQuery(
-        community
-            .collection('messages')
-            .where('senderId', isEqualTo: userId)
-            .where('createdAt', isGreaterThanOrEqualTo: joinedAt),
+        messages,
         (_) => const {'senderId': deletedUserId, 'senderName': deletedUserName},
       );
     }
+    await _anonymizeQuery(
+      _firestore
+          .collectionGroup('messages')
+          .where('senderId', isEqualTo: userId),
+      (_) => const {'senderId': deletedUserId, 'senderName': deletedUserName},
+    );
+    await _anonymizeQuery(
+      _firestore
+          .collectionGroup('comments')
+          .where('authorId', isEqualTo: userId),
+      (_) => const {'authorId': deletedUserId, 'authorName': deletedUserName},
+    );
+    await _anonymizeQuery(
+      _firestore.collectionGroup('asks').where('authorId', isEqualTo: userId),
+      (_) => const {
+        'authorId': deletedUserId,
+        'authorDisplayName': deletedUserName,
+      },
+    );
+    await _anonymizeCommunityAnswers(userId);
+  }
+
+  @override
+  Future<void> deleteUserRoot(String userId) =>
+      _firestore.collection('users').doc(userId).delete();
+
+  @override
+  Future<void> deleteDetachedIdentityDocuments(String userId) async {
+    for (final (group, field) in const [
+      ('likes', 'userId'),
+      ('votes', 'uid'),
+      ('members', 'uid'),
+    ]) {
+      DocumentSnapshot<Map<String, dynamic>>? cursor;
+      while (true) {
+        Query<Map<String, dynamic>> query = _firestore
+            .collectionGroup(group)
+            .where(field, isEqualTo: userId)
+            .orderBy(FieldPath.documentId)
+            .limit(_deletePageSize);
+        if (group == 'members' && cursor != null) {
+          query = query.startAfterDocument(cursor);
+        }
+        final page = await query.get(const GetOptions(source: Source.server));
+        if (page.docs.isEmpty) break;
+        final references = page.docs
+            .where(
+              (document) =>
+                  group != 'members' || _isGoalMember(document.reference.path),
+            )
+            .map((document) => document.reference)
+            .toList(growable: false);
+        if (references.isNotEmpty) {
+          final batch = _firestore.batch();
+          for (final reference in references) {
+            batch.delete(reference);
+          }
+          await batch.commit();
+        }
+        if (group == 'members') cursor = page.docs.last;
+      }
+    }
+  }
+
+  bool _isGoalMember(String path) {
+    final segments = path.split('/');
+    return segments.length == 6 &&
+        segments[0] == 'gubs' &&
+        segments[2] == 'goals' &&
+        segments[4] == 'members';
   }
 
   Future<void> _anonymizeIdentityPairs(
@@ -248,11 +414,14 @@ class AccountDeletionRepository implements AccountDeletionRepositoryContract {
 
   Future<void> _anonymizeOrganizedEventAssignments(
     CollectionReference<Map<String, dynamic>> collection,
-    String userId,
-  ) async {
-    final snapshot = await collection.get(
-      const GetOptions(source: Source.server),
-    );
+    String userId, {
+    required bool includeLegacyDocuments,
+  }) async {
+    final snapshot = includeLegacyDocuments
+        ? await collection.get(const GetOptions(source: Source.server))
+        : await collection
+              .where('assignmentUserIds', arrayContains: userId)
+              .get(const GetOptions(source: Source.server));
     for (final document in snapshot.docs) {
       final assignments = document.data()['assignments'];
       if (assignments is! List) continue;
@@ -265,12 +434,17 @@ class AccountDeletionRepository implements AccountDeletionRepositoryContract {
         userId,
       );
       if (changed) {
-        await document.reference.update({'assignments': updatedAssignments});
+        await document.reference.update({
+          'assignments': updatedAssignments,
+          'assignmentUserIds': organizedEventAssignmentUserIds(
+            updatedAssignments,
+          ),
+        });
       }
     }
   }
 
-  Future<Timestamp> _membershipJoinedAt({
+  Future<Timestamp?> _membershipJoinedAtOrNull({
     required String rootCollection,
     required String rootId,
     required String userId,
@@ -282,10 +456,53 @@ class AccountDeletionRepository implements AccountDeletionRepositoryContract {
         .doc(userId)
         .get(const GetOptions(source: Source.server));
     final joinedAt = snapshot.data()?['joinedAt'];
-    if (joinedAt is! Timestamp) {
-      throw StateError('The current membership has no valid joinedAt.');
+    return joinedAt is Timestamp ? joinedAt : null;
+  }
+
+  Future<void> _anonymizeCommunityAnswers(String userId) async {
+    final bestAnswerAsks = await _firestore
+        .collectionGroup('asks')
+        .where('bestAnswerAuthorId', isEqualTo: userId)
+        .get(const GetOptions(source: Source.server));
+    final bestAnswerAskPaths = bestAnswerAsks.docs
+        .map((document) => document.reference.path)
+        .toSet();
+    final snapshot = await _firestore
+        .collectionGroup('answers')
+        .where('authorId', isEqualTo: userId)
+        .get(const GetOptions(source: Source.server));
+    for (final answer in snapshot.docs) {
+      final ask = answer.reference.parent.parent;
+      if (ask == null || answer.id != userId) continue;
+      var sourceData = answer.data();
+      var replacementId = sourceData['deletionReplacementAnswerId'];
+      if (replacementId is! String || replacementId.isEmpty) {
+        replacementId = answer.reference.parent.doc().id;
+        await answer.reference.update({
+          'deletionReplacementAnswerId': replacementId,
+        });
+        sourceData = {
+          ...sourceData,
+          'deletionReplacementAnswerId': replacementId,
+        };
+      }
+      final replacement = answer.reference.parent.doc(replacementId);
+      final data = Map<String, Object?>.from(sourceData)
+        ..['answerId'] = replacement.id
+        ..['authorId'] = deletedUserId
+        ..['authorDisplayName'] = deletedUserName
+        ..remove('deletionReplacementAnswerId');
+      final batch = _firestore.batch();
+      batch.set(replacement, data);
+      if (bestAnswerAskPaths.contains(ask.path)) {
+        batch.update(ask, {
+          'bestAnswerId': replacement.id,
+          'bestAnswerAuthorId': deletedUserId,
+        });
+      }
+      batch.delete(answer.reference);
+      await batch.commit();
     }
-    return joinedAt;
   }
 
   Map<String, Object?> _identityUpdate(String idField, String? nameField) {
@@ -374,6 +591,23 @@ class AccountDeletionRepository implements AccountDeletionRepositoryContract {
   }
 
   @override
+  Future<void> deleteCommunityActiveAskSlots(String userId) async {
+    while (true) {
+      final snapshot = await _firestore
+          .collectionGroup('activeAskSlots')
+          .where('authorId', isEqualTo: userId)
+          .limit(_deletePageSize)
+          .get(const GetOptions(source: Source.server));
+      if (snapshot.docs.isEmpty) return;
+      final batch = _firestore.batch();
+      for (final document in snapshot.docs) {
+        batch.delete(document.reference);
+      }
+      await batch.commit();
+    }
+  }
+
+  @override
   Future<void> deletePrivateCopy(String gubId, String userId) => _firestore
       .collection('users')
       .doc(userId)
@@ -391,12 +625,55 @@ class AccountDeletionRepository implements AccountDeletionRepositoryContract {
           .delete();
 
   @override
-  Future<void> deleteProfile(String userId) {
+  Future<void> deleteProfile(String userId) async {
+    final userReference = _firestore.collection('users').doc(userId);
+    for (final collection in profileSubcollectionsForDeletion) {
+      await _deleteCollection(userReference.collection(collection));
+    }
+
     final batch = _firestore.batch();
     for (final collection in profileDocumentCollections) {
-      batch.delete(_firestore.collection(collection).doc(userId));
+      if (collection != 'users') {
+        batch.delete(_firestore.collection(collection).doc(userId));
+      }
     }
-    return batch.commit();
+    await batch.commit();
+    await _deleteExternalUserDocuments(userId);
+  }
+
+  Future<void> _deleteExternalUserDocuments(String userId) async {
+    for (final collectionGroup in externalCollectionGroupsForDeletion) {
+      while (true) {
+        final page = await _firestore
+            .collectionGroup(collectionGroup)
+            .where('userId', isEqualTo: userId)
+            .limit(_deletePageSize)
+            .get(const GetOptions(source: Source.server));
+        if (page.docs.isEmpty) break;
+        final batch = _firestore.batch();
+        for (final document in page.docs) {
+          batch.delete(document.reference);
+        }
+        await batch.commit();
+      }
+    }
+  }
+
+  Future<void> _deleteCollection(
+    CollectionReference<Map<String, dynamic>> collection,
+  ) async {
+    while (true) {
+      final page = await collection
+          .orderBy(FieldPath.documentId)
+          .limit(_deletePageSize)
+          .get(const GetOptions(source: Source.server));
+      if (page.docs.isEmpty) return;
+      final batch = _firestore.batch();
+      for (final document in page.docs) {
+        batch.delete(document.reference);
+      }
+      await batch.commit();
+    }
   }
 
   String _name(Map<String, dynamic> data, String fallback) {

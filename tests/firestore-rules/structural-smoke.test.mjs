@@ -2,7 +2,7 @@ import { before, after, beforeEach, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { initializeTestEnvironment, assertSucceeds, assertFails } from '@firebase/rules-unit-testing';
-import { doc, writeBatch, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, doc, getDocs, query, writeBatch, setDoc, updateDoc, serverTimestamp, where } from 'firebase/firestore';
 
 const projectId = 'demo-gubify';
 let env;
@@ -40,4 +40,26 @@ test('owner starts deletion',async()=>{await seedGub();const d=db('owner'),b=wri
 test('member cannot start deletion',async()=>{await seedGub();await env.withSecurityRulesDisabled(async c=>setDoc(doc(c.firestore(),'gubs','g1','members','member'),member('member','member')));const d=db('member');await assertFails(updateDoc(doc(d,'gubs','g1'),{deletionStatus:'deleting',deletionRequestedBy:'member',deletionStartedAt:new Date(),deletionUpdatedAt:new Date(),deletionPhase:'preparing'}));});
 test('deletion plus functional change fails',async()=>{await seedGub();const d=db('owner');await assertFails(updateDoc(doc(d,'gubs','g1'),{name:'Changed',deletionStatus:'deleting',deletionRequestedBy:'owner',deletionStartedAt:new Date(),deletionUpdatedAt:new Date(),deletionPhase:'preparing'}));});
 test('deleting cannot return active',async()=>{await env.withSecurityRulesDisabled(async c=>{await setDoc(doc(c.firestore(),'inviteTokens',tokenId),token('owner',false));await setDoc(doc(c.firestore(),'gubs','g1'),{...root('g1'),deletionStatus:'deleting',deletionRequestedBy:'owner',deletionStartedAt:new Date(),deletionPhase:'preparing'});});await assertFails(updateDoc(doc(db('owner'),'gubs','g1'),{deletionStatus:'active'}));});
+test('owner can query only root Gubs whose deletion they requested',async()=>{
+ await env.withSecurityRulesDisabled(async c=>{
+  const d=c.firestore();
+  await setDoc(doc(d,'gubs','owned-deleting'),{...root('owned-deleting','owner'),deletionStatus:'deleting',deletionRequestedBy:'owner',deletionStartedAt:new Date(),deletionPhase:'directCollections'});
+  await setDoc(doc(d,'gubs','other-deleting'),{...root('other-deleting','other'),deletionStatus:'deleting',deletionRequestedBy:'other',deletionStartedAt:new Date(),deletionPhase:'directCollections'});
+ });
+ const ownerQuery=query(
+  collection(env.authenticatedContext('owner').firestore(),'gubs'),
+  where('ownerId','==','owner'),
+  where('deletionStatus','==','deleting'),
+  where('deletionRequestedBy','==','owner'),
+ );
+ const snapshot=await assertSucceeds(getDocs(ownerQuery));
+ assert.deepEqual(snapshot.docs.map(document=>document.id),['owned-deleting']);
+ const outsiderQuery=query(
+  collection(env.authenticatedContext('outsider').firestore(),'gubs'),
+  where('ownerId','==','owner'),
+  where('deletionStatus','==','deleting'),
+  where('deletionRequestedBy','==','owner'),
+ );
+ await assertFails(getDocs(outsiderQuery));
+});
 test('unknown subcollection is denied',async()=>{await seedGub();await assertFails(setDoc(doc(db('owner'),'gubs','g1','unknown','x'),{ok:true}));});

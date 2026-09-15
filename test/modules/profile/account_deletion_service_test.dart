@@ -135,8 +135,12 @@ void main() {
     expect(events, [
       'preflight',
       'marker-write:uid',
+      'begin-deletion-state',
       'membership-index',
       'anonymize-shared',
+      'community-slots',
+      'delete-user-root',
+      'delete-detached-identities',
       'private-reads:g1',
       'leave-gub:g1',
       'community-request:c1',
@@ -187,6 +191,25 @@ void main() {
 
     expect((await service.deleteAccount()).isSuccess, isTrue);
     expect(repository.events, contains('private-copy:gone'));
+  });
+
+  test('stale Gub and Community copies do not fail account deletion', () async {
+    final repository = _Repository()
+      ..privateIds = ['stale-gub']
+      ..communityIds = ['stale-community'];
+    final service = AccountDeletionService(
+      authService: _AuthService(),
+      repository: repository,
+      markerStore: _MarkerStore(repository.events),
+      leavePrivateGub: (_) async => throw StateError('missing membership'),
+      leaveCommunity: (_) async => throw StateError('missing membership'),
+      clearUserCache: () {},
+      clearLocalProfileState: () async {},
+    );
+
+    expect((await service.deleteAccount()).isSuccess, isTrue);
+    expect(repository.events, contains('private-copy:stale-gub'));
+    expect(repository.events, contains('community-copy:stale-community'));
   });
 
   test(
@@ -423,6 +446,11 @@ class _Repository implements AccountDeletionRepositoryContract {
   final List<String> deletedProfileUserIds = [];
 
   @override
+  Future<void> beginDeletionState(String userId) async {
+    events.add('begin-deletion-state');
+  }
+
+  @override
   Future<void> anonymizeSharedContent({
     required String userId,
     required List<String> privateGubIds,
@@ -430,6 +458,16 @@ class _Repository implements AccountDeletionRepositoryContract {
   }) async {
     anonymizedUserIds.add(userId);
     events.add('anonymize-shared');
+  }
+
+  @override
+  Future<void> deleteUserRoot(String userId) async {
+    events.add('delete-user-root');
+  }
+
+  @override
+  Future<void> deleteDetachedIdentityDocuments(String userId) async {
+    events.add('delete-detached-identities');
   }
 
   @override
@@ -459,6 +497,10 @@ class _Repository implements AccountDeletionRepositoryContract {
     String communityId,
     String userId,
   ) async => events.add('community-request:$communityId');
+
+  @override
+  Future<void> deleteCommunityActiveAskSlots(String userId) async =>
+      events.add('community-slots');
 
   @override
   Future<void> deletePrivateCopy(String gubId, String userId) async =>

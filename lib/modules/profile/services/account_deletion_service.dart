@@ -84,6 +84,10 @@ class AccountDeletionService {
           'persistRecoveryMarker',
           () => _markerStore.writeUserId(uid),
         );
+        await _atStage(
+          'beginDeletionState',
+          () => _repository.beginDeletionState(uid),
+        );
         final memberships = await _atStage(
           'cleanupPersonalCopies',
           () => _repository.loadMemberships(uid),
@@ -97,6 +101,15 @@ class AccountDeletionService {
             privateGubIds: privateIds,
             communityIds: communityIds,
           ),
+        );
+        await _atStage(
+          'cleanupActiveAskSlots',
+          () => _repository.deleteCommunityActiveAskSlots(uid),
+        );
+        await _atStage('deleteUserRoot', () => _repository.deleteUserRoot(uid));
+        await _atStage(
+          'deleteDetachedIdentityDocuments',
+          () => _repository.deleteDetachedIdentityDocuments(uid),
         );
         await _cleanMemberships(uid, privateIds, communityIds);
         await _atStage(

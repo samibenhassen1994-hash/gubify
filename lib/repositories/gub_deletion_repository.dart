@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 
 class GubDeletionTarget {
   final String name;
@@ -21,6 +22,46 @@ class GubDeletionRepository {
   static final GubDeletionRepository instance = GubDeletionRepository._();
 
   static const _pageSize = 300;
+  static const _memberCleanupPageSize = 200;
+
+  static const Map<String, List<String>> nestedCollectionsForDeletion = {
+    'proposals': ['votes'],
+    'goals': ['members'],
+    'posts': ['comments', 'likes'],
+  };
+
+  static const List<String> directCollectionsForDeletion = [
+    'messages',
+    'chatReads',
+    'boardReads',
+    'tasks',
+    'events',
+    'organizedEvents',
+    'notifications',
+    'creationCooldowns',
+    'bans',
+  ];
+
+  @visibleForTesting
+  static List<GubDeletionPhase> phasesToRunFromForTesting(
+    GubDeletionPhase currentPhase,
+  ) => GubDeletionPhase.values.skip(currentPhase.index).toList(growable: false);
+
+  @visibleForTesting
+  static Future<void> drainMemberCleanupForTesting({
+    required Future<List<String>> Function(int limit) loadPage,
+    required Future<void> Function(List<String> uids) deletePage,
+    required Future<void> Function() deleteOwnerCopy,
+    required Future<void> Function() onDrained,
+  }) async {
+    while (true) {
+      final page = await loadPage(_memberCleanupPageSize);
+      if (page.isEmpty) break;
+      await deletePage(page);
+    }
+    await deleteOwnerCopy();
+    await onDrained();
+  }
 
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
@@ -52,26 +93,22 @@ class GubDeletionRepository {
       ownerId: ownerId,
       confirmedName: confirmedName,
     );
-
-    onPhase(GubDeletionPhase.preparing);
-    final memberIds = await _captureMemberIds(
-      gubReference: gubReference,
-      ownerId: ownerId,
-      existingData: data,
-    );
-    await _completePhase(gubReference, ownerId, GubDeletionPhase.preparing);
-
     final phase = _phaseFrom(data['deletionPhase']);
-    if (phase.index <= GubDeletionPhase.nestedCollections.index) {
+    final phasesToRun = phasesToRunFromForTesting(phase);
+
+    if (phasesToRun.contains(GubDeletionPhase.preparing)) {
+      onPhase(GubDeletionPhase.preparing);
+      await _completePhase(gubReference, ownerId, GubDeletionPhase.preparing);
+    }
+
+    if (phasesToRun.contains(GubDeletionPhase.nestedCollections)) {
       onPhase(GubDeletionPhase.nestedCollections);
-      await _deleteParentsWithChildren(
-        parents: gubReference.collection('proposals'),
-        childCollection: 'votes',
-      );
-      await _deleteParentsWithChildren(
-        parents: gubReference.collection('goals'),
-        childCollection: 'members',
-      );
+      for (final entry in nestedCollectionsForDeletion.entries) {
+        await _deleteParentsWithChildren(
+          parents: gubReference.collection(entry.key),
+          childCollections: entry.value,
+        );
+      }
       await _completePhase(
         gubReference,
         ownerId,
@@ -79,20 +116,9 @@ class GubDeletionRepository {
       );
     }
 
-    if (phase.index <= GubDeletionPhase.directCollections.index) {
+    if (phasesToRun.contains(GubDeletionPhase.directCollections)) {
       onPhase(GubDeletionPhase.directCollections);
-      for (final collection in const [
-        'messages',
-        'chatReads',
-        'boardReads',
-        'posts',
-        'tasks',
-        'events',
-        'organizedEvents',
-        'notifications',
-        'creationCooldowns',
-        'members',
-      ]) {
+      for (final collection in directCollectionsForDeletion) {
         await _deleteCollection(gubReference.collection(collection));
       }
       await _completePhase(
@@ -102,16 +128,21 @@ class GubDeletionRepository {
       );
     }
 
-    if (phase.index <= GubDeletionPhase.userCopies.index) {
+    if (phasesToRun.contains(GubDeletionPhase.userCopies)) {
       onPhase(GubDeletionPhase.userCopies);
-      await _deleteUserCopies(gubId: gubId, memberIds: memberIds);
-      await _completePhase(gubReference, ownerId, GubDeletionPhase.userCopies);
+      await _deleteMemberCopies(
+        gubReference: gubReference,
+        gubId: gubId,
+        ownerId: ownerId,
+      );
     }
 
-    onPhase(GubDeletionPhase.finalizing);
-    await _deleteInviteToken(data['inviteTokenId']);
-    await _completePhase(gubReference, ownerId, GubDeletionPhase.finalizing);
-    await gubReference.delete();
+    if (phasesToRun.contains(GubDeletionPhase.finalizing)) {
+      onPhase(GubDeletionPhase.finalizing);
+      await _deleteInviteTokens(gubId, ownerId);
+      await _completePhase(gubReference, ownerId, GubDeletionPhase.finalizing);
+      await gubReference.delete();
+    }
   }
 
   Future<Map<String, dynamic>> _beginOrResume({
@@ -203,11 +234,17 @@ class GubDeletionRepository {
     }
   }
 
-  Future<void> _deleteInviteToken(Object? value) async {
-    if (value is! String || value.isEmpty) return;
-    final reference = _firestore.collection('inviteTokens').doc(value);
-    final snapshot = await reference.get();
-    if (snapshot.exists) await reference.delete();
+  Future<void> _deleteInviteTokens(String gubId, String ownerId) async {
+    while (true) {
+      final page = await _firestore
+          .collection('inviteTokens')
+          .where('gubId', isEqualTo: gubId)
+          .where('ownerId', isEqualTo: ownerId)
+          .limit(_pageSize)
+          .get();
+      if (page.docs.isEmpty) return;
+      await _deleteReferences(page.docs.map((document) => document.reference));
+    }
   }
 
   Future<void> _completePhase(
@@ -237,45 +274,70 @@ class GubDeletionRepository {
     _ => GubDeletionPhase.preparing,
   };
 
-  Future<Set<String>> _captureMemberIds({
+  Future<void> _deleteMemberCopies({
     required DocumentReference<Map<String, dynamic>> gubReference,
+    required String gubId,
     required String ownerId,
-    required Map<String, dynamic> existingData,
-  }) async {
-    final memberIds = <String>{
-      ownerId,
-      ..._storedMemberIds(existingData['deletionMemberIds']),
-    };
-    DocumentSnapshot<Map<String, dynamic>>? cursor;
-
-    while (true) {
-      Query<Map<String, dynamic>> query = gubReference
+  }) => drainMemberCleanupForTesting(
+    loadPage: (limit) async {
+      final page = await gubReference
           .collection('members')
           .orderBy(FieldPath.documentId)
-          .limit(_pageSize);
+          .limit(limit)
+          .get();
+      return page.docs.map((document) => document.id).toList(growable: false);
+    },
+    deletePage: (uids) async {
+      final batch = _firestore.batch();
+      for (final uid in uids) {
+        batch
+          ..delete(gubReference.collection('members').doc(uid))
+          ..delete(
+            _firestore
+                .collection('users')
+                .doc(uid)
+                .collection('gubs')
+                .doc(gubId),
+          );
+      }
+      await batch.commit();
+    },
+    deleteOwnerCopy: () => _deleteReferences([
+      _firestore.collection('users').doc(ownerId).collection('gubs').doc(gubId),
+    ]),
+    onDrained: () async {
+      await _deleteOrphanUserCopies(gubId, ownerId);
+      await _completePhase(gubReference, ownerId, GubDeletionPhase.userCopies);
+    },
+  );
+
+  Future<void> _deleteOrphanUserCopies(String gubId, String ownerId) async {
+    DocumentSnapshot<Map<String, dynamic>>? cursor;
+    while (true) {
+      Query<Map<String, dynamic>> query = _firestore
+          .collectionGroup('gubs')
+          .where('gubId', isEqualTo: gubId)
+          .where('ownerId', isEqualTo: ownerId)
+          .orderBy(FieldPath.documentId)
+          .limit(_memberCleanupPageSize);
       if (cursor != null) query = query.startAfterDocument(cursor);
-
       final page = await query.get();
-      if (page.docs.isEmpty) break;
-      memberIds.addAll(page.docs.map((document) => document.id));
+      if (page.docs.isEmpty) return;
+      final copies = page.docs.where((document) {
+        final segments = document.reference.path.split('/');
+        return segments.length == 4 &&
+            segments[0] == 'users' &&
+            segments[2] == 'gubs' &&
+            segments[3] == gubId;
+      });
+      await _deleteReferences(copies.map((document) => document.reference));
       cursor = page.docs.last;
-    }
-
-    final sortedMemberIds = memberIds.toList()..sort();
-    await gubReference.update({'deletionMemberIds': sortedMemberIds});
-    return memberIds;
-  }
-
-  Iterable<String> _storedMemberIds(Object? value) sync* {
-    if (value is! Iterable<Object?>) return;
-    for (final item in value) {
-      if (item is String && item.isNotEmpty) yield item;
     }
   }
 
   Future<void> _deleteParentsWithChildren({
     required CollectionReference<Map<String, dynamic>> parents,
-    required String childCollection,
+    required List<String> childCollections,
   }) async {
     while (true) {
       final page = await parents
@@ -285,7 +347,9 @@ class GubDeletionRepository {
       if (page.docs.isEmpty) return;
 
       for (final parent in page.docs) {
-        await _deleteCollection(parent.reference.collection(childCollection));
+        for (final childCollection in childCollections) {
+          await _deleteCollection(parent.reference.collection(childCollection));
+        }
       }
 
       await _deleteReferences(page.docs.map((document) => document.reference));
@@ -303,17 +367,6 @@ class GubDeletionRepository {
       if (page.docs.isEmpty) return;
       await _deleteReferences(page.docs.map((document) => document.reference));
     }
-  }
-
-  Future<void> _deleteUserCopies({
-    required String gubId,
-    required Set<String> memberIds,
-  }) async {
-    final references = memberIds.map(
-      (uid) =>
-          _firestore.collection('users').doc(uid).collection('gubs').doc(gubId),
-    );
-    await _deleteReferences(references);
   }
 
   Future<void> _deleteReferences(

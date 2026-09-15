@@ -108,6 +108,9 @@ class GubEventModel {
     'originUserId': originUserId,
     'sourceAuthorName': sourceAuthorName,
     'assignments': assignments.map((item) => item.toFirestore()).toList(),
+    'assignmentUserIds': assignments
+        .map((item) => item.userId)
+        .toList(growable: false),
   };
   int get completedCount =>
       assignments.where((item) => item.isCompleted).length;

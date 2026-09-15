@@ -13,6 +13,7 @@ class CreateGubEventScreen extends StatefulWidget {
   final String? sourcePreview;
   final String? originUserId;
   final String? sourceAuthorName;
+  final Future<List<Map<String, String>>> Function(String gubId)? membersLoader;
 
   const CreateGubEventScreen({
     super.key,
@@ -22,6 +23,7 @@ class CreateGubEventScreen extends StatefulWidget {
     this.sourcePreview,
     this.originUserId,
     this.sourceAuthorName,
+    this.membersLoader,
   });
 
   bool get isChatConversion =>
@@ -50,7 +52,9 @@ class _CreateGubEventScreenState extends State<CreateGubEventScreen> {
       final preview = widget.sourcePreview!;
       _title.text = preview.length <= 80 ? preview : preview.substring(0, 80);
     }
-    GubEventService.instance.members(widget.gubId).then((members) {
+    (widget.membersLoader ?? GubEventService.instance.members)(
+      widget.gubId,
+    ).then((members) {
       if (mounted) setState(() => _members = members);
     });
   }
@@ -218,32 +222,48 @@ class _CreateGubEventScreenState extends State<CreateGubEventScreen> {
       ),
       child: Column(
         children: [
-          CheckboxListTile(
-            contentPadding: EdgeInsets.zero,
-            controlAffinity: ListTileControlAffinity.leading,
-            value: selected,
-            secondary: CircleAvatar(
-              radius: 18,
-              backgroundColor: const Color(0xFFDBEAFE),
-              child: Text(
-                _initial(name),
-                style: const TextStyle(
-                  color: _primaryColor,
-                  fontWeight: FontWeight.w700,
+          Material(
+            type: MaterialType.transparency,
+            child: CheckboxListTile(
+              contentPadding: EdgeInsets.zero,
+              controlAffinity: ListTileControlAffinity.leading,
+              value: selected,
+              secondary: CircleAvatar(
+                radius: 18,
+                backgroundColor: const Color(0xFFDBEAFE),
+                child: Text(
+                  _initial(name),
+                  style: const TextStyle(
+                    color: _primaryColor,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
+              title: Text(
+                name,
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+              onChanged: (value) {
+                if (value == true) {
+                  if (!_selected.contains(id) &&
+                      _selected.length >= GubEventService.maxAssignments) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(GubEventService.assignmentLimitMessage),
+                      ),
+                    );
+                    return;
+                  }
+                }
+                setState(() {
+                  if (value == true) {
+                    _selected.add(id);
+                  } else {
+                    _selected.remove(id);
+                  }
+                });
+              },
             ),
-            title: Text(
-              name,
-              style: const TextStyle(fontWeight: FontWeight.w600),
-            ),
-            onChanged: (value) => setState(() {
-              if (value == true) {
-                _selected.add(id);
-              } else {
-                _selected.remove(id);
-              }
-            }),
           ),
           if (selected)
             Padding(

@@ -26,6 +26,13 @@ class CommunityRepository {
   static const int _membershipCleanupPageSize = 150;
   static const String _deletionMembersSubcollection = "deletionMembers";
 
+  @visibleForTesting
+  static const List<String> rewardReferenceFieldsForDeletion = [
+    'lastRewardCommunityId',
+    'lastRewardAskId',
+    'lastRewardRole',
+  ];
+
   // Community deletion is client-side for Firebase Spark compatibility.
   // Every future Community subcollection must be added to this cleanup list.
   static const List<String> _knownCommunitySubcollections = [
@@ -904,6 +911,15 @@ class CommunityRepository {
             communityId: normalizedCommunityId,
             communityReference: communityReference,
           );
+          await _deleteOrphanCommunityCopies(
+            communityId: normalizedCommunityId,
+            ownerId: ownerId,
+          );
+          await _deleteOrphanCommunityProgress(normalizedCommunityId);
+
+          deletionStep = 'delete_reward_references';
+          deletionPath = 'communityUserProgress/*';
+          await _deleteCommunityRewardReferences(normalizedCommunityId);
 
           deletionStep = 'delete_ask_answers';
           deletionPath = 'communities/*/asks/*/answers';
@@ -1124,6 +1140,79 @@ class CommunityRepository {
           }, SetOptions(merge: true));
         }
         batch.delete(marker.reference);
+      }
+      await batch.commit();
+    }
+  }
+
+  Future<void> _deleteCommunityRewardReferences(String communityId) async {
+    while (true) {
+      final page = await _firestore
+          .collection('communityUserProgress')
+          .where('lastRewardCommunityId', isEqualTo: communityId)
+          .limit(_batchSize)
+          .get();
+      if (page.docs.isEmpty) return;
+
+      final batch = _firestore.batch();
+      for (final document in page.docs) {
+        batch.update(document.reference, {
+          for (final field in rewardReferenceFieldsForDeletion)
+            field: FieldValue.delete(),
+        });
+      }
+      await batch.commit();
+    }
+  }
+
+  Future<void> _deleteOrphanCommunityCopies({
+    required String communityId,
+    required String ownerId,
+  }) async {
+    DocumentSnapshot<Map<String, dynamic>>? cursor;
+    while (true) {
+      Query<Map<String, dynamic>> query = _firestore
+          .collectionGroup('communities')
+          .where('communityId', isEqualTo: communityId)
+          .where('ownerId', isEqualTo: ownerId)
+          .orderBy(FieldPath.documentId)
+          .limit(_batchSize);
+      if (cursor != null) query = query.startAfterDocument(cursor);
+      final page = await query.get();
+      if (page.docs.isEmpty) return;
+      final batch = _firestore.batch();
+      var writes = 0;
+      for (final document in page.docs) {
+        final segments = document.reference.path.split('/');
+        if (segments.length == 4 &&
+            segments[0] == 'users' &&
+            segments[2] == 'communities' &&
+            segments[3] == communityId) {
+          batch.delete(document.reference);
+          writes++;
+        }
+      }
+      if (writes > 0) await batch.commit();
+      cursor = page.docs.last;
+    }
+  }
+
+  Future<void> _deleteOrphanCommunityProgress(String communityId) async {
+    while (true) {
+      final page = await _firestore
+          .collection('communityUserProgress')
+          .where('communityIds', arrayContains: communityId)
+          .limit(_batchSize)
+          .get();
+      if (page.docs.isEmpty) return;
+      final batch = _firestore.batch();
+      for (final document in page.docs) {
+        batch.set(document.reference, {
+          'communityIds': FieldValue.arrayRemove([communityId]),
+          'membershipProjectionCommunityId': communityId,
+          'membershipProjectionAction': 'delete',
+          'membershipProjectionUpdatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
       }
       await batch.commit();
     }

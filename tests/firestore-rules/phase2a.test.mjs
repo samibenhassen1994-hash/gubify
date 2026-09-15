@@ -451,6 +451,32 @@ describe('Approval requests', () => {
       ),
     );
   });
+  test('account deletion can remove an own processed request after the user profile is gone', async () => {
+    await seedRequest(uid.requester, {
+      status: 'rejected',
+      resolvedAt: now(),
+      resolvedBy: uid.owner,
+    });
+    await assertSucceeds(setDoc(
+      doc(db(uid.requester), 'accountDeletionStates', uid.requester),
+      { userId: uid.requester, status: 'deleting', startedAt: serverTimestamp() },
+    ));
+    await env.withSecurityRulesDisabled((context) =>
+      deleteDoc(doc(context.firestore(), 'users', uid.requester)),
+    );
+
+    await assertSucceeds(
+      deleteDoc(
+        doc(
+          db(uid.requester),
+          'communities',
+          'c1',
+          'joinRequests',
+          uid.requester,
+        ),
+      ),
+    );
+  });
   test('owner can list requests but normal member cannot', async () => {
     await seedMember();
     await seedRequest();

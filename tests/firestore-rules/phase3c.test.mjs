@@ -8,6 +8,7 @@ import {
 } from '@firebase/rules-unit-testing';
 import {
   collection,
+  collectionGroup,
   deleteDoc,
   doc,
   getDoc,
@@ -73,6 +74,7 @@ const organizedEvent = (id = 'organized1') => ({
   createdAt: ts(), status: 'active', completedAt: null, sourceType: 'manual',
   sourceId: null, sourcePreview: null, originUserId: null, sourceAuthorName: null,
   assignments: [assignment(uid.secondMember)],
+  assignmentUserIds: [uid.secondMember],
 });
 const proposal = (id = 'proposal1') => ({
   gubId: 'g1', proposalId: id, title: 'Proposal', description: 'Details', creatorId: uid.memberGub,
@@ -354,6 +356,39 @@ describe('Gub cleanup authorization and isolation', () => {
     await assertSucceeds(deleteDoc(doc(db(uid.ownerGub), 'inviteTokens', tokenId('g1'))));
     await assertSucceeds(deleteDoc(doc(db(uid.ownerGub), 'gubs', 'g1')));
   });
+  test('deletion owner can discover and delete stale invite tokens for the same Gub', async () => {
+    await markGubDeleting();
+    await seed(['inviteTokens', 'OLD3C2Q7'], {
+      gubId: 'g1',
+      ownerId: uid.ownerGub,
+      gubName: 'g1 Gub',
+      active: false,
+      createdAt: ts(),
+    });
+    const ownerDb = db(uid.ownerGub);
+    const tokens = query(
+      collection(ownerDb, 'inviteTokens'),
+      where('gubId', '==', 'g1'),
+      where('ownerId', '==', uid.ownerGub),
+    );
+    const snapshot = await assertSucceeds(getDocs(tokens));
+    assert.equal(snapshot.size, 2);
+    for (const token of snapshot.docs) {
+      await assertSucceeds(deleteDoc(token.ref));
+    }
+  });
+  test('deletion owner discovers and removes an orphan user Gub copy', async () => {
+    await seed(['users', uid.outsider, 'gubs', 'g1'], gubCopy('g1', uid.outsider));
+    const ownerDb = db(uid.ownerGub);
+    const copies = await assertSucceeds(getDocs(query(
+      collectionGroup(ownerDb, 'gubs'),
+      where('gubId', '==', 'g1'),
+      where('ownerId', '==', uid.ownerGub),
+    )));
+    const orphan = copies.docs.find((entry) => entry.ref.path === `users/${uid.outsider}/gubs/g1`);
+    assert.ok(orphan);
+    await assertSucceeds(deleteDoc(orphan.ref));
+  });
 });
 
 describe('complete and resumed Gub pipeline', () => {
@@ -423,6 +458,28 @@ describe('Community transition, cleanup, legacy, and retry', () => {
     await assertFails(deleteDoc(doc(db(uid.ownerCommunity), 'communityOwnership', uid.ownerCommunity)));
     await assertFails(deleteDoc(doc(db(uid.ownerCommunity), 'communities', 'c1')));
     await assertSucceeds(cleanupCommunity(db(uid.ownerCommunity)));
+  });
+  test('deletion owner removes orphan Community copy and progress projection atomically', async () => {
+    await markCommunityDeleting();
+    await seed(['users', uid.communityOutsider, 'communities', 'c1'], communityCopy('c1', uid.communityOutsider));
+    await seed(['communityUserProgress', uid.communityOutsider], { xp: 12, communityIds: ['c1', 'other'] });
+    const ownerDb = db(uid.ownerCommunity);
+    const copies = await assertSucceeds(getDocs(query(
+      collectionGroup(ownerDb, 'communities'),
+      where('communityId', '==', 'c1'),
+      where('ownerId', '==', uid.ownerCommunity),
+    )));
+    const orphan = copies.docs.find((entry) => entry.ref.path === `users/${uid.communityOutsider}/communities/c1`);
+    assert.ok(orphan);
+    const batch = writeBatch(ownerDb);
+    batch.delete(orphan.ref);
+    batch.set(doc(ownerDb, 'communityUserProgress', uid.communityOutsider), {
+      communityIds: ['other'],
+      membershipProjectionCommunityId: 'c1',
+      membershipProjectionAction: 'delete',
+      membershipProjectionUpdatedAt: serverTimestamp(),
+    }, { merge: true });
+    await assertSucceeds(batch.commit());
   });
   test('full current Community pipeline deletes all data and preserves unrelated Community', async () => {
     await seed(['communities', 'c1', 'messages', 'message1'], { messageId: 'message1', communityId: 'c1', senderId: uid.memberCommunity, senderName: uid.memberCommunity, text: 'Message', createdAt: ts() });
