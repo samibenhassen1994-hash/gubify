@@ -11,6 +11,8 @@ class MyGubsService {
 
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
+  bool get isCurrentUserAnonymous => _auth.currentUser?.isAnonymous ?? false;
+
   Stream<List<Map<String, dynamic>>> privateGubsStream() {
     final user = _auth.currentUser;
     if (user == null) {
