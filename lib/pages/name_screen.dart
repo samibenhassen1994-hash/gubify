@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../modules/legal/legal_links.dart';
-import '../screens/welcome_screen.dart';
+import '../screens/main_navigation_shell.dart';
 import '../services/auth_service.dart';
 import '../widgets/startup_artwork_background.dart';
 
@@ -12,6 +12,7 @@ class NameScreen extends StatefulWidget {
   final AuthService? authService;
   final Future<void> Function()? onBackToSignIn;
   final LegalUrlLauncher? legalUrlLauncher;
+  final WidgetBuilder? authenticatedAppBuilder;
 
   const NameScreen({
     super.key,
@@ -19,6 +20,7 @@ class NameScreen extends StatefulWidget {
     this.authService,
     this.onBackToSignIn,
     this.legalUrlLauncher,
+    this.authenticatedAppBuilder,
   });
 
   @override
@@ -318,7 +320,15 @@ class _NameScreenState extends State<NameScreen> {
                                     Navigator.pushReplacement(
                                       context,
                                       MaterialPageRoute(
-                                        builder: (_) => const WelcomeScreen(),
+                                        builder: (context) =>
+                                            widget.authenticatedAppBuilder
+                                                ?.call(context) ??
+                                            MainNavigationShell(
+                                              userId:
+                                                  _authService.currentUserId!,
+                                              isAnonymous: _authService
+                                                  .isCurrentUserAnonymous,
+                                            ),
                                       ),
                                     );
                                     WidgetsBinding.instance

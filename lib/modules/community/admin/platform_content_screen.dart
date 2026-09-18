@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../widgets/gubify_swipe_back.dart';
+
 import 'platform_admin_gate.dart';
 import 'platform_admin_service.dart';
 import 'platform_moderation_model.dart';
@@ -90,7 +92,8 @@ class _PlatformContentScreenState extends State<PlatformContentScreen> {
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
+  Widget build(BuildContext context) => GubifySwipeBack(
+    child: Scaffold(
     appBar: AppBar(
       title: Text(switch (widget.kind) {
         PlatformContentKind.messages => 'Chat moderation',
@@ -171,6 +174,7 @@ class _PlatformContentScreenState extends State<PlatformContentScreen> {
           ],
         );
       },
+    ),
     ),
   );
 }

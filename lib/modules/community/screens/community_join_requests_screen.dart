@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../widgets/gub_content_card.dart';
 import '../../../widgets/gub_screen_background.dart';
+import '../../../widgets/gubify_swipe_back.dart';
 import '../models/community_access_request_model.dart';
 import '../models/community_model.dart';
 import '../services/community_service.dart';
@@ -109,7 +110,8 @@ class _CommunityJoinRequestsScreenState
 
   @override
   Widget build(BuildContext context) {
-    return GubScreenBackground(
+    return GubifySwipeBack(
+      child: GubScreenBackground(
       variant: GubBackgroundAssignments.profiles,
       child: Scaffold(
         backgroundColor: Colors.transparent,
@@ -210,6 +212,7 @@ class _CommunityJoinRequestsScreenState
                   },
                 ),
         ),
+      ),
       ),
     );
   }

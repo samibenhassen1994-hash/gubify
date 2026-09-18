@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../widgets/gub_screen_background.dart';
+import '../../../widgets/gubify_swipe_back.dart';
 import '../../chat/widgets/chat_user_avatar.dart';
 import '../../community/moderation/services/community_moderation_service.dart';
 import '../../community/moderation/widgets/community_report_dialog.dart';
@@ -14,6 +15,7 @@ import '../../community/widgets/community_user_xp_scope.dart';
 import '../../moderation/blocking/services/user_block_service.dart';
 import '../../moderation/gub_reporting/services/gub_user_moderation_service.dart';
 import '../models/user_profile_model.dart';
+import '../widgets/community_progress_summary.dart';
 import '../services/user_profile_service.dart';
 import 'user_activity_screen.dart';
 
@@ -145,7 +147,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return GubScreenBackground(
+    final content = GubScreenBackground(
       variant: GubBackgroundAssignments.profiles,
       child: Scaffold(
         backgroundColor: Colors.transparent,
@@ -256,6 +258,9 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         ),
       ),
     );
+    return widget.communityId == null
+        ? content
+        : GubifySwipeBack(child: content);
   }
 }
 
@@ -335,7 +340,7 @@ class _ProfileHeader extends StatelessWidget {
                 ],
                 if (communityXp != null) ...[
                   const SizedBox(height: 18),
-                  _CommunityLevelCard(
+                  CommunityProgressSummary(
                     level: CommunityLevel.fromXp(communityXp!),
                   ),
                 ],
@@ -379,88 +384,6 @@ class _ProfileHeader extends StatelessWidget {
                 ],
               ),
             ),
-        ],
-      ),
-    );
-  }
-}
-
-class _CommunityLevelCard extends StatelessWidget {
-  const _CommunityLevelCard({required this.level});
-
-  final CommunityLevel level;
-
-  @override
-  Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
-    final colorScheme = Theme.of(context).colorScheme;
-    final barText = level.isMaxLevel
-        ? '${CommunityLevel.maxXp}+ XP'
-        : '${level.xpWithinCurrentLevel} / '
-              '${level.xpRequiredForNextLevel} XP';
-    final detail = level.isMaxLevel
-        ? 'Max level'
-        : '${level.percentage}% to Level ${level.nextLevel}';
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.8),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Column(
-        children: [
-          Text(
-            'Level ${level.level}',
-            style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-          ),
-          if (level.recognition != null) ...[
-            const SizedBox(height: 3),
-            Text(
-              level.recognition!,
-              style: textTheme.bodyMedium?.copyWith(color: Colors.black54),
-            ),
-          ],
-          const SizedBox(height: 10),
-          const SizedBox(height: 12),
-          SizedBox(
-            height: 32,
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: colorScheme.primaryContainer,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: colorScheme.primary),
-                  ),
-                  child: const SizedBox.expand(),
-                ),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: FractionallySizedBox(
-                    widthFactor: level.progress,
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: colorScheme.primary,
-                        borderRadius: BorderRadius.circular(11),
-                      ),
-                      child: const SizedBox.expand(),
-                    ),
-                  ),
-                ),
-                Text(
-                  barText,
-                  style: textTheme.labelLarge?.copyWith(
-                    color: colorScheme.onPrimary,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 8),
-          Center(child: Text(detail, style: textTheme.bodySmall)),
         ],
       ),
     );

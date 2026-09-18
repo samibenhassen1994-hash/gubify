@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../widgets/gub_screen_background.dart';
+import '../../../widgets/gubify_swipe_back.dart';
 import '../models/community_ask_model.dart';
 import '../moderation/services/community_moderation_service.dart';
 import '../moderation/widgets/community_report_dialog.dart';
@@ -71,7 +72,8 @@ class _CommunityAsksScreenState extends State<CommunityAsksScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return GubScreenBackground(
+    return GubifySwipeBack(
+      child: GubScreenBackground(
       variant: GubBackgroundAssignments.board,
       child: Scaffold(
         backgroundColor: Colors.transparent,
@@ -166,6 +168,7 @@ class _CommunityAsksScreenState extends State<CommunityAsksScreen> {
             ],
           ),
         ),
+      ),
       ),
     );
   }

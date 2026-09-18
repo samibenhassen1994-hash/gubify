@@ -26,6 +26,9 @@ class UserHeader extends StatefulWidget {
   final bool darkCard;
   final double? bottomPadding;
   final VoidCallback? onExploreCommunities;
+  final VoidCallback? onOpenPersonalProfile;
+  final String? currentUserIdOverride;
+  final Future<Map<String, dynamic>?>? userFutureOverride;
 
   const UserHeader({
     super.key,
@@ -36,6 +39,9 @@ class UserHeader extends StatefulWidget {
     this.darkCard = false,
     this.bottomPadding,
     this.onExploreCommunities,
+    this.onOpenPersonalProfile,
+    this.currentUserIdOverride,
+    this.userFutureOverride,
   }) : assert(!darkCard || showCard, "darkCard requires showCard.");
 
   @override
@@ -55,18 +61,22 @@ class _UserHeaderState extends State<UserHeader> {
   @override
   void didUpdateWidget(covariant UserHeader oldWidget) {
     super.didUpdateWidget(oldWidget);
-    final currentUserId = FirebaseAuth.instance.currentUser?.uid;
+    final currentUserId =
+        widget.currentUserIdOverride ?? FirebaseAuth.instance.currentUser?.uid;
     if (currentUserId != _userId) {
       _loadCurrentUser();
     }
   }
 
   void _loadCurrentUser() {
-    final currentUserId = FirebaseAuth.instance.currentUser?.uid;
+    final currentUserId =
+        widget.currentUserIdOverride ?? FirebaseAuth.instance.currentUser?.uid;
     _userId = currentUserId;
-    _userFuture = currentUserId == null
-        ? Future.value(null)
-        : UserRepository.instance.getUser(currentUserId);
+    _userFuture =
+        widget.userFutureOverride ??
+        (currentUserId == null
+            ? Future.value(null)
+            : UserRepository.instance.getUser(currentUserId));
   }
 
   Future<void> _openSettings() async {
@@ -92,8 +102,9 @@ class _UserHeaderState extends State<UserHeader> {
 
   @override
   Widget build(BuildContext context) {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null || user.uid != _userId) {
+    final currentUserId =
+        widget.currentUserIdOverride ?? FirebaseAuth.instance.currentUser?.uid;
+    if (currentUserId == null || currentUserId != _userId) {
       return _buildPlaceholder();
     }
 
@@ -128,10 +139,11 @@ class _UserHeaderState extends State<UserHeader> {
           children: [
             _CurrentUserAvatar(
               gubId: widget.gubId,
-              userId: user.uid,
+              userId: currentUserId,
               displayName: displayName,
               photoUrl: widget.darkCard ? null : photoUrl,
               personalProfileEnabled: widget.personalProfileEnabled,
+              onOpenPersonalProfile: widget.onOpenPersonalProfile,
               backgroundColor: widget.darkCard ? const Color(0xFF2563EB) : null,
             ),
 
@@ -481,6 +493,7 @@ class _CurrentUserAvatar extends StatefulWidget {
   final String? photoUrl;
   final bool personalProfileEnabled;
   final Color? backgroundColor;
+  final VoidCallback? onOpenPersonalProfile;
 
   const _CurrentUserAvatar({
     required this.gubId,
@@ -489,6 +502,7 @@ class _CurrentUserAvatar extends StatefulWidget {
     this.displayName,
     this.photoUrl,
     this.backgroundColor,
+    this.onOpenPersonalProfile,
   });
 
   @override
@@ -507,6 +521,10 @@ class _CurrentUserAvatarState extends State<_CurrentUserAvatar> {
 
     setState(() => _isOpeningProfile = true);
     try {
+      if (gubId == null && widget.onOpenPersonalProfile != null) {
+        widget.onOpenPersonalProfile!();
+        return;
+      }
       await Navigator.of(context).push(
         MaterialPageRoute(
           builder: (_) => gubId == null

@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -6,7 +8,6 @@ import '../repositories/user_repository.dart';
 import '../modules/community/screens/community_explorer_screen.dart';
 import '../widgets/gubify_background.dart';
 import '../widgets/gubify_logo.dart';
-import '../widgets/primary_button.dart';
 import '../widgets/user_header.dart';
 import 'gub/create_gub_screen.dart';
 import 'gub/join_gub_screen.dart';
@@ -17,10 +18,22 @@ class WelcomeScreen extends StatefulWidget {
     super.key,
     this.headerOverride,
     this.greetingOverride,
+    this.onExploreCommunities,
+    this.onOpenPersonalProfile,
+    this.onCreateGub,
+    this.onOpenMyGubs,
+    this.onOpenJoinGub,
+    this.compactForBottomNavigation = false,
   });
 
   final Widget? headerOverride;
   final Widget? greetingOverride;
+  final VoidCallback? onExploreCommunities;
+  final VoidCallback? onOpenPersonalProfile;
+  final VoidCallback? onCreateGub;
+  final VoidCallback? onOpenMyGubs;
+  final VoidCallback? onOpenJoinGub;
+  final bool compactForBottomNavigation;
 
   @override
   State<WelcomeScreen> createState() => _WelcomeScreenState();
@@ -57,6 +70,11 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   }
 
   void _goToCreateGub() {
+    final onCreateGub = widget.onCreateGub;
+    if (onCreateGub != null) {
+      onCreateGub();
+      return;
+    }
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => const CreateGubScreen()),
@@ -64,6 +82,11 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   }
 
   void _goToMyGubs() {
+    final onOpenMyGubs = widget.onOpenMyGubs;
+    if (onOpenMyGubs != null) {
+      onOpenMyGubs();
+      return;
+    }
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => const MyGubsScreen()),
@@ -71,6 +94,11 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   }
 
   void _goToJoinGub() {
+    final onOpenJoinGub = widget.onOpenJoinGub;
+    if (onOpenJoinGub != null) {
+      onOpenJoinGub();
+      return;
+    }
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => const JoinGubScreen()),
@@ -78,6 +106,11 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   }
 
   void _goToCommunityExplorer() {
+    final onExploreCommunities = widget.onExploreCommunities;
+    if (onExploreCommunities != null) {
+      onExploreCommunities();
+      return;
+    }
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => const CommunityExplorerScreen()),
@@ -92,6 +125,8 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
           builder: (context, constraints) {
             final compact = constraints.maxHeight < 560;
             final veryCompact = constraints.maxHeight < 480;
+            final compactActionHeight =
+                veryCompact && widget.compactForBottomNavigation ? 30.0 : 44.0;
             final compactLogoSize = (constraints.maxHeight *
                     (veryCompact ? 0.06 : 0.105))
                 .clamp(veryCompact ? 22.0 : 40.0, veryCompact ? 32.0 : 52.0)
@@ -108,6 +143,8 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                             darkCard: !compact,
                         bottomPadding: compact ? (veryCompact ? 0 : 4) : null,
                             onExploreCommunities: _goToCommunityExplorer,
+                            onOpenPersonalProfile:
+                                widget.onOpenPersonalProfile,
                           ),
 
                       if (compact)
@@ -126,11 +163,20 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                           ),
                         )
                       else
-                        Expanded(
-                          flex: 5,
-                          child: Center(
-                            child: _buildLogo(glowSize: 190, logoWidth: 260),
-                          ),
+                        Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            SizedBox(
+                              height: 190,
+                              child: Center(
+                                child: _buildLogo(
+                                  glowSize: 190,
+                                  logoWidth: 260,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 20),
+                          ],
                         ),
 
                       widget.greetingOverride ??
@@ -139,41 +185,22 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                             veryCompact: veryCompact,
                           ),
 
-                      SizedBox(height: veryCompact ? 0 : (compact ? 2 : 10)),
+              SizedBox(height: veryCompact ? 4 : (compact ? 8 : 16)),
 
-                      _CommunityExplorerPortal(
-                        onPressed: _goToCommunityExplorer,
-                        compact: compact,
-                        veryCompact: veryCompact,
-                      ),
-
-                      SizedBox(height: veryCompact ? 2 : (compact ? 4 : 14)),
-
-              Text(
-                'Create your Gub or join an existing one\nto collaborate with your group.',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: veryCompact ? 11 : (compact ? 12 : 15),
-                  height: veryCompact ? 1.1 : (compact ? 1.2 : 1.5),
-                  color: const Color(0xFFB5BCC9),
-                ),
-              ),
-
-              SizedBox(height: veryCompact ? 2 : (compact ? 6 : 20)),
-
-              PrimaryButton(
-                text: 'Create Gub',
+              _CreateGubGlassAction(
                 onPressed: _goToCreateGub,
-                height: compact ? 44 : 55,
+                size: veryCompact ? 48 : 52,
               ),
 
-              SizedBox(height: veryCompact ? 2 : (compact ? 4 : 12)),
+              SizedBox(height: veryCompact ? 4 : (compact ? 8 : 16)),
 
               _outlinedButton(
                 icon: Icons.home_work_outlined,
                 label: 'My Gubs',
                 onPressed: _goToMyGubs,
-                height: compact ? 44 : 54,
+                height: veryCompact
+                    ? compactActionHeight
+                    : (compact ? 44 : 54),
               ),
 
               SizedBox(height: veryCompact ? 2 : (compact ? 4 : 12)),
@@ -182,7 +209,9 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                 icon: Icons.group_outlined,
                 label: 'Join a Gub',
                 onPressed: _goToJoinGub,
-                height: compact ? 44 : 54,
+                height: veryCompact
+                    ? compactActionHeight
+                    : (compact ? 44 : 54),
               ),
 
               SizedBox(height: veryCompact ? 0 : (compact ? 2 : 4)),
@@ -195,7 +224,12 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                     onPressed: _openWebsite,
                     style: compact
                         ? TextButton.styleFrom(
-                            minimumSize: const Size(0, 40),
+                            minimumSize: Size(
+                              0,
+                              veryCompact && widget.compactForBottomNavigation
+                                  ? 24
+                                  : 40,
+                            ),
                             padding: EdgeInsets.symmetric(
                               horizontal: veryCompact ? 2 : 4,
                             ),
@@ -221,7 +255,12 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                     onPressed: _openSupport,
                     style: compact
                         ? TextButton.styleFrom(
-                            minimumSize: const Size(0, 40),
+                            minimumSize: Size(
+                              0,
+                              veryCompact && widget.compactForBottomNavigation
+                                  ? 24
+                                  : 40,
+                            ),
                             padding: EdgeInsets.symmetric(
                               horizontal: veryCompact ? 2 : 4,
                             ),
@@ -353,121 +392,68 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   }
 }
 
-class _CommunityExplorerPortal extends StatelessWidget {
+class _CreateGubGlassAction extends StatelessWidget {
   final VoidCallback onPressed;
-  final bool compact;
-  final bool veryCompact;
+  final double size;
 
-  const _CommunityExplorerPortal({
+  const _CreateGubGlassAction({
     required this.onPressed,
-    this.compact = false,
-    this.veryCompact = false,
+    required this.size,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Semantics(
-      button: true,
-      label: 'Explore communities',
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(20),
-        child: Ink(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [
-                const Color(0xFF2563EB).withValues(alpha: 0.42),
-                const Color(0xFF06B6D4).withValues(alpha: 0.24),
+    return Tooltip(
+      message: 'Create Gub',
+      child: Semantics(
+        button: true,
+        label: 'Create Gub',
+        child: SizedBox(
+          width: size,
+          height: size,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF0F172A).withValues(alpha: 0.18),
+                  blurRadius: 16,
+                  offset: const Offset(0, 5),
+                ),
               ],
             ),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.22)),
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xFF0F172A).withValues(alpha: 0.22),
-                blurRadius: 16,
-                offset: const Offset(0, 6),
-              ),
-            ],
-          ),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(20),
-            onTap: onPressed,
-            child: Padding(
-              padding: EdgeInsets.symmetric(
-                horizontal: veryCompact ? 12 : (compact ? 14 : 16),
-                vertical: veryCompact ? 2 : (compact ? 5 : 13),
-              ),
-              child: Row(
-                children: [
-                  _CommunityPortalIcon(
-                    size: veryCompact ? 28 : (compact ? 34 : 42),
-                  ),
-                  SizedBox(width: veryCompact ? 8 : (compact ? 10 : 13)),
-                  Expanded(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Explore Communities',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: veryCompact ? 14 : (compact ? 15 : 16),
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        SizedBox(height: veryCompact ? 1 : (compact ? 2 : 3)),
-                        Text(
-                          'Discover public Gubs by interests, language and people.',
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: Color(0xFFDCEBFF),
-                            fontSize: veryCompact ? 10 : (compact ? 11 : 12),
-                            height: veryCompact ? 1 : (compact ? 1.15 : 1.25),
-                          ),
-                        ),
-                      ],
+            child: ClipOval(
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.14),
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.24),
                     ),
                   ),
-                  SizedBox(width: veryCompact ? 4 : (compact ? 6 : 8)),
-                  Icon(Icons.arrow_forward_rounded, color: Colors.white),
-                ],
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      key: const Key('welcome-create-gub-glass-action'),
+                      customBorder: const CircleBorder(),
+                      onTap: onPressed,
+                      child: const Center(
+                        child: Icon(
+                          Icons.add_rounded,
+                          color: Colors.white,
+                          size: 30,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
               ),
             ),
           ),
         ),
       ),
-    );
-  }
-}
-
-class _CommunityPortalIcon extends StatelessWidget {
-  const _CommunityPortalIcon({required this.size});
-
-  final double size;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        color: const Color(0xFF93C5FD).withValues(alpha: 0.24),
-        shape: BoxShape.circle,
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF60A5FA).withValues(alpha: 0.36),
-            blurRadius: 14,
-          ),
-        ],
-      ),
-        child: Icon(
-          Icons.public_rounded,
-          color: Colors.white,
-          size: size * 0.57,
-        ),
     );
   }
 }

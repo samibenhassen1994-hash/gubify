@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../widgets/gubify_swipe_back.dart';
+
 import '../../profile/screens/user_profile_screen.dart';
 import '../leveling/community_level.dart';
 import '../models/community_leaderboard_model.dart';
@@ -61,9 +63,10 @@ class _CommunityLeaderboardScreenState
 
   @override
   Widget build(BuildContext context) {
-    return DefaultTabController(
-      length: 2,
-      child: Stack(
+    return GubifySwipeBack(
+      child: DefaultTabController(
+        length: 2,
+        child: Stack(
         children: [
           Positioned.fill(
             child: Image.asset(
@@ -110,6 +113,7 @@ class _CommunityLeaderboardScreenState
             ),
           ),
         ],
+        ),
       ),
     );
   }

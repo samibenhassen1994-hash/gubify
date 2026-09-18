@@ -9,11 +9,22 @@ import '../../community/models/community_model.dart';
 import '../../community/screens/gub_community_home_screen.dart';
 import '../../community/widgets/community_membership_card.dart';
 import '../../community/widgets/community_linked_account_gate.dart';
+import '../../community/widgets/community_user_xp_scope.dart';
+import '../../community/services/community_user_xp_cache.dart';
+import '../../community/leveling/community_level.dart';
 import '../models/user_profile_model.dart';
 import '../services/user_profile_service.dart';
 import '../widgets/google_account_connection_section.dart';
+import '../widgets/community_progress_summary.dart';
 import 'user_profile_screen.dart';
 import '../../../services/auth_service.dart';
+
+typedef PersonalCommunityHomeBuilder =
+    Widget Function(
+      BuildContext context,
+      String communityId,
+      VoidCallback? onExitToMyGubs,
+    );
 
 class PersonalProfileScreen extends StatefulWidget {
   final String userId;
@@ -22,6 +33,12 @@ class PersonalProfileScreen extends StatefulWidget {
   final Stream<List<PersonalGubModel>>? gubsStream;
   final Stream<List<CommunityMembershipModel>>? communitiesStream;
   final Widget? accountConnectionSection;
+  final bool showCommunityProgress;
+  final CommunityUserXpCache? communityUserXpCache;
+  final double additionalBottomScrollPadding;
+  final VoidCallback? onExitToMyGubs;
+  final PersonalCommunityHomeBuilder? communityHomeBuilder;
+  final CommunityLinkedAccountGate? communityLinkedAccountGate;
 
   const PersonalProfileScreen({
     super.key,
@@ -31,6 +48,12 @@ class PersonalProfileScreen extends StatefulWidget {
     this.gubsStream,
     this.communitiesStream,
     this.accountConnectionSection,
+    this.showCommunityProgress = false,
+    this.communityUserXpCache,
+    this.additionalBottomScrollPadding = 0,
+    this.onExitToMyGubs,
+    this.communityHomeBuilder,
+    this.communityLinkedAccountGate,
   });
 
   @override
@@ -115,11 +138,14 @@ class _PersonalProfileScreenState extends State<PersonalProfileScreen> {
                     stream: _communitiesStream,
                     builder: (context, communitiesSnapshot) {
                       return ListView(
-                        padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
+                        padding: EdgeInsets.fromLTRB(
+                          20,
+                          24,
+                          20,
+                          32 + widget.additionalBottomScrollPadding,
+                        ),
                         children: [
-                          _PersonalProfileHeader(
-                            profile: profileSnapshot.data!,
-                          ),
+                          _buildProfileHeader(profileSnapshot.data!),
                           const SizedBox(height: 20),
                           widget.accountConnectionSection ??
                               GoogleAccountConnectionSection(
@@ -148,6 +174,27 @@ class _PersonalProfileScreenState extends State<PersonalProfileScreen> {
             },
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildProfileHeader(UserProfileModel profile) {
+    if (!widget.showCommunityProgress) {
+      return _PersonalProfileHeader(profile: profile);
+    }
+    return CommunityUserXpScope(
+      cache: widget.communityUserXpCache,
+      userIds: {widget.userId},
+      builder: (context, xpByUserId) => Column(
+        children: [
+          _PersonalProfileHeader(profile: profile),
+          const SizedBox(height: 20),
+          CommunityProgressSummary(
+            level: CommunityLevel.fromXp(xpByUserId[widget.userId]),
+            showTitle: true,
+            showTotalXp: true,
+          ),
+        ],
       ),
     );
   }
@@ -237,13 +284,23 @@ class _PersonalProfileScreenState extends State<PersonalProfileScreen> {
   }
 
   Future<void> _openCommunity(CommunityMembershipModel membership) async {
-    if (!await showCommunityLinkedAccountGate(context) || !mounted) return;
+    final canOpen =
+        await (widget.communityLinkedAccountGate?.call(context) ??
+            showCommunityLinkedAccountGate(context));
+    if (!canOpen || !mounted) return;
     await Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => GubCommunityHomeScreen(
-          communityId: membership.community.communityId,
-          initialCommunity: membership.community,
-        ),
+        builder: (context) =>
+            widget.communityHomeBuilder?.call(
+              context,
+              membership.community.communityId,
+              widget.onExitToMyGubs,
+            ) ??
+            GubCommunityHomeScreen(
+              communityId: membership.community.communityId,
+              initialCommunity: membership.community,
+              onExitToMyGubs: widget.onExitToMyGubs,
+            ),
       ),
     );
   }

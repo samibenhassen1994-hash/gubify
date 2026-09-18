@@ -10,6 +10,7 @@ import 'package:gubify/modules/community/repositories/community_ask_answer_repos
 import 'package:gubify/modules/community/services/community_ask_answer_service.dart';
 import 'package:gubify/modules/community/services/community_ask_service.dart';
 import 'package:gubify/modules/community/services/community_user_xp_cache.dart';
+import 'package:gubify/widgets/gubify_swipe_back.dart';
 
 final _xpCache = CommunityUserXpCache(loadXp: (_) async => const {});
 
@@ -90,6 +91,13 @@ Widget _details({
 }
 
 void main() {
+  testWidgets('Ask details exposes reusable edge swipe back', (tester) async {
+    await tester.pumpWidget(_details());
+    await tester.pumpAndSettle();
+
+    expect(find.byType(GubifySwipeBack), findsOneWidget);
+  });
+
   testWidgets('long press reports another Answer but not own content', (
     tester,
   ) async {

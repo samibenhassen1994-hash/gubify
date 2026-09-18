@@ -8,6 +8,7 @@ class GubPageHeader extends StatelessWidget {
   final String? gubId;
   final bool personalProfileEnabled;
   final bool userHeaderInCard;
+  final VoidCallback? onBack;
 
   const GubPageHeader({
     super.key,
@@ -15,6 +16,7 @@ class GubPageHeader extends StatelessWidget {
     this.gubId,
     this.personalProfileEnabled = false,
     this.userHeaderInCard = false,
+    this.onBack,
   });
 
   @override
@@ -33,6 +35,10 @@ class GubPageHeader extends StatelessWidget {
                   constraints: const BoxConstraints(),
                   splashRadius: 22,
                   onPressed: () {
+                    if (onBack != null) {
+                      onBack!();
+                      return;
+                    }
                     if (Navigator.canPop(context)) {
                       Navigator.pop(context);
                     } else {

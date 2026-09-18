@@ -176,6 +176,27 @@ void main() {
     expect(auth.deleteCalls, 0);
   });
 
+  test('retry resumes cleanup before deleting the Firebase Auth user', () async {
+    final repository = _Repository()..failMembershipDiscovery = true;
+    final auth = _AuthService()..anonymous = true;
+    final service = _service(auth, repository);
+
+    expect(
+      (await service.deleteAccount()).status,
+      AccountDeletionStatus.cleanupFailed,
+    );
+    expect(auth.deleteCalls, 0);
+
+    repository.failMembershipDiscovery = false;
+    expect((await service.deleteAccount()).isSuccess, isTrue);
+    expect(auth.deleteCalls, 1);
+    expect(
+      repository.events.where((event) => event == 'begin-deletion-state'),
+      hasLength(2),
+    );
+    expect(repository.profileDeleted, isTrue);
+  });
+
   test('missing membership is harmless and stale copy is removed', () async {
     final repository = _Repository()..privateIds = ['gone'];
     final auth = _AuthService();

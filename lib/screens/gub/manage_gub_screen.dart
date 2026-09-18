@@ -7,12 +7,30 @@ import '../../widgets/banned_users_screen.dart';
 import '../../widgets/gub_content_card.dart';
 import '../../widgets/gub_screen_background.dart';
 import 'widgets/delete_gub_dialog.dart';
-import 'my_gubs_screen.dart';
+import 'gub_deletion_navigation.dart';
+
+typedef GubDeletionAccessLoader =
+    Future<GubDeletionAccess> Function(String gubId);
+typedef ManageGubDelete =
+    Future<void> Function({
+      required String gubId,
+      required String confirmedName,
+      required ValueChanged<String> onProgress,
+    });
 
 class ManageGubScreen extends StatefulWidget {
   final String gubId;
+  final VoidCallback? onExitToMyGubs;
+  final GubDeletionAccessLoader? accessLoader;
+  final ManageGubDelete? deleteGub;
 
-  const ManageGubScreen({super.key, required this.gubId});
+  const ManageGubScreen({
+    super.key,
+    required this.gubId,
+    this.onExitToMyGubs,
+    this.accessLoader,
+    this.deleteGub,
+  });
 
   @override
   State<ManageGubScreen> createState() => _ManageGubScreenState();
@@ -25,18 +43,23 @@ class _ManageGubScreenState extends State<ManageGubScreen> {
   @override
   void initState() {
     super.initState();
-    _accessFuture = GubDeletionService.instance.access(widget.gubId);
+    _accessFuture = (widget.accessLoader ?? GubDeletionService.instance.access)(
+      widget.gubId,
+    );
   }
 
   Future<void> _confirmDeletion(GubDeletionAccess access) async {
-    await GubChatOverlay.runWithChatOverlayHidden(() async {
-      await showDialog<bool>(
+    final deleted = await GubChatOverlay.runWithChatOverlayHidden(() async {
+      return showDialog<bool>(
         context: context,
         barrierDismissible: false,
         builder: (_) => DeleteGubDialog(
           gubName: access.gubName,
           onDelete: (confirmedName, onProgress) {
-            return GubDeletionService.instance.deleteGubCompletely(
+            final deleteGub =
+                widget.deleteGub ??
+                GubDeletionService.instance.deleteGubCompletely;
+            return deleteGub(
               gubId: widget.gubId,
               confirmedName: confirmedName,
               onProgress: onProgress,
@@ -45,6 +68,8 @@ class _ManageGubScreenState extends State<ManageGubScreen> {
         ),
       );
     });
+    if (!mounted || deleted != true) return;
+    navigateAfterGubExit(context, onExitToMyGubs: widget.onExitToMyGubs);
   }
 
   Future<void> _leaveGub() async {
@@ -73,10 +98,7 @@ class _ManageGubScreenState extends State<ManageGubScreen> {
     try {
       await MemberService.instance.leaveGub(gubId: widget.gubId);
       if (!mounted) return;
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const MyGubsScreen()),
-        (_) => false,
-      );
+      navigateAfterGubExit(context, onExitToMyGubs: widget.onExitToMyGubs);
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(

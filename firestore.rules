@@ -258,6 +258,26 @@ service cloud.firestore {
         || (getAfter(inviteTokenPath(code)).data.gubId == id
           && getAfter(inviteTokenPath(code)).data.active == false);
     }
+    function validLegacyGubInviteData(data) {
+      return !data.keys().hasAny(['inviteTokenId'])
+        && data.keys().hasAny(['inviteCode'])
+        && data.inviteCode is string
+        && data.inviteCode.matches('^.{1,3}-[0-9]{4}$');
+    }
+    function validGubDeletionInviteState(id) {
+      let data = resource.data;
+      return data.keys().hasAny(['inviteTokenId'])
+        ? inviteTokenRevokedAfter(id, data.inviteTokenId)
+        : validLegacyGubInviteData(data);
+    }
+    function validGubFinalDelete(id) {
+      let data = resource.data;
+      return gubDeletingOwner(id)
+        && (data.keys().hasAny(['inviteTokenId'])
+          ? !exists(inviteTokenPath(data.inviteTokenId))
+          : (validLegacyGubInviteData(data)
+            && data.get('deletionPhase', '') == 'finalizing'));
+    }
 
     function messagePath(id, messageId) { return /databases/$(database)/documents/gubs/$(id)/messages/$(messageId); }
     function taskPath(id, taskId) { return /databases/$(database)/documents/gubs/$(id)/tasks/$(taskId); }
@@ -986,7 +1006,7 @@ service cloud.firestore {
         && communityDeletingOwner(id)
         && !exists(communityMemberPath(id, uid))
         && !existsAfter(userCommunityPath(uid, id));
-      return linkedCommunityAccount()
+      return (linkedCommunityAccount() || deletingOwnAccount(uid))
         && validCommunityProgressSchema(after)
         && id is string && id.size() > 0
         && after.membershipProjectionAction in ['leave','ban','delete']
@@ -1856,7 +1876,7 @@ service cloud.firestore {
     }
 
     match /communityUserProgress/{uid} {
-      allow read: if linkedCommunityAccount();
+      allow read: if linkedCommunityAccount() || deletingOwnAccount(uid);
       allow create, update: if accountActive() && (validCommunityProgressReward(uid)
         || validCommunityProjectionJoin(uid)
         || validCommunityProjectionVersion(uid));
@@ -1876,7 +1896,8 @@ service cloud.firestore {
         && request.resource.data.accepted == true
         && request.resource.data.acceptedAt == request.time
         && request.resource.data.version == 1;
-      allow delete: if linkedCommunityAccount() && own(uid);
+      allow delete: if own(uid)
+        && (linkedCommunityAccount() || deletingOwnAccount(uid));
     }
 
     match /users/{uid} {
@@ -1915,9 +1936,10 @@ service cloud.firestore {
         allow delete: if own(uid) || gubDeletingOwner(id) || gubOwnerRemovingMember(id, uid);
       }
       match /communities/{id} {
-        allow read: if linkedCommunityAccount()
-          && (own(uid) || (isCommunityMember(id)
-            && exists(communityMemberPath(id, uid))));
+        allow read: if (own(uid)
+            && (linkedCommunityAccount() || accountDeletionStarted(uid)))
+          || (linkedCommunityAccount() && isCommunityMember(id)
+            && exists(communityMemberPath(id, uid)));
         allow create: if (accountActive() && linkedCommunityAccount() && own(uid) && (
             validCommunityMemberAndCopy(id, uid,
               communityAfter(id).data.ownerId == uid ? 'owner' : 'member')
@@ -1933,7 +1955,9 @@ service cloud.firestore {
           ))
           || (validCommunityApprovalSignal(id, uid)
             && validCommunityCopyData(request.resource.data, id, uid, 'member'));
-        allow delete: if (linkedCommunityAccount() && own(uid)) || communityDeletingOwner(id)
+        allow delete: if (own(uid)
+            && (linkedCommunityAccount() || accountDeletionStarted(uid)))
+          || communityDeletingOwner(id)
           || communityOwnerRemovingMember(id, uid);
       }
       match /blockedUsers/{blockedUid} {
@@ -2014,14 +2038,17 @@ service cloud.firestore {
                 || (request.auth.uid != resource.data.ownerId
                   && exists(gubMemberPath(id, request.auth.uid))
                   && !existsAfter(gubMemberPath(id, request.auth.uid)))))))
-        || (isGubOwner(id) && resource.data.get('deletionStatus','active') == 'active' && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+        || (request.resource.data.get('deletionStatus', 'active') == 'deleting'
+          && resource.data.get('deletionStatus','active') == 'active'
+          && isGubOwner(id)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'deletionStatus','deletionRequestedBy','deletionStartedAt','deletionUpdatedAt','deletionPhase'
-        ]) && request.resource.data.deletionStatus == 'deleting'
+        ])
           && request.resource.data.deletionRequestedBy == request.auth.uid
           && request.resource.data.deletionStartedAt == request.time
           && request.resource.data.deletionUpdatedAt == request.time
           && request.resource.data.deletionPhase == 'preparing'
-          && inviteTokenRevokedAfter(id, resource.data.inviteTokenId))
+          && validGubDeletionInviteState(id))
         || (gubDeletingOwner(id)
           && request.resource.data.deletionStatus == 'deleting'
           && request.resource.data.deletionRequestedBy == resource.data.deletionRequestedBy
@@ -2034,8 +2061,7 @@ service cloud.firestore {
           && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['deletionMemberIds'])
             || request.resource.data.deletionMemberIds is list))
       );
-      allow delete: if gubDeletingOwner(id)
-        && !exists(inviteTokenPath(resource.data.inviteTokenId));
+      allow delete: if validGubFinalDelete(id);
 
       match /members/{uid} {
         allow get: if own(uid) || isGubMember(id) || isGubOwner(id);
@@ -2324,6 +2350,10 @@ service cloud.firestore {
     match /communities/{id} {
       allow read: if isPlatformAdmin() || signedIn() && (resource.data.visibility == 'public'
         || resource.data.ownerId == request.auth.uid || isCommunityMember(id));
+      allow get: if deletingOwnAccount(request.auth.uid)
+        && exists(communityMemberPath(id, request.auth.uid))
+        && get(communityMemberPath(id, request.auth.uid)).data.uid
+          == request.auth.uid;
       allow create: if accountActive() && linkedCommunityAccount() && validCommunityRootCreate(id)
         && validCommunityMemberAndCopy(id, request.auth.uid, 'owner')
         && getAfter(ownershipPath(request.auth.uid)).data.communityId == id
@@ -2363,7 +2393,7 @@ service cloud.firestore {
       allow delete: if communityFinalizingDeletion(id);
       match /members/{uid} {
         allow get: if communityExists(id)
-          && ((linkedCommunityAccount() && own(uid))
+          && (((linkedCommunityAccount() || deletingOwnAccount(uid)) && own(uid))
             || isCommunityMember(id) || canModerateCommunity(id));
         allow list: if communityExists(id)
           && (isCommunityMember(id) || canModerateCommunity(id));
@@ -2387,6 +2417,11 @@ service cloud.firestore {
             && communityProjectionAbsent(id, uid)
             && communityAfter(id).data.memberCount == communityDoc(id).data.memberCount - 1)
           || (linkedCommunityAccount() && own(uid) && uid != communityDoc(id).data.ownerId
+            && communityActive(id)
+            && communityProjectionAbsent(id, uid)
+            && communityAfter(id).data.memberCount == communityDoc(id).data.memberCount - 1)
+          || (deletingOwnAccount(uid) && own(uid)
+            && uid != communityDoc(id).data.ownerId
             && communityActive(id)
             && communityProjectionAbsent(id, uid)
             && communityAfter(id).data.memberCount == communityDoc(id).data.memberCount - 1);
@@ -2613,6 +2648,9 @@ service cloud.firestore {
               && currentCommunityGuidelinesAccepted(uid))
             || (deletingOwnAccount(uid)
               && resource.data.status in ['approved','rejected'])))
+          || (deletingOwnAccount(uid)
+            && resource.data.userId == uid
+            && resource.data.status in ['pending','approved','rejected'])
           || communityDeletingOwner(id);
       }
       match /membershipMutations/{mutationId} {

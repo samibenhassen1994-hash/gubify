@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../widgets/gub_content_card.dart';
 import '../../../widgets/gub_screen_background.dart';
+import '../../../widgets/gubify_swipe_back.dart';
 import '../models/community_access_request_model.dart';
 import '../models/community_model.dart';
 import '../images/community_image_view.dart';
@@ -21,6 +22,7 @@ class CommunityPublicDetailsScreen extends StatefulWidget {
   final CommunityGuidelinesPreAction? guidelinesPreAction;
   final Future<CommunityModel> Function(String communityId)? joinCommunity;
   final Widget Function(String communityId)? communityHomeBuilder;
+  final VoidCallback? onExitToMyGubs;
 
   const CommunityPublicDetailsScreen({
     super.key,
@@ -31,6 +33,7 @@ class CommunityPublicDetailsScreen extends StatefulWidget {
     this.guidelinesPreAction,
     this.joinCommunity,
     this.communityHomeBuilder,
+    this.onExitToMyGubs,
   });
 
   @override
@@ -105,7 +108,10 @@ class _CommunityPublicDetailsScreenState
         MaterialPageRoute(
           builder: (_) =>
               widget.communityHomeBuilder?.call(community.communityId) ??
-              GubCommunityHomeScreen(communityId: community.communityId),
+              GubCommunityHomeScreen(
+                communityId: community.communityId,
+                onExitToMyGubs: widget.onExitToMyGubs,
+              ),
         ),
       );
     } catch (error) {
@@ -131,14 +137,18 @@ class _CommunityPublicDetailsScreenState
       MaterialPageRoute(
         builder: (_) =>
             widget.communityHomeBuilder?.call(widget.communityId) ??
-            GubCommunityHomeScreen(communityId: widget.communityId),
+            GubCommunityHomeScreen(
+              communityId: widget.communityId,
+              onExitToMyGubs: widget.onExitToMyGubs,
+            ),
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    return GubScreenBackground(
+    return GubifySwipeBack(
+      child: GubScreenBackground(
       variant: GubBackgroundAssignments.profiles,
       child: Scaffold(
         backgroundColor: Colors.transparent,
@@ -185,6 +195,7 @@ class _CommunityPublicDetailsScreenState
             },
           ),
         ),
+      ),
       ),
     );
   }

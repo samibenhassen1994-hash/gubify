@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../widgets/gubify_swipe_back.dart';
+
 import '../../../../widgets/banned_users_screen.dart';
 import '../models/community_model.dart';
 import '../screens/community_members_screen.dart';
@@ -25,7 +27,8 @@ class PlatformCommunityScreen extends StatelessWidget {
         ),
       );
   @override
-  Widget build(BuildContext context) => Scaffold(
+  Widget build(BuildContext context) => GubifySwipeBack(
+    child: Scaffold(
     appBar: AppBar(title: Text(community.name)),
     body: ListView(
       children: [
@@ -91,6 +94,7 @@ class PlatformCommunityScreen extends StatelessWidget {
             ),
           ),
       ],
+    ),
     ),
   );
 }

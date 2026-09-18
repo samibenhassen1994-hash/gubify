@@ -8,8 +8,34 @@ import 'package:gubify/modules/community/screens/community_settings_screen.dart'
 import 'package:gubify/modules/community/services/community_user_xp_cache.dart';
 import 'package:gubify/modules/profile/models/user_profile_model.dart';
 import 'package:gubify/modules/profile/screens/user_profile_screen.dart';
+import 'package:gubify/widgets/gubify_swipe_back.dart';
 
 void main() {
+  testWidgets('shell-managed Community exit reuses the shell callback', (
+    tester,
+  ) async {
+    var exits = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => FilledButton(
+            onPressed: () => navigateAfterCommunityExit(
+              context,
+              onExitToMyGubs: () => exits += 1,
+            ),
+            child: const Text('Complete Community exit'),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Complete Community exit'));
+    await tester.pump();
+
+    expect(exits, 1);
+    expect(find.text('Complete Community exit'), findsOneWidget);
+  });
+
   testWidgets(
     'keeps Community details and opens the current user Community profile',
     (tester) async {
@@ -42,6 +68,7 @@ void main() {
       expect(find.text('Study Circle'), findsOneWidget);
       expect(find.text('Community role: Owner'), findsOneWidget);
       expect(find.byType(ChatUserAvatar), findsOneWidget);
+      expect(find.byType(GubifySwipeBack), findsOneWidget);
 
       await tester.tap(
         find.byKey(const ValueKey('community-settings-current-user-profile')),
@@ -52,6 +79,61 @@ void main() {
       expect(find.text('Block User'), findsNothing);
     },
   );
+
+  testWidgets('nested Community routes edge-swipe one level at a time', (
+    tester,
+  ) async {
+    Widget settings() => CommunitySettingsScreen(
+      community: _community,
+      isOwner: false,
+      currentUserId: 'current-user',
+      currentUserRoleFuture: Future.value('owner'),
+      currentUserProfileFuture: Future.value(
+        const UserProfileModel(
+          userId: 'current-user',
+          displayName: 'Sami',
+          photoUrl: null,
+          isCurrentUser: true,
+        ),
+      ),
+      communityUserXpCache: CommunityUserXpCache(
+        loadXp: (_) async => const <String, int>{},
+      ),
+      selfProfileActiveAsksStream: Stream.value(const <CommunityAskModel>[]),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => FilledButton(
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(builder: (_) => settings()),
+            ),
+            child: const Text('Open settings'),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('Open settings'));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('community-settings-current-user-profile')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(UserProfileScreen), findsOneWidget);
+
+    var gesture = await tester.startGesture(const Offset(10, 300));
+    await gesture.moveBy(const Offset(90, 0));
+    await gesture.up();
+    await tester.pumpAndSettle();
+    expect(find.text('Community Settings'), findsOneWidget);
+
+    gesture = await tester.startGesture(const Offset(10, 300));
+    await gesture.moveBy(const Offset(90, 0));
+    await gesture.up();
+    await tester.pumpAndSettle();
+    expect(find.text('Open settings'), findsOneWidget);
+  });
 }
 
 final _community = CommunityModel(

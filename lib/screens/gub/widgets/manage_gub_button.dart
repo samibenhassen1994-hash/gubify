@@ -4,8 +4,13 @@ import '../manage_gub_screen.dart';
 
 class ManageGubButton extends StatelessWidget {
   final String gubId;
+  final VoidCallback? onExitToMyGubs;
 
-  const ManageGubButton({super.key, required this.gubId});
+  const ManageGubButton({
+    super.key,
+    required this.gubId,
+    this.onExitToMyGubs,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -28,7 +33,12 @@ class ManageGubButton extends StatelessWidget {
         onPressed: () {
           Navigator.push(
             context,
-            MaterialPageRoute(builder: (_) => ManageGubScreen(gubId: gubId)),
+            MaterialPageRoute(
+              builder: (_) => ManageGubScreen(
+                gubId: gubId,
+                onExitToMyGubs: onExitToMyGubs,
+              ),
+            ),
           );
         },
       ),

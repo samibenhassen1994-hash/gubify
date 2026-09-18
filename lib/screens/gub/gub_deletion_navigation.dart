@@ -19,10 +19,13 @@ GubDeletionRouteAction resolveGubDeletionRouteAction({
 
 class GubDeletionNavigationController {
   final WidgetBuilder _destinationBuilder;
+  final VoidCallback? onExitToMyGubs;
   bool _navigationScheduled = false;
 
-  GubDeletionNavigationController({WidgetBuilder? destinationBuilder})
-    : _destinationBuilder = destinationBuilder ?? _buildMyGubs;
+  GubDeletionNavigationController({
+    WidgetBuilder? destinationBuilder,
+    this.onExitToMyGubs,
+  }) : _destinationBuilder = destinationBuilder ?? _buildMyGubs;
 
   bool get navigationScheduled => _navigationScheduled;
 
@@ -33,11 +36,11 @@ class GubDeletionNavigationController {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!context.mounted) return;
 
-      final navigator = Navigator.of(context, rootNavigator: true);
       final messenger = ScaffoldMessenger.maybeOf(context);
-      navigator.pushAndRemoveUntil(
-        MaterialPageRoute(builder: buildDestination),
-        (_) => false,
+      navigateAfterGubExit(
+        context,
+        onExitToMyGubs: onExitToMyGubs,
+        destinationBuilder: buildDestination,
       );
 
       if (message != null && messenger != null) {
@@ -56,4 +59,21 @@ class GubDeletionNavigationController {
   Widget buildDestination(BuildContext context) => _destinationBuilder(context);
 
   static Widget _buildMyGubs(BuildContext context) => const MyGubsScreen();
+}
+
+void navigateAfterGubExit(
+  BuildContext context, {
+  VoidCallback? onExitToMyGubs,
+  WidgetBuilder? destinationBuilder,
+}) {
+  if (onExitToMyGubs != null) {
+    onExitToMyGubs();
+    return;
+  }
+  Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
+    MaterialPageRoute(
+      builder: destinationBuilder ?? GubDeletionNavigationController._buildMyGubs,
+    ),
+    (_) => false,
+  );
 }

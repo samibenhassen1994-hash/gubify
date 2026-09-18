@@ -4,14 +4,20 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
-import '../screens/gub/my_gubs_screen.dart';
+import '../screens/gub/gub_deletion_navigation.dart';
 import '../repositories/gub_invite_repository.dart';
 
 class GubAccessGuard extends StatefulWidget {
   final String gubId;
   final Widget child;
+  final VoidCallback? onExitToMyGubs;
 
-  const GubAccessGuard({super.key, required this.gubId, required this.child});
+  const GubAccessGuard({
+    super.key,
+    required this.gubId,
+    required this.child,
+    this.onExitToMyGubs,
+  });
 
   @override
   State<GubAccessGuard> createState() => _GubAccessGuardState();
@@ -96,9 +102,9 @@ class _GubAccessGuardState extends State<GubAccessGuard> {
     if (!mounted) return;
 
     if (result) {
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const MyGubsScreen()),
-        (_) => false,
+      navigateAfterGubExit(
+        context,
+        onExitToMyGubs: widget.onExitToMyGubs,
       );
     }
   }

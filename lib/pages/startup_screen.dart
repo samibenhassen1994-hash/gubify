@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 
 import 'auth_entry_screen.dart';
 import '../pages/name_screen.dart';
-import '../screens/welcome_screen.dart';
+import '../screens/main_navigation_shell.dart';
 import '../services/auth_service.dart';
 import '../services/user_service.dart';
 import '../services/local_storage_service.dart';
@@ -158,7 +158,10 @@ class _StartupScreenState extends State<StartupScreen> {
           MaterialPageRoute(
             builder: (context) =>
                 widget.authenticatedAppBuilder?.call(context) ??
-                const WelcomeScreen(),
+                MainNavigationShell(
+                  userId: uid,
+                  isAnonymous: _auth.isCurrentUserAnonymous,
+                ),
           ),
         );
         WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -174,6 +177,7 @@ class _StartupScreenState extends State<StartupScreen> {
             builder: (nameScreenContext) => NameScreen(
               authService: authService,
               onNavigationReady: onNavigationReady,
+              authenticatedAppBuilder: widget.authenticatedAppBuilder,
               onBackToSignIn: () async {
                 if (!nameScreenContext.mounted) return;
                 Navigator.of(nameScreenContext).pushAndRemoveUntil(

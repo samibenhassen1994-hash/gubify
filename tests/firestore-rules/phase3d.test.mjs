@@ -18,6 +18,7 @@ import {
   limit,
   orderBy,
   query,
+  runTransaction,
   serverTimestamp,
   setDoc,
   updateDoc,
@@ -194,6 +195,184 @@ describe('cross-module and cross-resource isolation', () => {
 
 describe('account deletion personal-data cleanup', () => {
   const deletionState = (userId) => ({ userId, status: 'deleting', startedAt: serverTimestamp() });
+
+  test('anonymous retry can discover and delete only its own personal copies', async () => {
+    await env.withSecurityRulesDisabled(async (context) => {
+      const d = context.firestore();
+      await setDoc(doc(d, 'users', uid.member, 'communities', 'c1'), {
+        communityId: 'c1', name: 'Public', ownerId: uid.communityOwner,
+        role: 'member', joinedAt: now(),
+      });
+      await setDoc(doc(d, 'users', uid.second, 'communities', 'c1'), {
+        communityId: 'c1', name: 'Public', ownerId: uid.communityOwner,
+        role: 'member', joinedAt: now(),
+      });
+    });
+
+    const anonymousDb = env.authenticatedContext(uid.member, {
+      firebase: { sign_in_provider: 'anonymous' },
+    }).firestore();
+    await assertSucceeds(setDoc(
+      doc(anonymousDb, 'accountDeletionStates', uid.member),
+      deletionState(uid.member),
+    ));
+
+    const privateCopies = collection(
+      anonymousDb, 'users', uid.member, 'gubs',
+    );
+    const communityCopies = collection(
+      anonymousDb, 'users', uid.member, 'communities',
+    );
+    assert.equal((await assertSucceeds(getDocs(privateCopies))).size, 2);
+    assert.equal((await assertSucceeds(getDocs(communityCopies))).size, 1);
+    await assertSucceeds(deleteDoc(
+      doc(anonymousDb, 'users', uid.member, 'communities', 'c1'),
+    ));
+
+    await assertFails(setDoc(
+      doc(anonymousDb, 'users', uid.communityMember, 'communities', 'late'),
+      { communityId: 'late' },
+    ));
+    await assertFails(getDocs(collection(
+      anonymousDb, 'users', uid.second, 'communities',
+    )));
+    await assertFails(deleteDoc(
+      doc(anonymousDb, 'users', uid.second, 'communities', 'c1'),
+    ));
+  });
+
+  test('anonymous retry can delete its Guidelines acceptance after profile deletion', async () => {
+    await env.withSecurityRulesDisabled(async (context) => {
+      await setDoc(
+        doc(context.firestore(), 'communityGuidelinesAcceptances', uid.member),
+        { accepted: true, version: 1, acceptedAt: now() },
+      );
+    });
+
+    const anonymousDb = env.authenticatedContext(uid.member, {
+      firebase: { sign_in_provider: 'anonymous' },
+    }).firestore();
+    await assertSucceeds(setDoc(
+      doc(anonymousDb, 'accountDeletionStates', uid.member),
+      deletionState(uid.member),
+    ));
+    await assertSucceeds(deleteDoc(doc(anonymousDb, 'users', uid.member)));
+    await assertSucceeds(deleteDoc(
+      doc(anonymousDb, 'communityGuidelinesAcceptances', uid.member),
+    ));
+  });
+
+  test('anonymous retry can leave its Community after profile deletion', async () => {
+    await env.withSecurityRulesDisabled(async (context) => {
+      const d = context.firestore();
+      await updateDoc(doc(d, 'communities', 'c1'), {
+        slug: 'public', visibility: 'private', accessMode: 'open', updatedAt: now(),
+      });
+      await setDoc(doc(d, 'communityPublic', 'public'), {
+        communityId: 'c1', slug: 'public', name: 'Public', description: '',
+        type: 'General', language: 'English', accessMode: 'open',
+        memberCount: 2, createdAt: now(), updatedAt: now(),
+      });
+      await setDoc(doc(d, 'users', uid.communityMember, 'communities', 'c1'), {
+        communityId: 'c1', name: 'Public', ownerId: uid.communityOwner,
+        role: 'member', joinedAt: now(),
+      });
+      await setDoc(doc(d, 'communityUserProgress', uid.communityMember), {
+        xp: 0, communityIds: ['c1'],
+        membershipProjectionCommunityId: 'c1',
+        membershipProjectionAction: 'join',
+        membershipProjectionUpdatedAt: now(),
+      });
+    });
+
+    const anonymousDb = env.authenticatedContext(uid.communityMember, {
+      firebase: { sign_in_provider: 'anonymous' },
+    }).firestore();
+    await assertSucceeds(setDoc(
+      doc(anonymousDb, 'accountDeletionStates', uid.communityMember),
+      deletionState(uid.communityMember),
+    ));
+    await assertSucceeds(deleteDoc(
+      doc(anonymousDb, 'users', uid.communityMember),
+    ));
+
+    await assertSucceeds(runTransaction(anonymousDb, async (transaction) => {
+      const rootReference = doc(anonymousDb, 'communities', 'c1');
+      const memberReference = doc(
+        anonymousDb, 'communities', 'c1', 'members', uid.communityMember,
+      );
+      const copyReference = doc(
+        anonymousDb, 'users', uid.communityMember, 'communities', 'c1',
+      );
+      const progressReference = doc(
+        anonymousDb, 'communityUserProgress', uid.communityMember,
+      );
+      await transaction.get(rootReference);
+      await transaction.get(memberReference);
+      await transaction.get(progressReference);
+      transaction.delete(memberReference);
+      transaction.delete(copyReference);
+      transaction.update(rootReference, { memberCount: 1 });
+      transaction.update(doc(anonymousDb, 'communityPublic', 'public'), {
+        memberCount: 1, updatedAt: serverTimestamp(),
+      });
+      transaction.set(progressReference, {
+        communityIds: [],
+        membershipProjectionCommunityId: 'c1',
+        membershipProjectionAction: 'leave',
+        membershipProjectionUpdatedAt: serverTimestamp(),
+      }, { merge: true });
+    }));
+  });
+
+  test('anonymous retry can leave its Private Gub after profile deletion', async () => {
+    const anonymousDb = env.authenticatedContext(uid.member, {
+      firebase: { sign_in_provider: 'anonymous' },
+    }).firestore();
+    await assertSucceeds(setDoc(
+      doc(anonymousDb, 'accountDeletionStates', uid.member),
+      deletionState(uid.member),
+    ));
+    await assertSucceeds(deleteDoc(doc(anonymousDb, 'users', uid.member)));
+
+    await assertSucceeds(runTransaction(anonymousDb, async (transaction) => {
+      const rootReference = doc(anonymousDb, 'gubs', 'g1');
+      const memberReference = doc(
+        anonymousDb, 'gubs', 'g1', 'members', uid.member,
+      );
+      const copyReference = doc(
+        anonymousDb, 'users', uid.member, 'gubs', 'g1',
+      );
+      await transaction.get(rootReference);
+      await transaction.get(memberReference);
+      transaction.delete(memberReference);
+      transaction.delete(copyReference);
+      transaction.update(rootReference, { memberCount: 2 });
+    }));
+  });
+
+  test('anonymous retry can delete its pending join request after profile deletion', async () => {
+    await env.withSecurityRulesDisabled(async (context) => {
+      await setDoc(
+        doc(context.firestore(), 'communities', 'c1', 'joinRequests', uid.member),
+        {
+          userId: uid.member, displayName: uid.member,
+          status: 'pending', createdAt: now(),
+        },
+      );
+    });
+    const anonymousDb = env.authenticatedContext(uid.member, {
+      firebase: { sign_in_provider: 'anonymous' },
+    }).firestore();
+    await assertSucceeds(setDoc(
+      doc(anonymousDb, 'accountDeletionStates', uid.member),
+      deletionState(uid.member),
+    ));
+    await assertSucceeds(deleteDoc(doc(anonymousDb, 'users', uid.member)));
+    await assertSucceeds(deleteDoc(doc(
+      anonymousDb, 'communities', 'c1', 'joinRequests', uid.member,
+    )));
+  });
 
   test('deletion state can list only its own Community join requests', async () => {
     await env.withSecurityRulesDisabled(async (context) => {

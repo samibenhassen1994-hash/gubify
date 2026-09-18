@@ -25,6 +25,7 @@ typedef CommunityCreator =
       required String language,
       required String accessMode,
     });
+typedef PrivateGubCreator = Future<String> Function({required String name});
 
 class CreateGubScreen extends StatefulWidget {
   const CreateGubScreen({
@@ -34,6 +35,10 @@ class CreateGubScreen extends StatefulWidget {
     this.communityGuidelinesPreAction,
     this.communityCreator,
     this.userHeader,
+    this.onPrivateGubCreated,
+    this.onCommunityCreated,
+    this.onExitToMyGubs,
+    this.privateGubCreator,
   });
 
   final CommunityLinkedAccountGate? communityLinkedAccountGate;
@@ -41,6 +46,10 @@ class CreateGubScreen extends StatefulWidget {
   final CommunityGuidelinesPreAction? communityGuidelinesPreAction;
   final CommunityCreator? communityCreator;
   final Widget? userHeader;
+  final ValueChanged<String>? onPrivateGubCreated;
+  final ValueChanged<CommunityModel>? onCommunityCreated;
+  final VoidCallback? onExitToMyGubs;
+  final PrivateGubCreator? privateGubCreator;
 
   @override
   State<CreateGubScreen> createState() => _CreateGubScreenState();
@@ -342,21 +351,36 @@ class _CreateGubScreenState extends State<CreateGubScreen> {
 
         if (!mounted) return;
 
+        final onCommunityCreated = widget.onCommunityCreated;
+        if (onCommunityCreated != null) {
+          onCommunityCreated(community);
+          return;
+        }
+
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
             builder: (_) => GubCommunityHomeScreen(
               communityId: community.communityId,
               initialCommunity: community,
+              onExitToMyGubs: widget.onExitToMyGubs,
             ),
           ),
         );
         return;
       }
 
-      final gubId = await GubService().createHub(name: gubName);
+      final gubId =
+          await (widget.privateGubCreator?.call(name: gubName) ??
+              GubService().createHub(name: gubName));
 
       if (!mounted) return;
+
+      final onPrivateGubCreated = widget.onPrivateGubCreated;
+      if (onPrivateGubCreated != null) {
+        onPrivateGubCreated(gubId);
+        return;
+      }
 
       Navigator.pushAndRemoveUntil(
         context,

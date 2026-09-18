@@ -5,8 +5,13 @@ import 'manage_gub_button.dart';
 
 class GubActionsSection extends StatelessWidget {
   final String gubId;
+  final VoidCallback? onExitToMyGubs;
 
-  const GubActionsSection({super.key, required this.gubId});
+  const GubActionsSection({
+    super.key,
+    required this.gubId,
+    this.onExitToMyGubs,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -16,7 +21,10 @@ class GubActionsSection extends StatelessWidget {
 
         const SizedBox(height: 15),
 
-        ManageGubButton(gubId: gubId),
+        ManageGubButton(
+          gubId: gubId,
+          onExitToMyGubs: onExitToMyGubs,
+        ),
       ],
     );
   }

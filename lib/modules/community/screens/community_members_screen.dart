@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../../../widgets/gub_content_card.dart';
 import '../../../widgets/gub_screen_background.dart';
+import '../../../widgets/gubify_swipe_back.dart';
 import '../../profile/screens/user_profile_screen.dart';
 import '../../profile/models/user_profile_model.dart';
 import '../models/community_model.dart';
@@ -45,7 +46,8 @@ class CommunityMembersScreen extends StatelessWidget {
     final isOwner =
         this.isOwner ?? CommunityService.instance.isCurrentUserOwner(community);
 
-    return GubScreenBackground(
+    return GubifySwipeBack(
+      child: GubScreenBackground(
       variant: GubBackgroundAssignments.profiles,
       child: Scaffold(
         backgroundColor: Colors.transparent,
@@ -101,6 +103,7 @@ class CommunityMembersScreen extends StatelessWidget {
             },
           ),
         ),
+      ),
       ),
     );
   }

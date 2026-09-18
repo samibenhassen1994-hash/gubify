@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../widgets/gub_screen_background.dart';
+import '../../../widgets/gubify_swipe_back.dart';
 import '../models/community_model.dart';
 import '../repositories/community_repository.dart';
 import '../restrictions/services/community_restriction_service.dart';
@@ -26,6 +27,9 @@ class CommunityExplorerScreen extends StatefulWidget {
   final bool Function(CommunityModel community)? isOwner;
   final CommunityLinkedAccountGate? linkedAccountGate;
   final CommunityOpenHandler? onCommunityOpen;
+  final bool showBackButton;
+  final double additionalBottomScrollPadding;
+  final VoidCallback? onExitToMyGubs;
 
   const CommunityExplorerScreen({
     super.key,
@@ -36,6 +40,9 @@ class CommunityExplorerScreen extends StatefulWidget {
     this.isOwner,
     this.linkedAccountGate,
     this.onCommunityOpen,
+    this.showBackButton = true,
+    this.additionalBottomScrollPadding = 0,
+    this.onExitToMyGubs,
   });
 
   @override
@@ -187,8 +194,14 @@ class _CommunityExplorerScreenState extends State<CommunityExplorerScreen> {
       context,
       MaterialPageRoute(
         builder: (_) => isJoined
-            ? GubCommunityHomeScreen(communityId: community.communityId)
-            : CommunityPublicDetailsScreen(communityId: community.communityId),
+            ? GubCommunityHomeScreen(
+                communityId: community.communityId,
+                onExitToMyGubs: widget.onExitToMyGubs,
+              )
+            : CommunityPublicDetailsScreen(
+                communityId: community.communityId,
+                onExitToMyGubs: widget.onExitToMyGubs,
+              ),
       ),
     );
     if (mounted) _retryInitialLoad();
@@ -207,16 +220,19 @@ class _CommunityExplorerScreenState extends State<CommunityExplorerScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return GubScreenBackground(
+    final content = GubScreenBackground(
       variant: GubBackgroundAssignments.profiles,
       child: Scaffold(
         backgroundColor: Colors.transparent,
         appBar: AppBar(
-          leading: IconButton(
-            tooltip: "Back",
-            onPressed: () => Navigator.maybePop(context),
-            icon: const Icon(Icons.arrow_back_rounded),
-          ),
+          automaticallyImplyLeading: widget.showBackButton,
+          leading: widget.showBackButton
+              ? IconButton(
+                  tooltip: "Back",
+                  onPressed: () => Navigator.maybePop(context),
+                  icon: const Icon(Icons.arrow_back_rounded),
+                )
+              : null,
           title: const Text("Explore communities"),
           backgroundColor: Colors.transparent,
           surfaceTintColor: Colors.transparent,
@@ -259,6 +275,9 @@ class _CommunityExplorerScreenState extends State<CommunityExplorerScreen> {
         ),
       ),
     );
+    return widget.showBackButton
+        ? GubifySwipeBack(child: content)
+        : content;
   }
 
   Widget _buildResults() {
@@ -289,7 +308,12 @@ class _CommunityExplorerScreenState extends State<CommunityExplorerScreen> {
         final joinedIds = joinedSnapshot.data ?? const <String>{};
         return ListView.separated(
           controller: _scrollController,
-          padding: const EdgeInsets.fromLTRB(20, 4, 20, 28),
+          padding: EdgeInsets.fromLTRB(
+            20,
+            4,
+            20,
+            28 + widget.additionalBottomScrollPadding,
+          ),
           itemCount: filtered.length + 1,
           separatorBuilder: (_, _) => const SizedBox(height: 12),
           itemBuilder: (context, index) {

@@ -8,6 +8,7 @@ import '../../../screens/gub/my_gubs_screen.dart';
 import '../../../services/app_sound_service.dart';
 import '../../../services/auth_service.dart';
 import '../../../widgets/gub_screen_background.dart';
+import '../../../widgets/gubify_swipe_back.dart';
 import '../../profile/screens/account_screen.dart';
 import '../guidelines/community_guidelines_gate.dart';
 import '../models/community_access_request_model.dart';
@@ -25,11 +26,13 @@ import 'community_settings_screen.dart';
 class GubCommunityHomeScreen extends StatefulWidget {
   final String communityId;
   final CommunityModel? initialCommunity;
+  final VoidCallback? onExitToMyGubs;
 
   const GubCommunityHomeScreen({
     super.key,
     required this.communityId,
     this.initialCommunity,
+    this.onExitToMyGubs,
   });
 
   @override
@@ -137,6 +140,14 @@ class _GubCommunityHomeScreenState extends State<GubCommunityHomeScreen> {
       if (!mounted) {
         return;
       }
+      final onExitToMyGubs = widget.onExitToMyGubs;
+      if (onExitToMyGubs != null) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(message)));
+        onExitToMyGubs();
+        return;
+      }
       if (showPublicDetails) {
         await Navigator.of(context).pushReplacement(
           MaterialPageRoute(
@@ -170,7 +181,8 @@ class _GubCommunityHomeScreenState extends State<GubCommunityHomeScreen> {
     final isKeyboardOpen = MediaQuery.viewInsetsOf(context).bottom > 0;
 
     return CommunityGuidelinesGate(
-      child: GubScreenBackground(
+      child: GubifySwipeBack(
+        child: GubScreenBackground(
         variant: GubBackgroundAssignments.createGub,
         child: Scaffold(
         resizeToAvoidBottomInset: true,
@@ -308,6 +320,8 @@ class _GubCommunityHomeScreenState extends State<GubCommunityHomeScreen> {
                                     MaterialPageRoute(
                                       builder: (_) => CommunitySettingsScreen(
                                         community: community,
+                                        onExitToMyGubs:
+                                            widget.onExitToMyGubs,
                                       ),
                                     ),
                                   ),
@@ -356,7 +370,8 @@ class _GubCommunityHomeScreenState extends State<GubCommunityHomeScreen> {
           ),
         ),
       ),
-    ),
+        ),
+      ),
     );
   }
 }

@@ -86,6 +86,32 @@ void main() {
     expect(navigatorKey.currentState!.canPop(), isFalse);
   });
 
+  testWidgets('shell-managed deletion returns through the existing shell', (
+    tester,
+  ) async {
+    var exits = 0;
+    final controller = GubDeletionNavigationController(
+      onExitToMyGubs: () => exits += 1,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => FilledButton(
+            onPressed: () => controller.scheduleExit(context),
+            child: const Text('Complete deletion'),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Complete deletion'));
+    await tester.pump();
+
+    expect(exits, 1);
+    expect(find.byType(MyGubsScreen), findsNothing);
+  });
+
   testWidgets('shows the member deletion message once', (tester) async {
     final controller = GubDeletionNavigationController(
       destinationBuilder: (_) => const Scaffold(body: Text('My Gubs')),

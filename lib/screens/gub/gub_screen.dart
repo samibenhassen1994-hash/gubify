@@ -10,6 +10,7 @@ import '../../widgets/gub_access_guard.dart';
 import '../../widgets/gub_community_rules_gate.dart';
 import '../../widgets/gub_page_header.dart';
 import '../../widgets/gub_screen_background.dart';
+import '../../widgets/gubify_swipe_back.dart';
 
 import 'gub_deletion_navigation.dart';
 import 'widgets/gub_actions_section.dart';
@@ -21,16 +22,24 @@ import 'widgets/members_card.dart';
 
 class GubScreen extends StatefulWidget {
   final String gubId;
+  final VoidCallback? onExitToMyGubs;
 
-  const GubScreen({super.key, required this.gubId});
+  const GubScreen({super.key, required this.gubId, this.onExitToMyGubs});
 
   @override
   State<GubScreen> createState() => _GubScreenState();
 }
 
 class _GubScreenState extends State<GubScreen> {
-  final GubDeletionNavigationController _deletionNavigation =
-      GubDeletionNavigationController();
+  late final GubDeletionNavigationController _deletionNavigation;
+
+  @override
+  void initState() {
+    super.initState();
+    _deletionNavigation = GubDeletionNavigationController(
+      onExitToMyGubs: widget.onExitToMyGubs,
+    );
+  }
 
   void _scheduleExitFromDeletedGub({required bool showDeletionMessage}) {
     _deletionNavigation.scheduleExit(
@@ -44,10 +53,12 @@ class _GubScreenState extends State<GubScreen> {
   @override
   Widget build(BuildContext context) {
     final gubId = widget.gubId;
-    return GubScreenBackground(
-      variant: GubBackgroundAssignments.tasks,
-      child: GubAccessGuard(
+    return GubifySwipeBack(
+      child: GubScreenBackground(
+        variant: GubBackgroundAssignments.tasks,
+        child: GubAccessGuard(
         gubId: gubId,
+        onExitToMyGubs: widget.onExitToMyGubs,
         child: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
           stream: GubRepository.instance.hubStream(gubId),
           builder: (context, snapshot) {
@@ -89,11 +100,16 @@ class _GubScreenState extends State<GubScreen> {
                 gubId: gubId,
                 child: Scaffold(
                   backgroundColor: Colors.transparent,
-                  body: _GubDashboard(gubId: gubId, data: data),
+                  body: _GubDashboard(
+                    gubId: gubId,
+                    data: data,
+                    onExitToMyGubs: widget.onExitToMyGubs,
+                  ),
                 ),
               ),
             );
           },
+        ),
         ),
       ),
     );
@@ -176,8 +192,13 @@ class _GubDeletionInProgressState extends State<_GubDeletionInProgress> {
 class _GubDashboard extends StatelessWidget {
   final String gubId;
   final Map<String, dynamic> data;
+  final VoidCallback? onExitToMyGubs;
 
-  const _GubDashboard({required this.gubId, required this.data});
+  const _GubDashboard({
+    required this.gubId,
+    required this.data,
+    this.onExitToMyGubs,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -220,11 +241,18 @@ class _GubDashboard extends StatelessWidget {
             memberCount: memberCount,
           ),
           const SizedBox(height: 12),
-          MembersCard(gubId: gubId, memberCount: memberCount),
+          MembersCard(
+            gubId: gubId,
+            memberCount: memberCount,
+            onExitToMyGubs: onExitToMyGubs,
+          ),
           const SizedBox(height: 12),
           InviteCodeCard(inviteCode: inviteCode),
           const SizedBox(height: 30),
-          GubActionsSection(gubId: gubId),
+          GubActionsSection(
+            gubId: gubId,
+            onExitToMyGubs: onExitToMyGubs,
+          ),
         ],
       ),
     );

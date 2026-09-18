@@ -6,13 +6,19 @@ import '../../services/member_service.dart';
 import '../../widgets/gub_content_card.dart';
 import '../../widgets/gub_screen_background.dart';
 import '../../modules/profile/screens/user_profile_screen.dart';
-import 'my_gubs_screen.dart';
+import 'gub_deletion_navigation.dart';
 
 class MembersScreen extends StatelessWidget {
   final String gubId;
   final String ownerId;
+  final VoidCallback? onExitToMyGubs;
 
-  const MembersScreen({super.key, required this.gubId, required this.ownerId});
+  const MembersScreen({
+    super.key,
+    required this.gubId,
+    required this.ownerId,
+    this.onExitToMyGubs,
+  });
 
   Future<void> _leaveGub(BuildContext context) async {
     final confirmed = await showDialog<bool>(
@@ -36,9 +42,9 @@ class MembersScreen extends StatelessWidget {
     try {
       await MemberService.instance.leaveGub(gubId: gubId);
       if (!context.mounted) return;
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const MyGubsScreen()),
-        (_) => false,
+      navigateAfterGubExit(
+        context,
+        onExitToMyGubs: onExitToMyGubs,
       );
     } catch (error) {
       if (context.mounted) {

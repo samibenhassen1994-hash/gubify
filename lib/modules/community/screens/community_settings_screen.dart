@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../../../widgets/gub_content_card.dart';
 import '../../../widgets/banned_users_screen.dart';
 import '../../../widgets/gub_screen_background.dart';
+import '../../../widgets/gubify_swipe_back.dart';
 import '../../../screens/welcome_screen.dart';
 import '../../../screens/gub/my_gubs_screen.dart';
 import '../../chat/widgets/chat_user_avatar.dart';
@@ -26,6 +27,7 @@ class CommunitySettingsScreen extends StatefulWidget {
   final bool? isOwner;
   final CommunityUserXpCache? communityUserXpCache;
   final Stream<List<CommunityAskModel>>? selfProfileActiveAsksStream;
+  final VoidCallback? onExitToMyGubs;
 
   const CommunitySettingsScreen({
     super.key,
@@ -36,6 +38,7 @@ class CommunitySettingsScreen extends StatefulWidget {
     this.isOwner,
     this.communityUserXpCache,
     this.selfProfileActiveAsksStream,
+    this.onExitToMyGubs,
   });
 
   @override
@@ -79,10 +82,10 @@ class _CommunitySettingsScreenState extends State<CommunitySettingsScreen> {
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(const SnackBar(content: Text('Community deleted.')));
-    Navigator.pushAndRemoveUntil(
+    navigateAfterCommunityExit(
       context,
-      MaterialPageRoute(builder: (_) => const WelcomeScreen()),
-      (_) => false,
+      onExitToMyGubs: widget.onExitToMyGubs,
+      standaloneDestination: (_) => const WelcomeScreen(),
     );
   }
 
@@ -110,9 +113,9 @@ class _CommunitySettingsScreenState extends State<CommunitySettingsScreen> {
         widget.community.communityId,
       );
       if (!mounted) return;
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const MyGubsScreen()),
-        (_) => false,
+      navigateAfterCommunityExit(
+        context,
+        onExitToMyGubs: widget.onExitToMyGubs,
       );
     } catch (error) {
       if (mounted) {
@@ -132,7 +135,8 @@ class _CommunitySettingsScreenState extends State<CommunitySettingsScreen> {
       isOwner: isOwner,
     );
 
-    return GubScreenBackground(
+    return GubifySwipeBack(
+      child: GubScreenBackground(
       variant: GubBackgroundAssignments.createGub,
       child: Scaffold(
         backgroundColor: Colors.transparent,
@@ -326,8 +330,26 @@ class _CommunitySettingsScreenState extends State<CommunitySettingsScreen> {
           ),
         ),
       ),
+      ),
     );
   }
+}
+
+void navigateAfterCommunityExit(
+  BuildContext context, {
+  VoidCallback? onExitToMyGubs,
+  WidgetBuilder? standaloneDestination,
+}) {
+  if (onExitToMyGubs != null) {
+    onExitToMyGubs();
+    return;
+  }
+  Navigator.of(context).pushAndRemoveUntil(
+    MaterialPageRoute(
+      builder: standaloneDestination ?? (_) => const MyGubsScreen(),
+    ),
+    (_) => false,
+  );
 }
 
 class _CurrentUserProfileArea extends StatelessWidget {

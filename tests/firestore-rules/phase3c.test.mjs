@@ -47,6 +47,11 @@ const member = (userId, role = 'member') => ({ uid: userId, displayName: userId,
 const gubRoot = (id = 'g1', ownerId = uid.ownerGub, overrides = {}) => ({
   gubId: id, name: `${id} Gub`, ownerId, inviteTokenId: tokenId(id), memberCount: gubMembers.length, createdAt: ts(), ...overrides,
 });
+const legacyGubRoot = (overrides = {}) => ({
+  gubId: 'g1', name: 'g1 Gub', ownerId: uid.ownerGub,
+  inviteCode: 'GUB-1234', memberCount: gubMembers.length, createdAt: ts(),
+  ...overrides,
+});
 const gubCopy = (id, userId, role = 'member', overrides = {}) => ({
   gubId: id, name: `${id} Gub`,
   ownerId: id === 'g2' ? uid.ownerOtherGub : uid.ownerGub, role, joinedAt: ts(), ...overrides,
@@ -157,6 +162,20 @@ async function startGubDeletion(actor = uid.ownerGub, overrides = {}) {
   batch.update(doc(clientDb, 'inviteTokens', tokenId('g1')), { active: false });
   return batch.commit();
 }
+async function seedLegacyGub(overrides = {}) {
+  await env.withSecurityRulesDisabled(async (context) => {
+    const seedDb = context.firestore();
+    await setDoc(doc(seedDb, 'gubs', 'g1'), legacyGubRoot(overrides));
+    await deleteDoc(doc(seedDb, 'inviteTokens', tokenId('g1')));
+  });
+}
+async function startLegacyGubDeletion(actor = uid.ownerGub, overrides = {}) {
+  return updateDoc(doc(db(actor), 'gubs', 'g1'), {
+    deletionStatus: 'deleting', deletionRequestedBy: actor,
+    deletionStartedAt: serverTimestamp(), deletionUpdatedAt: serverTimestamp(),
+    deletionPhase: 'preparing', ...overrides,
+  });
+}
 async function markGubDeleting(id = 'g1', ownerId = uid.ownerGub, overrides = {}) {
   await env.withSecurityRulesDisabled(async (context) => {
     const adminDb = context.firestore();
@@ -249,6 +268,66 @@ async function cleanupCommunity(clientDb, id = 'c1', ownerId = uid.ownerCommunit
 
 describe('Gub deletion transition and checkpoints', () => {
   test('real owner starts deletion with the exact server-timestamp payload', () => assertSucceeds(startGubDeletion()));
+  test('real owner can start deletion for a legacy inviteCode Gub', async () => {
+    await seedLegacyGub();
+    await assertSucceeds(startLegacyGubDeletion());
+  });
+  test('legacy non-owner cannot start deletion', async () => {
+    await seedLegacyGub();
+    await assertFails(startLegacyGubDeletion(uid.memberGub));
+  });
+  test('legacy outsider cannot start deletion', async () => {
+    await seedLegacyGub();
+    await assertFails(startLegacyGubDeletion(uid.outsider));
+  });
+  test('missing inviteTokenId without a valid legacy inviteCode grants no compatibility', async () => {
+    await seedLegacyGub({ inviteCode: '' });
+    await assertFails(startLegacyGubDeletion());
+  });
+  test('legacy deletion start cannot modify unrelated fields', async () => {
+    await seedLegacyGub();
+    await assertFails(startLegacyGubDeletion(uid.ownerGub, { name: 'Changed' }));
+  });
+  test('legacy owner can delete the root only after valid finalization', async () => {
+    await seedLegacyGub();
+    await assertFails(deleteDoc(doc(db(uid.ownerGub), 'gubs', 'g1')));
+    await seedLegacyGub({
+      deletionStatus: 'deleting', deletionRequestedBy: uid.ownerGub,
+      deletionStartedAt: ts(), deletionUpdatedAt: ts(), deletionPhase: 'finalizing',
+    });
+    await assertSucceeds(deleteDoc(doc(db(uid.ownerGub), 'gubs', 'g1')));
+  });
+  test('legacy non-owner cannot perform final root deletion', async () => {
+    await seedLegacyGub({
+      deletionStatus: 'deleting', deletionRequestedBy: uid.ownerGub,
+      deletionStartedAt: ts(), deletionUpdatedAt: ts(), deletionPhase: 'finalizing',
+    });
+    await assertFails(deleteDoc(doc(db(uid.memberGub), 'gubs', 'g1')));
+  });
+  test('legacy final delete rejects mismatched deletionRequestedBy', async () => {
+    await seedLegacyGub({
+      deletionStatus: 'deleting', deletionRequestedBy: uid.falseOwner,
+      deletionStartedAt: ts(), deletionUpdatedAt: ts(), deletionPhase: 'finalizing',
+    });
+    await assertFails(deleteDoc(doc(db(uid.ownerGub), 'gubs', 'g1')));
+  });
+  test('modern owner still must revoke the canonical token', async () => {
+    await assertFails(updateDoc(doc(db(uid.ownerGub), 'gubs', 'g1'), {
+      deletionStatus: 'deleting', deletionRequestedBy: uid.ownerGub,
+      deletionStartedAt: serverTimestamp(), deletionUpdatedAt: serverTimestamp(),
+      deletionPhase: 'preparing',
+    }));
+  });
+  test('modern Gub cannot bypass token revocation by also carrying inviteCode', async () => {
+    await env.withSecurityRulesDisabled((context) => updateDoc(
+      doc(context.firestore(), 'gubs', 'g1'), { inviteCode: 'GUB-1234' },
+    ));
+    await assertFails(updateDoc(doc(db(uid.ownerGub), 'gubs', 'g1'), {
+      deletionStatus: 'deleting', deletionRequestedBy: uid.ownerGub,
+      deletionStartedAt: serverTimestamp(), deletionUpdatedAt: serverTimestamp(),
+      deletionPhase: 'preparing',
+    }));
+  });
   for (const [name, actor] of [['member', uid.memberGub], ['outsider', uid.outsider], ['other Gub owner', uid.ownerOtherGub]]) {
     test(`${name} cannot start Gub deletion`, () => assertFails(startGubDeletion(actor)));
   }

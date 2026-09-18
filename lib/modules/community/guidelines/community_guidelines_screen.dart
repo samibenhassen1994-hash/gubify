@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../widgets/gubify_swipe_back.dart';
+
 typedef CommunityGuidelinesLauncher = Future<bool> Function(Uri uri);
 
 class CommunityGuidelinesScreen extends StatefulWidget {
@@ -165,10 +167,12 @@ class _CommunityGuidelinesScreenState extends State<CommunityGuidelinesScreen>
 
   @override
   Widget build(BuildContext context) {
-    return PopScope<Object?>(
-      canPop: !_saving && _currentPage == 0,
-      onPopInvokedWithResult: _handleBack,
-      child: ColoredBox(
+    return GubifySwipeBack(
+      onBack: _goBack,
+      child: PopScope<Object?>(
+        canPop: !_saving && _currentPage == 0,
+        onPopInvokedWithResult: _handleBack,
+        child: ColoredBox(
         color: const Color(0xFF08065F),
         child: Material(
           type: MaterialType.transparency,
@@ -410,6 +414,7 @@ class _CommunityGuidelinesScreenState extends State<CommunityGuidelinesScreen>
                 ),
             ],
           ),
+        ),
         ),
       ),
     );

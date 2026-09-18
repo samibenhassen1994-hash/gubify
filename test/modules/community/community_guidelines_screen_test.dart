@@ -97,6 +97,64 @@ void main() {
     expect(find.text('Open'), findsOneWidget);
   });
 
+  testWidgets('left-edge swipe returns to the previous onboarding page', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_app());
+    final pageView = tester.widget<PageView>(
+      find.byKey(const Key('community-guidelines-pages')),
+    );
+    pageView.controller!.jumpToPage(2);
+    await tester.pump();
+
+    final gesture = await tester.startGesture(const Offset(10, 300));
+    await gesture.moveBy(const Offset(90, 0));
+    await gesture.up();
+    await tester.pump();
+    await tester.pump(CommunityGuidelinesScreen.pageTransitionDuration);
+
+    expect(_currentPage(tester), closeTo(1, 0.01));
+  });
+
+  testWidgets('left-edge swipe exits naturally from the first page', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => FilledButton(
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => CommunityGuidelinesScreen(
+                  onAccept: () async {},
+                  onAccepted: () {},
+                ),
+              ),
+            ),
+            child: const Text('Open'),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('Open'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+
+    expect(
+      find.byKey(const Key('community-guidelines-page-0')),
+      findsOneWidget,
+    );
+    expect(_currentPage(tester), closeTo(0, 0.01));
+
+    final gesture = await tester.startGesture(const Offset(10, 300));
+    await gesture.moveBy(const Offset(90, 0));
+    await gesture.up();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+
+    expect(find.text('Open'), findsOneWidget);
+  });
+
   testWidgets('auto advances pages 1 to 4 after ten seconds', (tester) async {
     await tester.pumpWidget(_app());
     await tester.pump();

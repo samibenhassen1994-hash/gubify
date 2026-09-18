@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../widgets/gubify_swipe_back.dart';
+
 import '../models/community_model.dart';
 import 'platform_admin_service.dart';
 import 'platform_admin_gate.dart';
@@ -19,7 +21,8 @@ class _PlatformCommunitiesScreenState extends State<PlatformCommunitiesScreen> {
   int _limit = 50;
   late Stream<List<CommunityModel>> _communities = service.communities(_limit);
   @override
-  Widget build(BuildContext context) => Scaffold(
+  Widget build(BuildContext context) => GubifySwipeBack(
+    child: Scaffold(
     appBar: AppBar(title: const Text('Community moderation')),
     body: StreamBuilder<List<CommunityModel>>(
       stream: _communities,
@@ -68,6 +71,7 @@ class _PlatformCommunitiesScreenState extends State<PlatformCommunitiesScreen> {
           ],
         );
       },
+    ),
     ),
   );
 }

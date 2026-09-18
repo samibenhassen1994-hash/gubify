@@ -7,11 +7,13 @@ import '../members_screen.dart';
 class MembersCard extends StatelessWidget {
   final String gubId;
   final int memberCount;
+  final VoidCallback? onExitToMyGubs;
 
   const MembersCard({
     super.key,
     required this.gubId,
     required this.memberCount,
+    this.onExitToMyGubs,
   });
 
   @override
@@ -46,6 +48,7 @@ class MembersCard extends StatelessWidget {
                   builder: (_) => MembersScreen(
                     gubId: gubId,
                     ownerId: liveData?["ownerId"] ?? "",
+                    onExitToMyGubs: onExitToMyGubs,
                   ),
                 ),
               );

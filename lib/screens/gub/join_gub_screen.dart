@@ -6,18 +6,25 @@ import '../../services/gub_service.dart';
 import '../../widgets/gub_content_card.dart';
 import '../../widgets/gub_screen_background.dart';
 import '../../widgets/user_header.dart';
+import '../../widgets/gubify_swipe_back.dart';
 import 'gub_screen.dart';
 
 class JoinGubScreen extends StatefulWidget {
   final Future<String> Function({required String inviteCode})? joinAction;
   final bool showUserHeader;
   final String? initialCode;
+  final VoidCallback? onBack;
+  final ValueChanged<String>? onJoined;
+  final double additionalBottomScrollPadding;
 
   const JoinGubScreen({
     super.key,
     this.joinAction,
     this.showUserHeader = true,
     this.initialCode,
+    this.onBack,
+    this.onJoined,
+    this.additionalBottomScrollPadding = 0,
   });
 
   @override
@@ -113,11 +120,16 @@ class _JoinGubScreenState extends State<JoinGubScreen> {
 
       FocusManager.instance.primaryFocus?.unfocus();
 
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(builder: (_) => GubScreen(gubId: gubId)),
-        (_) => false,
-      );
+      final onJoined = widget.onJoined;
+      if (onJoined != null) {
+        onJoined(gubId);
+      } else {
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (_) => GubScreen(gubId: gubId)),
+          (_) => false,
+        );
+      }
     } catch (e) {
       if (!mounted) return;
 
@@ -145,12 +157,19 @@ class _JoinGubScreenState extends State<JoinGubScreen> {
 
   void _goBack() {
     FocusManager.instance.primaryFocus?.unfocus();
-    Navigator.pop(context);
+    final onBack = widget.onBack;
+    if (onBack != null) {
+      onBack();
+    } else {
+      Navigator.pop(context);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return GubifySwipeBack(
+      onBack: _goBack,
+      child: Scaffold(
       backgroundColor: Colors.transparent,
       resizeToAvoidBottomInset: true,
       body: GubScreenBackground(
@@ -185,7 +204,9 @@ class _JoinGubScreenState extends State<JoinGubScreen> {
                   24,
                   24,
                   24,
-                  24 + keyboardOccupiedHeight,
+                  24 +
+                      keyboardOccupiedHeight +
+                      widget.additionalBottomScrollPadding,
                 ),
                 child: ConstrainedBox(
                   constraints: BoxConstraints(minHeight: minimumContentHeight),
@@ -299,6 +320,7 @@ class _JoinGubScreenState extends State<JoinGubScreen> {
             },
           ),
         ),
+      ),
       ),
     );
   }
