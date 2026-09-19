@@ -1,6 +1,28 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:gubify/modules/community/models/community_leaderboard_model.dart';
+import 'package:gubify/modules/community/screens/global_best_answer_ranking_screen.dart';
 import 'package:gubify/screens/welcome_screen.dart';
+
+Future<CommunityLeaderboardPage> _emptyRanking({
+  Object? after,
+  required int limit,
+}) async => const CommunityLeaderboardPage(members: []);
+
+Future<CommunityLeaderboardPage> _fiveRankedUsers({
+  Object? after,
+  required int limit,
+}) async => CommunityLeaderboardPage(
+  members: List.generate(
+    5,
+    (index) => CommunityLeaderboardMember(
+      userId: 'user-$index',
+      displayName: 'Ranked ${index + 1}',
+      xp: 0,
+      bestAnswerCount: 5 - index,
+    ),
+  ),
+);
 
 void main() {
   testWidgets('fits a short screen without scrolling or overflow', (
@@ -10,17 +32,18 @@ void main() {
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
     await tester.pumpWidget(
-      const MaterialApp(
+      MaterialApp(
         home: WelcomeScreen(
-          headerOverride: SizedBox(height: 52),
-          greetingOverride: SizedBox(
+          headerOverride: const SizedBox(height: 52),
+          greetingOverride: const SizedBox(
             height: 31,
             child: Center(child: Text('Hi, Test')),
           ),
+          globalRankingLoader: _fiveRankedUsers,
         ),
       ),
     );
-    await tester.pump();
+    await tester.pumpAndSettle();
 
     expect(find.byType(SingleChildScrollView), findsNothing);
     expect(find.byType(ListView), findsNothing);
@@ -35,16 +58,14 @@ void main() {
     expect(find.byIcon(Icons.add_rounded), findsOneWidget);
     expect(find.text('My Gubs'), findsOneWidget);
     expect(find.text('Join a Gub'), findsOneWidget);
-    expect(find.text('Learn More'), findsOneWidget);
-    expect(find.text('Support Us'), findsOneWidget);
+    expect(find.text('Learn More'), findsNothing);
+    expect(find.text('Support Us'), findsNothing);
     expect(tester.takeException(), isNull);
 
     for (final action in [
       find.byTooltip('Create Gub'),
       find.text('My Gubs'),
       find.text('Join a Gub'),
-      find.text('Learn More'),
-      find.text('Support Us'),
     ]) {
       expect(tester.getBottomRight(action).dy, lessThanOrEqualTo(426));
     }
@@ -66,6 +87,7 @@ void main() {
               color: Colors.white,
             ),
           ),
+          globalRankingLoader: _emptyRanking,
         ),
       ),
     );
@@ -103,6 +125,9 @@ void main() {
   testWidgets('compact glass Create Gub action keeps the existing behavior', (
     tester,
   ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
     var createCalls = 0;
     await tester.pumpWidget(
       MaterialApp(
@@ -110,13 +135,17 @@ void main() {
           headerOverride: const SizedBox(height: 52),
           greetingOverride: const SizedBox(height: 31),
           onCreateGub: () => createCalls += 1,
+          globalRankingLoader: _emptyRanking,
         ),
       ),
     );
 
     final action = find.byKey(const Key('welcome-create-gub-glass-action'));
     expect(action, findsOneWidget);
-    expect(find.ancestor(of: action, matching: find.byType(ClipOval)), findsOneWidget);
+    expect(
+      find.ancestor(of: action, matching: find.byType(ClipOval)),
+      findsOneWidget,
+    );
     expect(
       find.ancestor(of: action, matching: find.byType(BackdropFilter)),
       findsOneWidget,
@@ -128,5 +157,39 @@ void main() {
     await tester.pump();
 
     expect(createCalls, 1);
+  });
+
+  testWidgets('shows five rankings below Join and opens the ranking page', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: WelcomeScreen(
+          headerOverride: const SizedBox(height: 96),
+          greetingOverride: const Text('Hi, Test'),
+          globalRankingLoader: _fiveRankedUsers,
+          globalRankingScreenBuilder: (_) =>
+              const Scaffold(body: Text('Global ranking destination')),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final preview = find.byKey(const Key('global-best-answer-ranking-preview'));
+    expect(preview, findsOneWidget);
+    expect(find.text('Ranked 1'), findsOneWidget);
+    expect(find.text('Ranked 5'), findsOneWidget);
+    expect(
+      tester.getTopLeft(preview).dy,
+      greaterThan(tester.getBottomLeft(find.text('Join a Gub')).dy),
+    );
+
+    await tester.tap(preview);
+    await tester.pumpAndSettle();
+    expect(find.text('Global ranking destination'), findsOneWidget);
+    expect(find.byType(GlobalBestAnswerRankingScreen), findsNothing);
   });
 }

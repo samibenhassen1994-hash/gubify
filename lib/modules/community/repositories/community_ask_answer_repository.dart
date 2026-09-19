@@ -202,8 +202,12 @@ class CommunityAskAnswerRepository {
       final progress = _firestore.collection('communityUserProgress');
       final winnerProgress = progress.doc(winnerId);
       final askerProgress = progress.doc(askerId);
+      final globalRanking = _firestore
+          .collection('globalBestAnswerRanking')
+          .doc(winnerId);
       final winnerProgressSnapshot = await transaction.get(winnerProgress);
       final askerProgressSnapshot = await transaction.get(askerProgress);
+      final globalRankingSnapshot = await transaction.get(globalRanking);
       int number(Map<String, dynamic>? data, String key) =>
           (data?[key] as num?)?.toInt() ?? 0;
       final winnerXp =
@@ -239,6 +243,14 @@ class CommunityAskAnswerRepository {
         'lastRewardAskId': askId,
         'lastRewardRole': 'askAuthor',
       }, SetOptions(merge: true));
+      transaction.set(globalRanking, {
+        'userId': winnerId,
+        'displayName': winnerSnapshot.data()?['displayName'] ?? 'User',
+        'photoUrl': winnerSnapshot.data()?['photoUrl'],
+        'bestAnswerCount':
+            number(globalRankingSnapshot.data(), 'bestAnswerCount') + 1,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
       return CommunityAskResolution(
         result: CommunityAskResolveResult.resolved,
         xpByUserId: {winnerId: winnerXp, askerId: askerXp},

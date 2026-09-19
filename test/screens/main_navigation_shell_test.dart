@@ -1,11 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gubify/modules/community/models/community_model.dart';
+import 'package:gubify/modules/community/models/community_leaderboard_model.dart';
 import 'package:gubify/modules/profile/models/user_profile_model.dart';
 import 'package:gubify/screens/main_navigation_shell.dart';
 import 'package:gubify/screens/welcome_screen.dart';
 import 'package:gubify/widgets/gubify_bottom_navigation_bar.dart';
 import 'package:gubify/widgets/gubify_swipe_back.dart';
+
+Future<CommunityLeaderboardPage> _emptyRanking({
+  Object? after,
+  required int limit,
+}) async => const CommunityLeaderboardPage(members: []);
 
 void main() {
   Widget buildShell({
@@ -618,6 +624,7 @@ void main() {
                 onCreateGub: onCreateGub,
                 onOpenMyGubs: onMyGubs,
                 onOpenJoinGub: onJoinGub,
+                globalRankingLoader: _emptyRanking,
                 compactForBottomNavigation: true,
               ),
           exploreBuilder: (_) => const SizedBox(),

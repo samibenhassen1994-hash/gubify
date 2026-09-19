@@ -844,6 +844,7 @@ service cloud.firestore {
     function communityAnswerPath(id, askId, answerId) { return /databases/$(database)/documents/communities/$(id)/asks/$(askId)/answers/$(answerId); }
     function communityActiveAskSlotPath(id, uid) { return /databases/$(database)/documents/communities/$(id)/activeAskSlots/$(uid); }
     function communityUserProgressPath(uid) { return /databases/$(database)/documents/communityUserProgress/$(uid); }
+    function globalBestAnswerRankingPath(uid) { return /databases/$(database)/documents/globalBestAnswerRanking/$(uid); }
     function communityDeletionMemberPath(id, uid) { return /databases/$(database)/documents/communities/$(id)/deletionMembers/$(uid); }
     function communityBanPath(id, uid) { return /databases/$(database)/documents/communities/$(id)/bans/$(uid); }
     function userCommunityPath(uid, id) { return /databases/$(database)/documents/users/$(uid)/communities/$(id); }
@@ -1159,7 +1160,44 @@ service cloud.firestore {
         && winnerProgress.lastRewardRole == 'bestAnswer'
         && askerProgress.lastRewardCommunityId == id
         && askerProgress.lastRewardAskId == askId
-        && askerProgress.lastRewardRole == 'askAuthor';
+        && askerProgress.lastRewardRole == 'askAuthor'
+        && validGlobalBestAnswerRankingAfter(
+          id, askId, afterAsk.bestAnswerAuthorId
+        );
+    }
+    function validGlobalBestAnswerRankingAfter(id, askId, uid) {
+      let rankingPath = globalBestAnswerRankingPath(uid);
+      let afterRanking = getAfter(rankingPath).data;
+      let member = get(communityMemberPath(id, uid)).data;
+      return existsAfter(rankingPath)
+        && afterRanking.keys().hasOnly([
+          'userId','displayName','photoUrl','bestAnswerCount','updatedAt'
+        ])
+        && afterRanking.userId == uid
+        && afterRanking.displayName == member.displayName
+        && afterRanking.photoUrl == member.get('photoUrl', null)
+        && afterRanking.bestAnswerCount is int
+        && afterRanking.bestAnswerCount > 0
+        && afterRanking.updatedAt == request.time
+        && ((!exists(rankingPath) && afterRanking.bestAnswerCount == 1)
+          || (exists(rankingPath)
+            && afterRanking.bestAnswerCount
+              == get(rankingPath).data.bestAnswerCount + 1));
+    }
+    function validGlobalBestAnswerRankingReward(uid) {
+      let progress = getAfter(communityUserProgressPath(uid)).data;
+      let id = progress.get('lastRewardCommunityId', '');
+      let askId = progress.get('lastRewardAskId', '');
+      let askBefore = get(communityAskPath(id, askId)).data;
+      let askAfter = getAfter(communityAskPath(id, askId)).data;
+      return signedIn()
+        && progress.lastRewardRole == 'bestAnswer'
+        && askBefore.status == 'active'
+        && askBefore.authorId == request.auth.uid
+        && askAfter.status == 'resolved'
+        && askAfter.bestAnswerAuthorId == uid
+        && uid != askAfter.authorId
+        && validGlobalBestAnswerRankingAfter(id, askId, uid);
     }
     function validCommunityAskAuthorEdit(id) {
       let afterAsk = request.resource.data;
@@ -1884,6 +1922,11 @@ service cloud.firestore {
         || validCommunityRewardReferenceCleanup(uid);
       allow delete: if own(uid)
         && !existsAfter(/databases/$(database)/documents/users/$(uid));
+    }
+
+    match /globalBestAnswerRanking/{uid} {
+      allow read: if signedIn();
+      allow create, update: if validGlobalBestAnswerRankingReward(uid);
     }
 
     match /communityGuidelinesAcceptances/{uid} {
