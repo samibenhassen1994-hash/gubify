@@ -26,7 +26,7 @@ Chat messages, task completion, proposal outcomes, XP, levels, leaderboards, gen
 
 The domain write remains client-owned and Rules-protected. After a Task, Proposal, Answer, Ask resolution, or Join Request mutation completes successfully, the Flutter client sends a best-effort event request to the Worker containing only the event type and authoritative entity identifiers. Push failure never rolls back or corrupts the already-completed domain operation.
 
-The Worker authenticates the caller with a fully verified Firebase ID token, reloads all authoritative Firestore documents, validates that the event exists and that the caller was allowed to cause it, derives recipients and message copy server-side, and uses a deterministic event key. It persists a deterministic delivery plan and enqueues bounded recipient chunks in Cloudflare Queue. Queue consumers create one deterministic inbox document per recipient, load that recipient's registered devices, send FCM HTTP v1 messages, and remove device records for permanently invalid tokens.
+The Worker authenticates the caller with a fully verified Firebase ID token, reloads all authoritative Firestore documents, validates that the event exists and that the caller was allowed to cause it, derives recipients and message copy server-side, and uses a deterministic event key. It persists a deterministic delivery plan and enqueues one deterministic Cloudflare Queue message per recipient. Queue consumers create one deterministic inbox document per recipient, load that recipient's registered devices, send FCM HTTP v1 messages, and remove device records for permanently invalid tokens.
 
 The Flutter app reads only its own global inbox and devices. It never supplies recipient IDs, notification titles, or notification bodies.
 
@@ -73,7 +73,7 @@ Path:
 
 `pushDeliveryEvents/{eventKey}`
 
-The Worker creates or observes a deterministic event guard recording the canonical event type, authoritative recipient set, and deterministic chunk plan. Recipient inbox document IDs are deterministic, and inbox creation is an idempotent create-or-read operation: retries cannot create duplicate inbox entries or reset an already-read document to unread.
+The Worker creates or observes a deterministic event guard recording the canonical event type and authoritative recipient set. Each recipient has a deterministic child delivery record under `pushDeliveryEvents/{eventKey}/recipients/{uid}` with enqueue state, enqueue attempts, last enqueue timestamp, device cursor, and completion timestamp. Recipient inbox document IDs are deterministic, and inbox creation is an idempotent create-or-read operation: retries cannot create duplicate inbox entries or reset an already-read document to unread.
 
 FCM delivery is deliberately best-effort rather than exactly-once. Queue retries may resend an FCM message after an ambiguous timeout. Every FCM payload therefore uses the deterministic notification ID/event key as Android `notification.tag`, Android collapse key where supported, and APNs `apns-collapse-id`, reducing duplicate visible notifications while acknowledging that FCM cannot guarantee exactly-once device delivery. No design claim relies on a per-device exactly-once delivery ledger.
 
@@ -90,7 +90,7 @@ Join Request documents gain an immutable-per-cycle `requestedAt` server timestam
 
 ## Firestore Rules
 
-Rules changes are limited to the two new user subcollections:
+Rules changes are limited to the two new user subcollections plus the minimum required `requestedAt` validation on the existing Community Join Request lifecycle. The Private Gub notification Rules under `gubs/{gubId}/notifications/{notificationId}` remain byte-for-byte unchanged.
 
 ### `users/{uid}/devices/{deviceId}`
 
@@ -106,7 +106,19 @@ Rules changes are limited to the two new user subcollections:
 - Client update may change only `read` from `false` to `true`; all other fields must remain unchanged.
 - No user can access another user's inbox.
 
-The Worker uses service-account authorization and is not granted through client Rules. Existing Rules for `gubs/{gubId}/notifications` remain byte-for-byte unchanged unless a failing regression demonstrates otherwise; in that case implementation stops for review.
+### `communities/{id}/joinRequests/{uid}` lifecycle
+
+The existing Join Request Rules and repository transactions are extended only to bind each reusable request document to one unambiguous request cycle:
+
+- Initial create requires `requestedAt` in the exact schema and requires both `createdAt == request.time` and `requestedAt == request.time`.
+- Reset from `approved` or `rejected` to `pending` requires a new `requestedAt == request.time`, preserves the original `createdAt`, removes the prior `resolvedAt`/`resolvedBy`, and changes no unrelated field.
+- Owner/Platform Admin transition from `pending` to `approved` or `rejected` must preserve `requestedAt` exactly from the pending resource, as well as the existing immutable identity/display/created fields.
+- Requester-side finalization of an approved request and any other legitimate current lifecycle operation must preserve `requestedAt`; no client path may remove it, reuse an earlier cycle value when reopening a request, or modify it outside the reset-to-pending transition.
+- Cancellation/deletion semantics remain unchanged because deletion removes the entire cycle document.
+
+Firestore emulator tests cover initial server-timestamp enforcement, reset-to-pending rotation, preservation through approve/reject/finalization, rejection of arbitrary edits/removal/backdating, and distinct event identity for two cycles using the same document ID.
+
+The Worker uses service-account authorization and is not granted through client Rules. Existing Rules for `gubs/{gubId}/notifications/{notificationId}` remain byte-for-byte unchanged.
 
 ## Worker endpoint and authentication
 
@@ -143,11 +155,17 @@ Required Worker configuration:
 
 No credentials or example private-key values are committed.
 
-Firebase ID-token verification is complete rather than decode-only. The verifier requires `alg == RS256`, resolves `kid` against Google's Secure Token public keys, verifies the signature with Web Crypto, and validates `iss == https://securetoken.google.com/{FIREBASE_PROJECT_ID}`, `aud == FIREBASE_PROJECT_ID`, non-empty bounded `sub`, `exp`, `iat`, and `auth_time` with a small documented clock-skew allowance. Public keys are cached with the Cloudflare Cache API according to Google's cache headers and refreshed on an unknown `kid`; failed verification never reaches event validation.
+Firebase ID-token verification is complete rather than decode-only. The canonical key source is the official Firebase/Google X.509 endpoint `https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com`. The verifier requires `alg == RS256`, resolves `kid` against those certificates, verifies the signature with Web Crypto, and validates `iss == https://securetoken.google.com/{FIREBASE_PROJECT_ID}`, `aud == FIREBASE_PROJECT_ID`, non-empty bounded `sub`, `exp`, `iat`, and `auth_time` with a small documented clock-skew allowance. Certificates are cached with the Cloudflare Cache API for the `Cache-Control: max-age` returned by the endpoint and refreshed immediately on an unknown `kid`; failed verification never reaches event validation.
 
 The endpoint applies Cloudflare's Rate Limiting binding before expensive Firestore/FCM work. It limits by a privacy-preserving hash of source IP before authentication and by verified Firebase UID after authentication. Rate-limit responses use HTTP 429 and do not create event guards or inbox documents. Exact limits remain configuration constants covered by tests and are conservative enough for legitimate retries.
 
-The HTTP handler performs authentication and authoritative validation only, persists the deterministic event/delivery plan, and sends recipient chunk references to `PUSH_DELIVERY_QUEUE`. Chunks contain no credentials or message text supplied by the client and are bounded (maximum 25 recipient UIDs per message). The Queue consumer re-reads the persisted authoritative plan, processes bounded recipient/device batches, and uses `ctx.waitUntil` only for short cleanup work. This keeps CPU time, subrequest count, message size, and retry behavior compatible with Workers Free limits. Chunk IDs and inbox IDs are deterministic, so Queue redelivery is safe.
+The HTTP handler performs authentication and authoritative validation only, persists the deterministic event/delivery plan, and sends one deterministic Queue message per recipient to `PUSH_DELIVERY_QUEUE`. The message contains only `eventKey` and recipient UID; it contains no credentials or client-supplied message text. Recipient fan-out therefore never relies on an arbitrary fixed recipient count per message.
+
+The Queue consumer re-reads the persisted authoritative plan and recipient state. It paginates device registrations with a maximum of 20 devices per invocation and enforces an explicit budget of at most 40 external subrequests, remaining below the Workers Free subrequest ceiling. If more devices remain or the budget would be exceeded, it persists the next device cursor and enqueues a deterministic continuation message for that same recipient. No invocation depends on an unlimited number of devices, members, or recipients. Queue batch size is configured conservatively, but correctness is defined by the per-message device page and subrequest budget rather than the batch size.
+
+Firestore persistence and Queue enqueue are explicitly non-atomic. The endpoint first creates or reads the event plan and deterministic recipient child records in `pending` state. It then attempts `queue.send()` for every recipient record not marked `completed`. Only after Queue acceptance does it record `enqueuedAt` and increment the enqueue attempt. If `queue.send()` fails, the recipient remains pending and the endpoint returns a retryable failure. If Queue acceptance succeeds but the Firestore status update fails, the record also remains pending; a later request may enqueue it again safely. If a prior request recorded `enqueued` but not `completed`, an explicit event retry may re-enqueue it after a bounded stale-enqueue interval. The consumer creates/reads the deterministic inbox document, advances the device cursor, and marks the recipient completed only after its bounded work is finished.
+
+Consequently, creating `pushDeliveryEvents/{eventKey}` never consumes the event by itself. Every endpoint retry enumerates all non-completed recipient records and repairs missing/stale enqueue work. Duplicate Queue messages are harmless because recipient state, inbox ID, continuation cursor, and notification collapse identifiers are deterministic. This recovery protocol handles both sides of the Firestore/Queue atomicity gap without claiming a cross-system transaction.
 
 ## Server-side event validation
 
@@ -275,6 +293,9 @@ Opening a notification from either the inbox or a system push uses the same coor
 - arbitrary client create/delete denied;
 - only `read: false -> true` accepted;
 - all other inbox mutations denied;
+- Join Request create requires `requestedAt == request.time`;
+- reset-to-pending rotates `requestedAt` while preserving `createdAt` and removing resolution metadata;
+- approve/reject/requester finalization preserve `requestedAt` and arbitrary requestedAt edits are denied;
 - existing Private Gub notification Rules regressions remain green.
 
 ### Worker
@@ -288,7 +309,9 @@ Opening a notification from either the inbox or a system push uses the same coor
 - resolved-request authorization and copy;
 - full Firebase ID-token signature/issuer/audience/time validation, key caching/refresh, and rate limiting;
 - deterministic event/chunk/inbox IDs and Queue redelivery behavior;
+- enqueue failure before acceptance, enqueue-success/status-write failure, stale enqueue, and retry recovery of every non-completed recipient;
 - multi-device delivery;
+- device pagination/continuation never exceeds 20 devices or 40 external subrequests per consumer invocation;
 - `notification + data` FCM payloads with deterministic Android/APNs collapse identifiers;
 - permanent invalid-token cleanup and transient-error retention;
 - existing Worker tests/lint/build remain green.
@@ -310,7 +333,8 @@ FCM launcher-dot appearance remains controlled by Android launchers and reflects
 - The global inbox is limited, read state is per recipient, and the navbar performs only an existence query.
 - FCM tokens are per UID and per installation, refresh safely, and are unregistered/deleted before logout or user change.
 - System-push taps mark the matching inbox notification read before routing.
-- Worker fan-out uses bounded Cloudflare Queue chunks compatible with Workers Free constraints.
+- Worker fan-out uses one deterministic Queue message per recipient, with bounded device pagination and subrequest usage compatible with Workers Free constraints.
+- Firestore/Queue enqueue failures are recoverable and cannot permanently consume an event guard.
 - Firebase ID tokens are fully verified with cached keys, and the endpoint is rate-limited.
 - Existing Private Gub internal notifications and their Rules are unchanged.
 - Flutter analyze/tests, complete Firestore Rules tests, and Worker tests/lint/build pass.
