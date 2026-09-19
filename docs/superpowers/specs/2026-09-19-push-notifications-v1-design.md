@@ -26,7 +26,7 @@ Chat messages, task completion, proposal outcomes, XP, levels, leaderboards, gen
 
 The domain write remains client-owned and Rules-protected. After a Task, Proposal, Answer, Ask resolution, or Join Request mutation completes successfully, the Flutter client sends a best-effort event request to the Worker containing only the event type and authoritative entity identifiers. Push failure never rolls back or corrupts the already-completed domain operation.
 
-The Worker authenticates the caller with a Firebase ID token, reloads all authoritative Firestore documents, validates that the event exists and that the caller was allowed to cause it, derives recipients and message copy server-side, and uses a deterministic event key. It creates one deterministic inbox document per recipient, loads that recipient's registered devices, sends FCM HTTP v1 messages, and removes device records for permanently invalid tokens.
+The Worker authenticates the caller with a fully verified Firebase ID token, reloads all authoritative Firestore documents, validates that the event exists and that the caller was allowed to cause it, derives recipients and message copy server-side, and uses a deterministic event key. It persists a deterministic delivery plan and enqueues bounded recipient chunks in Cloudflare Queue. Queue consumers create one deterministic inbox document per recipient, load that recipient's registered devices, send FCM HTTP v1 messages, and remove device records for permanently invalid tokens.
 
 The Flutter app reads only its own global inbox and devices. It never supplies recipient IDs, notification titles, or notification bodies.
 
@@ -45,7 +45,7 @@ Fields:
 - `platform`: one of `android`, `ios`.
 - `updatedAt`: server timestamp.
 
-The install UUID is stored locally with `shared_preferences`. On authentication changes, the service removes the previous user's device document before registering the same installation for the new UID. Token refresh updates the same document. Full tokens are never logged.
+The install UUID is stored locally with `shared_preferences`. Token refresh updates the same document. Every logout, account switch, and authenticated-session teardown first invokes a dedicated unregister operation while the old Firebase session is still valid: it deletes `users/{oldUid}/devices/{deviceId}`, then calls `FirebaseMessaging.deleteToken()`, and only then invokes Firebase Auth logout. If the Firestore delete fails, token deletion is still attempted so any stale server document points to an invalid registration token that the Worker can later remove. A subsequent login obtains a fresh token and registers the installation under the new UID. Anonymous-to-linked account conversion preserves the UID and therefore updates the existing registration rather than unregistering it. Full tokens are never logged.
 
 ### Global notification inbox
 
@@ -73,7 +73,9 @@ Path:
 
 `pushDeliveryEvents/{eventKey}`
 
-The Worker creates or observes a deterministic event guard recording the canonical event type and processing state. Recipient inbox document IDs are also deterministic, so retries cannot create duplicate inbox entries. FCM delivery is best-effort; a retry may resend only when delivery completion was not recorded, but never duplicates the inbox record.
+The Worker creates or observes a deterministic event guard recording the canonical event type, authoritative recipient set, and deterministic chunk plan. Recipient inbox document IDs are deterministic, and inbox creation is an idempotent create-or-read operation: retries cannot create duplicate inbox entries or reset an already-read document to unread.
+
+FCM delivery is deliberately best-effort rather than exactly-once. Queue retries may resend an FCM message after an ambiguous timeout. Every FCM payload therefore uses the deterministic notification ID/event key as Android `notification.tag`, Android collapse key where supported, and APNs `apns-collapse-id`, reducing duplicate visible notifications while acknowledging that FCM cannot guarantee exactly-once device delivery. No design claim relies on a per-device exactly-once delivery ledger.
 
 `eventKey` formats are canonical and entity-based, for example:
 
@@ -81,10 +83,10 @@ The Worker creates or observes a deterministic event guard recording the canonic
 - `proposal_created__{gubId}__{proposalId}`
 - `community_answer_created__{communityId}__{askId}__{answerId}`
 - `community_best_answer_selected__{communityId}__{askId}__{answerId}`
-- `community_join_request_created__{communityId}__{requesterUid}__{createdAt}`
-- `community_join_request_resolved__{communityId}__{requesterUid}__{status}__{resolvedAt}`
+- `community_join_request_created__{communityId}__{requesterUid}__{requestedAt}`
+- `community_join_request_resolved__{communityId}__{requesterUid}__{requestedAt}__{status}`
 
-The timestamp components for reusable Join Request document IDs come from authoritative Firestore timestamps, not client input.
+Join Request documents gain an immutable-per-cycle `requestedAt` server timestamp. A newly created request stores `createdAt == requestedAt`. When an already approved/rejected request is reset to `pending`, the existing document keeps its historical `createdAt` but receives a new server-side `requestedAt`; approval/rejection preserves that value. Thus every pending→resolved lifecycle has one authoritative cycle identifier even though the document ID is reused. The Worker rejects Join Request events without a valid `requestedAt`, and all event keys derive it from the authoritative request document rather than client input.
 
 ## Firestore Rules
 
@@ -121,12 +123,12 @@ Request body is a discriminated union containing only `type` and required entity
 
 Worker modules remain separate from `worker/index.ts`:
 
-- Firebase ID-token verification using Google's secure token certificates and Web Crypto.
+- Firebase ID-token verification using Google's Secure Token JWKS/certificates and Web Crypto.
 - Service-account OAuth access-token creation for Firestore and FCM HTTP v1.
 - Firestore REST helpers and strict document decoding.
 - Event validation/recipient resolution.
 - Inbox/idempotency persistence.
-- FCM delivery and invalid-token cleanup.
+- Queue producer, deterministic delivery chunks, Queue consumer, FCM delivery, and invalid-token cleanup.
 - HTTP route handler.
 
 `worker/index.ts` only recognizes the push route and delegates to the module; existing website, image, Community catalog, and sitemap routing remain unchanged.
@@ -136,8 +138,16 @@ Required Worker configuration:
 - Existing non-secret: `FIREBASE_PROJECT_ID`.
 - Secret: `FIREBASE_CLIENT_EMAIL`.
 - Secret: `FIREBASE_PRIVATE_KEY`.
+- Queue binding: `PUSH_DELIVERY_QUEUE`.
+- Rate Limiting binding: `PUSH_EVENTS_RATE_LIMITER`.
 
 No credentials or example private-key values are committed.
+
+Firebase ID-token verification is complete rather than decode-only. The verifier requires `alg == RS256`, resolves `kid` against Google's Secure Token public keys, verifies the signature with Web Crypto, and validates `iss == https://securetoken.google.com/{FIREBASE_PROJECT_ID}`, `aud == FIREBASE_PROJECT_ID`, non-empty bounded `sub`, `exp`, `iat`, and `auth_time` with a small documented clock-skew allowance. Public keys are cached with the Cloudflare Cache API according to Google's cache headers and refreshed on an unknown `kid`; failed verification never reaches event validation.
+
+The endpoint applies Cloudflare's Rate Limiting binding before expensive Firestore/FCM work. It limits by a privacy-preserving hash of source IP before authentication and by verified Firebase UID after authentication. Rate-limit responses use HTTP 429 and do not create event guards or inbox documents. Exact limits remain configuration constants covered by tests and are conservative enough for legitimate retries.
+
+The HTTP handler performs authentication and authoritative validation only, persists the deterministic event/delivery plan, and sends recipient chunk references to `PUSH_DELIVERY_QUEUE`. Chunks contain no credentials or message text supplied by the client and are bounded (maximum 25 recipient UIDs per message). The Queue consumer re-reads the persisted authoritative plan, processes bounded recipient/device batches, and uses `ctx.waitUntil` only for short cleanup work. This keeps CPU time, subrequest count, message size, and retry behavior compatible with Workers Free limits. Chunk IDs and inbox IDs are deterministic, so Queue redelivery is safe.
 
 ## Server-side event validation
 
@@ -159,11 +169,11 @@ The Worker loads the resolved Ask and selected Answer, verifies the authoritativ
 
 ### Join Request received
 
-The Worker loads the Community and pending request, verifies requester/caller consistency and approval access mode. Recipients are the Community owner plus every active Platform Admin whose user profile still exists and who is not in account-deletion state. No local Community admin role is introduced.
+The Worker loads the Community and pending request, verifies requester/caller consistency, approval access mode, and a valid authoritative `requestedAt` for the current pending cycle. Recipients are the Community owner plus every active Platform Admin whose user profile still exists and who is not in account-deletion state. No local Community admin role is introduced.
 
 ### Join Request resolved
 
-The Worker loads the request and Community, verifies status is `approved` or `rejected`, `resolvedBy` equals the caller, and caller is either the Community owner or an active Platform Admin under current architecture. Recipient is the authoritative request `userId`.
+The Worker loads the request and Community, verifies status is `approved` or `rejected`, `resolvedBy` equals the caller, the request retains the same authoritative `requestedAt` from its pending cycle, and caller is either the Community owner or an active Platform Admin under current architecture. Recipient is the authoritative request `userId`.
 
 ## Flutter event delivery
 
@@ -191,9 +201,14 @@ Test seams allow event delivery to be asserted without network requests.
 - observes `onTokenRefresh`;
 - observes Firebase Auth user changes to detach the installation from the previous UID and attach it to the current UID;
 - handles `onMessage` by relying on the Worker-written inbox stream for UI updates and avoiding an extra foreground system notification;
-- handles `onMessageOpenedApp` and `getInitialMessage` through a coordinator that waits for navigation readiness.
+- handles `onMessageOpenedApp` and `getInitialMessage` through a coordinator that waits for navigation readiness;
+- when a system push is opened, extracts the authoritative `notificationId`, marks that inbox document read before routing, and then opens the destination. Failure to mark read does not bypass destination validation, but is surfaced to the coordinator for bounded retry while the inbox stream remains authoritative.
 
 Account linking preserves the UID and therefore updates the same device record without breaking Anonymous-to-Google linking.
+
+All background/terminated deliveries use an FCM payload containing both `notification` and `data`. The `notification` block allows Android/iOS to display a system notification while the app is not foregrounded. The `data` block contains `notificationId`, `eventKey`, `type`, and only the bounded routing IDs needed by the app. Foreground handling does not synthesize a second local/system notification, preventing duplicate visible alerts.
+
+On Android, the high-importance notification channel enables `showBadge`/notification dots. This does not mirror Firestore unread state and does not create a numeric app badge: launcher dots represent active system notifications and disappear according to Android/launcher behavior when those notifications are opened, dismissed, or cleared. The in-app red bell dot remains independently driven by the Firestore unread existence query.
 
 ## Inbox and navbar badge
 
@@ -222,6 +237,8 @@ A separate `GlobalPushNotificationRouter` resolves each notification destination
 
 The coordinator uses the root navigator already owned by `GubifyApp`, queues one pending notification until startup navigation is ready, and avoids duplicate opens across initial-message and resumed-message paths.
 
+Opening a notification from either the inbox or a system push uses the same coordinator operation: mark the deterministic inbox document read, deduplicate the open by `notificationId`, then route. This ensures the navbar dot clears from the authoritative inbox state after a system-notification tap as well as an inbox tap.
+
 ## Error handling and consistency
 
 - Domain operations complete independently of push delivery.
@@ -229,7 +246,8 @@ The coordinator uses the root navigator already owned by `GubifyApp`, queues one
 - Missing/deleted destination content displays a simple unavailable message rather than crashing.
 - An FCM error never deletes inbox history.
 - Only permanent token errors (`UNREGISTERED` and equivalent invalid-registration responses) delete the matching device record; transient errors remain retryable.
-- Partial recipient delivery is recorded per recipient/device so retry remains bounded and idempotent.
+- Inbox creation is strongly idempotent and never duplicated or reset by retries.
+- FCM delivery remains best-effort/at-least-once under Queue retry. Deterministic collapse identifiers/tags reduce duplicate visible notifications but do not claim exactly-once delivery.
 
 ## Tests
 
@@ -242,7 +260,9 @@ The coordinator uses the root navigator already owned by `GubifyApp`, queues one
 - inbox loading/empty/error/read states;
 - routing for all six event types and unavailable destinations;
 - device registration, token refresh, user switching, linking with unchanged UID, and no full-token logging;
+- device unregister and FCM token deletion complete before Firebase Auth logout/account switch;
 - background/initial/opened-message coordinator and navigation-readiness queue;
+- system-push open marks the inbox document read before routing;
 - six service hooks fire only after successful writes and do not change domain success on delivery failure;
 - existing Private Gub notification tests remain unchanged and green.
 
@@ -264,25 +284,34 @@ The coordinator uses the root navigator already owned by `GubifyApp`, queues one
 - authoritative validation and recipients for all six events;
 - Answer-after-resolution rejection;
 - owner/active Platform Admin join-request recipients;
+- distinct Join Request cycles on the same document produce distinct `requestedAt` event keys;
 - resolved-request authorization and copy;
-- deterministic event keys and duplicate retry behavior;
+- full Firebase ID-token signature/issuer/audience/time validation, key caching/refresh, and rate limiting;
+- deterministic event/chunk/inbox IDs and Queue redelivery behavior;
 - multi-device delivery;
+- `notification + data` FCM payloads with deterministic Android/APNs collapse identifiers;
 - permanent invalid-token cleanup and transient-error retention;
 - existing Worker tests/lint/build remain green.
 
 ## Known V1 trade-offs
 
-Cloudflare Workers do not provide native Firestore document triggers. Therefore event dispatch is initiated by the successful Flutter operation. If the app is terminated after the Firestore write but before the Worker request begins, that event may not produce a push. Deterministic event keys make explicit retries safe, but V1 does not add a polling scheduler or Cloud Function. Closing that rare delivery gap would require a server-triggered outbox processor and is intentionally outside this V1.
+Cloudflare Workers do not provide native Firestore document triggers. Therefore event dispatch is initiated by the successful Flutter operation. If the app is terminated after the Firestore write but before the Worker request begins, that event may not produce a push. Deterministic event keys make explicit retries safe, but V1 does not add a polling scheduler or Cloud Function. Closing that rare delivery gap would require a server-triggered outbox processor and is intentionally outside this V1. Once the Worker accepts an event, Cloudflare Queue provides bounded asynchronous fan-out and retry.
 
-FCM launcher-dot appearance remains controlled by Android launchers. Gubify configures a channel that allows dots but does not implement numeric or OEM-specific badges.
+FCM delivery can duplicate under ambiguous network/Queue retry even though inbox creation cannot. Deterministic Android tags/collapse keys and APNs collapse IDs mitigate duplicate visible notifications; they do not create an exactly-once guarantee.
+
+FCM launcher-dot appearance remains controlled by Android launchers and reflects active system notifications, not the Firestore unread collection. Gubify configures a channel that allows dots but does not implement numeric or OEM-specific badges.
 
 ## Acceptance criteria
 
 - Exactly the six approved events can create global inbox documents and FCM deliveries.
 - Recipient, title, body, and routing data are derived by the Worker from authoritative data.
-- Retries do not duplicate inbox entries.
+- Reused Join Request documents identify each request cycle with authoritative `requestedAt`.
+- Retries do not duplicate inbox entries; FCM remains explicitly best-effort with deterministic collapse identifiers.
 - The global inbox is limited, read state is per recipient, and the navbar performs only an existence query.
-- FCM tokens are per UID and per installation, refresh safely, and detach on user change.
+- FCM tokens are per UID and per installation, refresh safely, and are unregistered/deleted before logout or user change.
+- System-push taps mark the matching inbox notification read before routing.
+- Worker fan-out uses bounded Cloudflare Queue chunks compatible with Workers Free constraints.
+- Firebase ID tokens are fully verified with cached keys, and the endpoint is rate-limited.
 - Existing Private Gub internal notifications and their Rules are unchanged.
 - Flutter analyze/tests, complete Firestore Rules tests, and Worker tests/lint/build pass.
 - No deployment, merge, or credential commit occurs.
