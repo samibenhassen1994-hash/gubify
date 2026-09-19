@@ -179,6 +179,38 @@ describe('Community active asks', () => {
     }));
   });
 
+  test('global Best Answer ranking is readable but cannot be forged', async () => {
+    await env.withSecurityRulesDisabled((context) => setDoc(
+      doc(context.firestore(), 'globalBestAnswerRanking', ids.member),
+      {
+        userId: ids.member,
+        displayName: 'Member',
+        photoUrl: null,
+        bestAnswerCount: 1,
+        updatedAt: t2,
+      },
+    ));
+
+    const rankingQuery = (uid) => query(
+      collection(db(uid), 'globalBestAnswerRanking'),
+      where('bestAnswerCount', '>', 0),
+      orderBy('bestAnswerCount', 'desc'),
+      orderBy(documentId(), 'desc'),
+      limit(10),
+    );
+    await assertSucceeds(getDocs(rankingQuery(ids.owner)));
+    await assertFails(setDoc(
+      doc(db(ids.member), 'globalBestAnswerRanking', ids.member),
+      {
+        userId: ids.member,
+        displayName: 'Member',
+        photoUrl: null,
+        bestAnswerCount: 9999,
+        updatedAt: serverTimestamp(),
+      },
+    ));
+  });
+
   test('global XP deletion requires the atomic account profile cleanup', async () => {
     await env.withSecurityRulesDisabled((context) => setDoc(
       doc(context.firestore(), 'communityUserProgress', ids.member),
@@ -680,7 +712,72 @@ describe('Community active asks', () => {
       xp: 2, communityIds: ['c1'], updatedAt: serverTimestamp(), lastRewardCommunityId: 'c1',
       lastRewardAskId: 'message-1', lastRewardRole: 'askAuthor',
     });
+    batch.set(doc(ownerDb, 'globalBestAnswerRanking', ids.member), {
+      userId: ids.member,
+      displayName: 'Member',
+      photoUrl: null,
+      bestAnswerCount: 1,
+      updatedAt: serverTimestamp(),
+    });
     await assertSucceeds(batch.commit());
+  });
+
+  test('Best Answer resolution must include the exact global increment', async () => {
+    await env.withSecurityRulesDisabled((context) => setDoc(
+      doc(context.firestore(), 'globalBestAnswerRanking', ids.member),
+      {
+        userId: ids.member,
+        displayName: 'Member',
+        photoUrl: null,
+        bestAnswerCount: 4,
+        updatedAt: t1,
+      },
+    ));
+
+    const ownerDb = db(ids.owner);
+    const missingRanking = writeBatch(ownerDb);
+    missingRanking.update(doc(ownerDb, 'communities', 'c1', 'asks', 'message-1'), {
+      status: 'resolved', bestAnswerId: 'answer-1', bestAnswerAuthorId: ids.member,
+      resolvedAt: serverTimestamp(), xpAwarded: true,
+    });
+    missingRanking.delete(doc(ownerDb, 'communities', 'c1', 'activeAskSlots', ids.owner));
+    missingRanking.update(doc(ownerDb, 'communities', 'c1', 'members', ids.member), {
+      bestAnswerCount: 1,
+    });
+    missingRanking.set(doc(ownerDb, 'communityUserProgress', ids.member), {
+      xp: 20, communityIds: ['c1'], updatedAt: serverTimestamp(), lastRewardCommunityId: 'c1',
+      lastRewardAskId: 'message-1', lastRewardRole: 'bestAnswer',
+    });
+    missingRanking.set(doc(ownerDb, 'communityUserProgress', ids.owner), {
+      xp: 2, communityIds: ['c1'], updatedAt: serverTimestamp(), lastRewardCommunityId: 'c1',
+      lastRewardAskId: 'message-1', lastRewardRole: 'askAuthor',
+    });
+    await assertFails(missingRanking.commit());
+
+    const valid = writeBatch(ownerDb);
+    valid.update(doc(ownerDb, 'communities', 'c1', 'asks', 'message-1'), {
+      status: 'resolved', bestAnswerId: 'answer-1', bestAnswerAuthorId: ids.member,
+      resolvedAt: serverTimestamp(), xpAwarded: true,
+    });
+    valid.delete(doc(ownerDb, 'communities', 'c1', 'activeAskSlots', ids.owner));
+    valid.update(doc(ownerDb, 'communities', 'c1', 'members', ids.member), {
+      bestAnswerCount: 1,
+    });
+    valid.set(doc(ownerDb, 'communityUserProgress', ids.member), {
+      xp: 20, communityIds: ['c1'], updatedAt: serverTimestamp(), lastRewardCommunityId: 'c1',
+      lastRewardAskId: 'message-1', lastRewardRole: 'bestAnswer',
+    });
+    valid.set(doc(ownerDb, 'communityUserProgress', ids.owner), {
+      xp: 2, communityIds: ['c1'], updatedAt: serverTimestamp(), lastRewardCommunityId: 'c1',
+      lastRewardAskId: 'message-1', lastRewardRole: 'askAuthor',
+    });
+    valid.update(doc(ownerDb, 'globalBestAnswerRanking', ids.member), {
+      displayName: 'Member',
+      photoUrl: null,
+      bestAnswerCount: 5,
+      updatedAt: serverTimestamp(),
+    });
+    await assertSucceeds(valid.commit());
   });
 
   test('non-author, own Answer, missing reward, and arbitrary XP resolution are denied', async () => {

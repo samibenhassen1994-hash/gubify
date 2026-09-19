@@ -27,6 +27,8 @@ class UserHeader extends StatefulWidget {
   final double? bottomPadding;
   final VoidCallback? onExploreCommunities;
   final VoidCallback? onOpenPersonalProfile;
+  final VoidCallback? onLearnMore;
+  final VoidCallback? onSupport;
   final String? currentUserIdOverride;
   final Future<Map<String, dynamic>?>? userFutureOverride;
 
@@ -40,6 +42,8 @@ class UserHeader extends StatefulWidget {
     this.bottomPadding,
     this.onExploreCommunities,
     this.onOpenPersonalProfile,
+    this.onLearnMore,
+    this.onSupport,
     this.currentUserIdOverride,
     this.userFutureOverride,
   }) : assert(!darkCard || showCard, "darkCard requires showCard.");
@@ -251,6 +255,46 @@ class _UserHeaderState extends State<UserHeader> {
                       : useLightForeground
                       ? Colors.white70
                       : const Color(0xFF2563EB),
+                ),
+              ),
+
+            if (widget.onLearnMore != null)
+              IconButton(
+                tooltip: "Learn More",
+                onPressed: widget.onLearnMore,
+                icon: Icon(
+                  Icons.language_rounded,
+                  size: 25,
+                  color: widget.darkCard
+                      ? Colors.white
+                      : useLightForeground
+                      ? Colors.white70
+                      : const Color(0xFF60A5FA),
+                ),
+              ),
+
+            if (widget.onSupport != null)
+              Tooltip(
+                message: "Support Us",
+                excludeFromSemantics: true,
+                child: Semantics(
+                  label: "Support Us",
+                  button: true,
+                  child: SizedBox(
+                    width: 44,
+                    height: 44,
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(22),
+                        onTap: widget.onSupport,
+                        child: Image.asset(
+                          'assets/images/supportbotton.png',
+                          fit: BoxFit.contain,
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
               ),
 

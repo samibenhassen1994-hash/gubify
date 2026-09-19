@@ -6,6 +6,8 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../repositories/user_repository.dart';
 import '../modules/community/screens/community_explorer_screen.dart';
+import '../modules/community/screens/global_best_answer_ranking_screen.dart';
+import '../modules/community/widgets/global_best_answer_ranking_preview.dart';
 import '../widgets/gubify_background.dart';
 import '../widgets/gubify_logo.dart';
 import '../widgets/user_header.dart';
@@ -23,6 +25,8 @@ class WelcomeScreen extends StatefulWidget {
     this.onCreateGub,
     this.onOpenMyGubs,
     this.onOpenJoinGub,
+    this.globalRankingLoader,
+    this.globalRankingScreenBuilder,
     this.compactForBottomNavigation = false,
   });
 
@@ -33,6 +37,8 @@ class WelcomeScreen extends StatefulWidget {
   final VoidCallback? onCreateGub;
   final VoidCallback? onOpenMyGubs;
   final VoidCallback? onOpenJoinGub;
+  final GlobalRankingLoader? globalRankingLoader;
+  final WidgetBuilder? globalRankingScreenBuilder;
   final bool compactForBottomNavigation;
 
   @override
@@ -145,6 +151,8 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                             onExploreCommunities: _goToCommunityExplorer,
                             onOpenPersonalProfile:
                                 widget.onOpenPersonalProfile,
+                            onLearnMore: _openWebsite,
+                            onSupport: _openSupport,
                           ),
 
                       if (compact)
@@ -214,75 +222,17 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                     : (compact ? 44 : 54),
               ),
 
-              SizedBox(height: veryCompact ? 0 : (compact ? 2 : 4)),
-
-              Wrap(
-                alignment: WrapAlignment.center,
-                spacing: veryCompact ? 4 : 8,
-                children: [
-                  TextButton.icon(
-                    onPressed: _openWebsite,
-                    style: compact
-                        ? TextButton.styleFrom(
-                            minimumSize: Size(
-                              0,
-                              veryCompact && widget.compactForBottomNavigation
-                                  ? 24
-                                  : 40,
-                            ),
-                            padding: EdgeInsets.symmetric(
-                              horizontal: veryCompact ? 2 : 4,
-                            ),
-                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            visualDensity: VisualDensity.compact,
-                          )
-                        : null,
-                    icon: Icon(
-                      Icons.language,
-                      size: veryCompact ? 16 : (compact ? 17 : 19),
-                      color: const Color(0xFF60A5FA),
-                    ),
-                    label: Text(
-                      'Learn More',
-                      style: TextStyle(
-                        color: const Color(0xFF60A5FA),
-                        fontSize: veryCompact ? 12 : (compact ? 13 : 14),
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
+              SizedBox(height: veryCompact ? 2 : 6),
+              GlobalBestAnswerRankingPreview(
+                compact: compact,
+                loadPage: widget.globalRankingLoader,
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute<void>(
+                    builder: widget.globalRankingScreenBuilder ??
+                        (_) => const GlobalBestAnswerRankingScreen(),
                   ),
-                  TextButton.icon(
-                    onPressed: _openSupport,
-                    style: compact
-                        ? TextButton.styleFrom(
-                            minimumSize: Size(
-                              0,
-                              veryCompact && widget.compactForBottomNavigation
-                                  ? 24
-                                  : 40,
-                            ),
-                            padding: EdgeInsets.symmetric(
-                              horizontal: veryCompact ? 2 : 4,
-                            ),
-                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            visualDensity: VisualDensity.compact,
-                          )
-                        : null,
-                    icon: Icon(
-                      Icons.favorite_border,
-                      size: veryCompact ? 16 : (compact ? 17 : 19),
-                      color: const Color(0xFFF87171),
-                    ),
-                    label: Text(
-                      'Support Us',
-                      style: TextStyle(
-                        color: const Color(0xFFF87171),
-                        fontSize: veryCompact ? 12 : (compact ? 13 : 14),
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ],
+                ),
               ),
 
               SizedBox(height: veryCompact ? 0 : (compact ? 2 : 4)),
