@@ -533,6 +533,7 @@ describe('manual Community restrictions', () => {
         displayName: 'Joiner',
         status: 'pending',
         createdAt: serverTimestamp(),
+        requestedAt: serverTimestamp(),
       }),
     );
     await env.withSecurityRulesDisabled(async (context) => {
@@ -547,6 +548,7 @@ describe('manual Community restrictions', () => {
         displayName: 'Outsider',
         status: 'rejected',
         createdAt: joinedAt,
+        requestedAt: joinedAt,
         resolvedAt: joinedAt,
         resolvedBy: ids.owner,
       });
@@ -557,6 +559,7 @@ describe('manual Community restrictions', () => {
         displayName: 'Outsider',
         status: 'pending',
         createdAt: joinedAt,
+        requestedAt: serverTimestamp(),
       }),
     );
     await assertFails(
@@ -565,6 +568,7 @@ describe('manual Community restrictions', () => {
         displayName: 'Member',
         status: 'pending',
         createdAt: serverTimestamp(),
+        requestedAt: serverTimestamp(),
       }),
     );
   });

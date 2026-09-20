@@ -27,7 +27,11 @@ export function planCommunityJoinRequestRequestedAtBackfill(documents) {
       invalidCreatedAt += 1;
       continue;
     }
-    updates.push({ reference: document.ref, requestedAt: data.createdAt });
+    updates.push({
+      reference: document.ref,
+      requestedAt: data.createdAt,
+      updateTime: document.updateTime,
+    });
   }
 
   return {
@@ -55,7 +59,16 @@ export async function executeCommunityJoinRequestRequestedAtBackfill({
 
   if (apply) {
     for (const update of plan.updates) {
-      await updateDocument(update.reference, { requestedAt: update.requestedAt });
+      if (!isTimestamp(update.updateTime)) {
+        throw new Error(
+          `Join request ${update.reference.path} is missing updateTime precondition`,
+        );
+      }
+      await updateDocument(
+        update.reference,
+        { requestedAt: update.requestedAt },
+        { lastUpdateTime: update.updateTime },
+      );
     }
   }
   return plan.summary;
@@ -73,14 +86,17 @@ export function parseCommunityJoinRequestBackfillMode(args) {
   return args.includes('--apply') ? 'apply' : 'dry-run';
 }
 
-async function readAllJoinRequests(firestore) {
+export async function readAllCommunityJoinRequests(
+  firestore,
+  pageSize = PAGE_SIZE,
+) {
   const documents = [];
   let cursor;
   while (true) {
     let query = firestore
       .collectionGroup('joinRequests')
       .orderBy(FieldPath.documentId())
-      .limit(PAGE_SIZE);
+      .limit(pageSize);
     if (cursor) query = query.startAfter(cursor);
     const page = await query.get();
     if (page.empty) break;
@@ -90,21 +106,73 @@ async function readAllJoinRequests(firestore) {
   return documents;
 }
 
-async function applyUpdates(firestore, updates) {
-  for (let start = 0; start < updates.length; start += BATCH_SIZE) {
+export async function applyCommunityJoinRequestRequestedAtUpdates(
+  firestore,
+  updates,
+  batchSize = BATCH_SIZE,
+) {
+  for (const update of updates) {
+    if (!isTimestamp(update.updateTime)) {
+      throw new Error(
+        `Join request ${update.reference.path} is missing updateTime precondition`,
+      );
+    }
+  }
+
+  for (let start = 0; start < updates.length; start += batchSize) {
     const batch = firestore.batch();
-    for (const update of updates.slice(start, start + BATCH_SIZE)) {
-      batch.update(update.reference, { requestedAt: update.requestedAt });
+    for (const update of updates.slice(start, start + batchSize)) {
+      batch.update(
+        update.reference,
+        { requestedAt: update.requestedAt },
+        { lastUpdateTime: update.updateTime },
+      );
     }
     await batch.commit();
   }
 }
 
-function printSummary(label, summary) {
-  console.log(
+function printSummary(label, summary, log) {
+  log(
     `${label}: missing=${summary.missing}, updated=${summary.updated}, `
       + `alreadyCurrent=${summary.alreadyCurrent}, invalidCreatedAt=${summary.invalidCreatedAt}`,
   );
+}
+
+export async function runCommunityJoinRequestRequestedAtBackfill({
+  firestore,
+  mode,
+  pageSize = PAGE_SIZE,
+  batchSize = BATCH_SIZE,
+  log = console.log,
+}) {
+  const documents = await readAllCommunityJoinRequests(firestore, pageSize);
+  const plan = planCommunityJoinRequestRequestedAtBackfill(documents);
+  printSummary(mode === 'apply' ? 'Planned apply' : 'Dry run', plan.summary, log);
+  if (plan.summary.invalidCreatedAt > 0) {
+    throw new Error(
+      `${plan.summary.invalidCreatedAt} join request documents have invalid or missing createdAt`,
+    );
+  }
+
+  if (mode !== 'apply') {
+    log('Dry run only. Re-run with --apply after reviewing the totals.');
+    return { plan: plan.summary, verification: null };
+  }
+
+  await applyCommunityJoinRequestRequestedAtUpdates(
+    firestore,
+    plan.updates,
+    batchSize,
+  );
+  const verification = planCommunityJoinRequestRequestedAtBackfill(
+    await readAllCommunityJoinRequests(firestore, pageSize),
+  ).summary;
+  printSummary('Verification', verification, log);
+  if (verification.missing > 0 || verification.invalidCreatedAt > 0) {
+    throw new Error('Verification failed: requestedAt backfill is incomplete.');
+  }
+  return { plan: plan.summary, verification };
 }
 
 async function main() {
@@ -115,27 +183,7 @@ async function main() {
   }
 
   const firestore = getFirestore();
-  const documents = await readAllJoinRequests(firestore);
-  const plan = planCommunityJoinRequestRequestedAtBackfill(documents);
-  printSummary(mode === 'apply' ? 'Planned apply' : 'Dry run', plan.summary);
-  if (plan.summary.invalidCreatedAt > 0) {
-    throw new Error(
-      `${plan.summary.invalidCreatedAt} join request documents have invalid or missing createdAt`,
-    );
-  }
-
-  if (mode === 'apply') {
-    await applyUpdates(firestore, plan.updates);
-    const verification = planCommunityJoinRequestRequestedAtBackfill(
-      await readAllJoinRequests(firestore),
-    ).summary;
-    printSummary('Verification', verification);
-    if (verification.missing > 0 || verification.invalidCreatedAt > 0) {
-      throw new Error('Verification failed: requestedAt backfill is incomplete.');
-    }
-  } else {
-    console.log('Dry run only. Re-run with --apply after reviewing the totals.');
-  }
+  await runCommunityJoinRequestRequestedAtBackfill({ firestore, mode });
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
