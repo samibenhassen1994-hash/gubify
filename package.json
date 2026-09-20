@@ -2,6 +2,8 @@
   "scripts": {
     "backfill:organized-event-assignees": "node tools/backfill-organized-event-assignment-user-ids.mjs",
     "test:backfill:organized-event-assignees": "node --test tests/tools/backfill-organized-event-assignment-user-ids.test.mjs",
+    "backfill:community-join-request-requested-at": "node tools/backfill-community-join-request-requested-at.mjs",
+    "test:backfill:community-join-request-requested-at": "node --test tests/tools/backfill-community-join-request-requested-at.test.mjs",
     "test:rules:platform-admin": "node --test tests/firestore-rules/platform-community-admin.test.mjs",
     "test:rules:smoke": "node --test tests/firestore-rules/structural-smoke.test.mjs",
     "test:rules:phase3a": "node --test tests/firestore-rules/phase3a.test.mjs",

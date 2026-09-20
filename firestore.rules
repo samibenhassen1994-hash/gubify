@@ -1881,11 +1881,13 @@ service cloud.firestore {
         && before.data.userId == uid
         && before.data.status == 'pending'
         && after.data.keys().hasOnly([
-          'userId','displayName','status','createdAt','resolvedAt','resolvedBy'
+          'userId','displayName','status','createdAt','requestedAt',
+          'resolvedAt','resolvedBy'
         ])
         && after.data.userId == uid
         && after.data.displayName == before.data.displayName
         && after.data.createdAt == before.data.createdAt
+        && after.data.requestedAt == before.data.requestedAt
         && after.data.status == 'approved'
         && after.data.resolvedAt == request.time
         && after.data.resolvedBy == request.auth.uid;
@@ -2652,21 +2654,26 @@ service cloud.firestore {
           && communityDoc(id).data.get('accessMode','approval') == 'approval'
           && !exists(communityMemberPath(id, uid))
           && !exists(communityBanPath(id, uid))
-          && request.resource.data.keys().hasOnly(['userId','displayName','status','createdAt'])
+          && request.resource.data.keys().hasOnly([
+            'userId','displayName','status','createdAt','requestedAt'
+          ])
           && request.resource.data.userId == uid
           && validText(request.resource.data.displayName, 1, 25)
           && request.resource.data.status == 'pending'
-          && request.resource.data.createdAt == request.time;
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.requestedAt == request.time;
         allow update: if validCommunityApprovalRequest(id, uid)
           || (canModerateCommunity(id)
             && uid != request.auth.uid && uid != communityDoc(id).data.ownerId
             && resource.data.status == 'pending'
             && request.resource.data.keys().hasOnly([
-              'userId','displayName','status','createdAt','resolvedAt','resolvedBy'
+              'userId','displayName','status','createdAt','requestedAt',
+              'resolvedAt','resolvedBy'
             ])
             && request.resource.data.userId == uid
             && request.resource.data.displayName == resource.data.displayName
             && request.resource.data.createdAt == resource.data.createdAt
+            && request.resource.data.requestedAt == resource.data.requestedAt
             && request.resource.data.status == 'rejected'
             && request.resource.data.resolvedAt == request.time
             && request.resource.data.resolvedBy == request.auth.uid)
@@ -2677,11 +2684,12 @@ service cloud.firestore {
             && !exists(communityMemberPath(id, uid))
             && !exists(communityBanPath(id, uid))
             && request.resource.data.keys().hasOnly([
-              'userId','displayName','status','createdAt'
+              'userId','displayName','status','createdAt','requestedAt'
             ])
             && request.resource.data.userId == resource.data.userId
             && request.resource.data.displayName == resource.data.displayName
             && request.resource.data.createdAt == resource.data.createdAt
+            && request.resource.data.requestedAt == request.time
             && request.resource.data.status == 'pending');
         allow delete: if (linkedCommunityAccount() && own(uid)
           && (resource.data.status == 'pending'

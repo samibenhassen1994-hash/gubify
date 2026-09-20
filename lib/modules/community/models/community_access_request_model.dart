@@ -11,12 +11,14 @@ class CommunityAccessRequestModel {
   final String displayName;
   final String status;
   final Timestamp? createdAt;
+  final Timestamp? requestedAt;
 
   const CommunityAccessRequestModel({
     required this.userId,
     required this.displayName,
     required this.status,
     required this.createdAt,
+    this.requestedAt,
   });
 
   factory CommunityAccessRequestModel.fromFirestore(
@@ -28,6 +30,7 @@ class CommunityAccessRequestModel {
       displayName: data["displayName"] as String? ?? "User",
       status: data["status"] as String? ?? pendingStatus,
       createdAt: data["createdAt"] as Timestamp?,
+      requestedAt: data["requestedAt"] as Timestamp?,
     );
   }
 }
