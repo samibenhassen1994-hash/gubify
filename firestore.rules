@@ -103,6 +103,19 @@ service cloud.firestore {
         && (data.get('photoUrl', null) == null || data.photoUrl is string)
         && (data.get('photoURL', null) == null || data.photoURL is string);
     }
+    function validDeviceRegistration(deviceId) {
+      let data = request.resource.data;
+      return data.keys().hasOnly(['deviceId','token','platform','updatedAt'])
+        && data.deviceId == deviceId
+        && validText(data.token, 1, 4096)
+        && data.platform in ['android', 'ios']
+        && data.updatedAt == request.time;
+    }
+    function validPushNotificationReadUpdate() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read'])
+        && resource.data.read == false
+        && request.resource.data.read == true;
+    }
     function validGubRootCreate(id) {
       let data = request.resource.data;
       let token = getAfter(inviteTokenPath(data.inviteTokenId));
@@ -2013,6 +2026,17 @@ service cloud.firestore {
           && request.resource.data.blockedUserId == blockedUid
           && request.resource.data.blockedAt == request.time;
         allow delete: if own(uid);
+      }
+      match /devices/{deviceId} {
+        allow get, list: if own(uid);
+        allow create, update: if own(uid) && !accountDeletionStarted(uid)
+          && validDeviceRegistration(deviceId);
+        allow delete: if own(uid);
+      }
+      match /pushNotifications/{notificationId} {
+        allow get, list: if own(uid);
+        allow create, delete: if false;
+        allow update: if own(uid) && validPushNotificationReadUpdate();
       }
     }
 
