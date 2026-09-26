@@ -7,6 +7,10 @@ import '../repositories/community_ask_answer_repository.dart';
 import 'community_ask_service.dart';
 import 'community_service.dart';
 import 'community_user_xp_cache.dart';
+import '../../push_notifications/models/push_event.dart';
+import '../../push_notifications/services/push_event_client.dart';
+
+typedef PushEventSubmit = Future<void> Function(PushEvent event);
 
 typedef CommunityAnswerCreate =
     Future<CommunityAnswerCreateResult> Function({
@@ -48,6 +52,7 @@ class CommunityAskAnswerService {
     required this._editAnswer,
     required this._deleteAnswer,
     required this._primeXp,
+    required this._submitPushEvent,
   });
 
   factory CommunityAskAnswerService.forTesting({
@@ -58,6 +63,7 @@ class CommunityAskAnswerService {
     CommunityAnswerEdit? editAnswer,
     CommunityAnswerDelete? deleteAnswer,
     void Function(Map<String, int>)? primeXp,
+    PushEventSubmit? submitPushEvent,
   }) => CommunityAskAnswerService._(
     currentAccount: currentAccount,
     currentDisplayName: currentDisplayName,
@@ -86,6 +92,7 @@ class CommunityAskAnswerService {
         ({required communityId, required askId, required answerId}) async =>
             CommunityAnswerDeleteResult.deleted,
     primeXp: primeXp ?? (_) {},
+    submitPushEvent: submitPushEvent ?? (_) async {},
   );
 
   factory CommunityAskAnswerService.withXpCache(CommunityUserXpCache xpCache) =>
@@ -110,6 +117,7 @@ class CommunityAskAnswerService {
         editAnswer: CommunityAskAnswerRepository.instance.editAnswer,
         deleteAnswer: CommunityAskAnswerRepository.instance.deleteAnswer,
         primeXp: xpCache.prime,
+        submitPushEvent: PushEventClient.instance.submit,
       );
 
   static const maxTextLength = AppLimits.communityMessageMaxLength;
@@ -124,6 +132,7 @@ class CommunityAskAnswerService {
   final CommunityAnswerEdit _editAnswer;
   final CommunityAnswerDelete _deleteAnswer;
   final void Function(Map<String, int>) _primeXp;
+  final PushEventSubmit _submitPushEvent;
 
   Future<String> createAnswer({
     required String communityId,
@@ -164,6 +173,11 @@ class CommunityAskAnswerService {
     if (result == CommunityAnswerCreateResult.askAuthor) {
       throw const CommunityAskAuthorCannotAnswerException();
     }
+    unawaited(_submitPushEvent(PushEvent.communityAnswerCreated(
+      communityId: communityId.trim(),
+      askId: askId.trim(),
+      answerId: account.userId,
+    )));
     return account.userId;
   }
 
@@ -243,6 +257,11 @@ class CommunityAskAnswerService {
     switch (result.result) {
       case CommunityAskResolveResult.resolved:
         _primeXp(result.xpByUserId);
+        unawaited(_submitPushEvent(PushEvent.communityBestAnswerSelected(
+          communityId: ask.communityId,
+          askId: ask.askId,
+          answerId: answer.answerId,
+        )));
         return result;
       case CommunityAskResolveResult.ownAnswer:
         throw const CommunityAskOwnAnswerException();
