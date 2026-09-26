@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../../widgets/gub_screen_background.dart';
+import '../../push_notifications/services/global_push_notification_service.dart';
+import '../../push_notifications/widgets/global_push_notification_card.dart';
 
 class GlobalNotificationsScreen extends StatelessWidget {
   const GlobalNotificationsScreen({super.key});
@@ -19,28 +21,25 @@ class GlobalNotificationsScreen extends StatelessWidget {
           elevation: 0,
           scrolledUnderElevation: 0,
         ),
-        body: const SafeArea(
+        body: SafeArea(
           top: false,
-          child: Center(
-            child: Padding(
-              padding: EdgeInsets.all(32),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.notifications_none_rounded,
-                    size: 52,
-                    color: Color(0xFF64748B),
-                  ),
-                  SizedBox(height: 14),
-                  Text(
-                    'Your notifications will appear here.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 16, color: Color(0xFF475569)),
-                  ),
-                ],
-              ),
-            ),
+          child: StreamBuilder(
+            stream: GlobalPushNotificationService.instance.watchRecent(),
+            builder: (context, snapshot) {
+              if (snapshot.hasError) return const Center(child: Text('Unable to load notifications.'));
+              final notifications = snapshot.data ?? const [];
+              if (notifications.isEmpty) return const Center(child: Text('Your notifications will appear here.'));
+              return ListView.builder(
+                itemCount: notifications.length,
+                itemBuilder: (context, index) {
+                  final notification = notifications[index];
+                  return GlobalPushNotificationCard(
+                    notification: notification,
+                    onTap: () => GlobalPushNotificationService.instance.markRead(notification.id),
+                  );
+                },
+              );
+            },
           ),
         ),
       ),
