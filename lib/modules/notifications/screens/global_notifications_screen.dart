@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../widgets/gub_screen_background.dart';
 import '../../push_notifications/services/global_push_notification_service.dart';
 import '../../push_notifications/widgets/global_push_notification_card.dart';
+import '../../push_notifications/services/push_notification_coordinator.dart';
 
 class GlobalNotificationsScreen extends StatelessWidget {
   const GlobalNotificationsScreen({super.key});
@@ -35,7 +36,11 @@ class GlobalNotificationsScreen extends StatelessWidget {
                   final notification = notifications[index];
                   return GlobalPushNotificationCard(
                     notification: notification,
-                    onTap: () => GlobalPushNotificationService.instance.markRead(notification.id),
+                    onTap: () => PushNotificationCoordinator.openFromInbox({
+                      ...notification.data,
+                      'notificationId': notification.id,
+                      'type': notification.type,
+                    }),
                   );
                 },
               );

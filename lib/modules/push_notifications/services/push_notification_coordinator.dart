@@ -10,7 +10,8 @@ import 'global_push_notification_service.dart';
 const globalNotificationChannelId = 'gubify_global_notifications';
 
 class PushNotificationCoordinator {
-  PushNotificationCoordinator({required this.navigatorKey});
+  PushNotificationCoordinator({required this.navigatorKey}) { instance = this; }
+  static PushNotificationCoordinator? instance;
   final GlobalKey<NavigatorState> navigatorKey;
   final _openedIds = <String>{};
 
@@ -44,6 +45,9 @@ class PushNotificationCoordinator {
       await GlobalPushNotificationRouter().open(context, data);
     }
   }
+
+  static Future<void> openFromInbox(Map<String, dynamic> data) async =>
+      instance?.open(data) ?? Future.value();
 }
 
 @pragma('vm:entry-point')
