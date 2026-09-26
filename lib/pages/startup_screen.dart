@@ -15,6 +15,7 @@ import '../modules/profile/screens/account_deletion_recovery_screen.dart';
 import '../modules/profile/services/account_deletion_service.dart';
 import '../modules/community/restrictions/services/community_restriction_service.dart';
 import '../modules/community/services/community_service.dart';
+import '../modules/push_notifications/services/push_device_service.dart';
 import '../widgets/startup_artwork_background.dart';
 import 'verify_email_screen.dart';
 
@@ -150,6 +151,7 @@ class _StartupScreenState extends State<StartupScreen> {
       if (!mounted) return;
 
       if (exists) {
+        unawaited(PushDeviceService.instance.attach(uid));
         await _resumeIncompleteCommunityDeletions();
         if (!mounted) return;
         unawaited(_initializePlatformRestriction(uid));
