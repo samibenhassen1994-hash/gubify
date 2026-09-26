@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
@@ -25,7 +26,7 @@ class PushDeviceService {
   }
 
   Future<void> attach(String uid) async {
-    if (uid.isEmpty) return;
+    if (uid.isEmpty || Firebase.apps.isEmpty) return;
     _attachedUid = uid;
     await FirebaseMessaging.instance.requestPermission();
     final token = await FirebaseMessaging.instance.getToken();
@@ -49,6 +50,7 @@ class PushDeviceService {
 
   /// Returns false only when both invalidation attempts fail.
   Future<bool> detachBeforeSignOut(String uid) async {
+    if (Firebase.apps.isEmpty) return true;
     final deviceId = await _installationId();
     var firestoreSucceeded = false;
     var tokenSucceeded = false;
