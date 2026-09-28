@@ -2,6 +2,8 @@
   "scripts": {
     "backfill:organized-event-assignees": "node tools/backfill-organized-event-assignment-user-ids.mjs",
     "test:backfill:organized-event-assignees": "node --test tests/tools/backfill-organized-event-assignment-user-ids.test.mjs",
+    "backfill:community-join-request-requested-at": "node tools/backfill-community-join-request-requested-at.mjs",
+    "test:backfill:community-join-request-requested-at": "node --test tests/tools/backfill-community-join-request-requested-at.test.mjs",
     "test:rules:platform-admin": "node --test tests/firestore-rules/platform-community-admin.test.mjs",
     "test:rules:smoke": "node --test tests/firestore-rules/structural-smoke.test.mjs",
     "test:rules:phase3a": "node --test tests/firestore-rules/phase3a.test.mjs",
@@ -10,12 +12,14 @@
     "test:rules:phase3d": "node --test tests/firestore-rules/phase3d.test.mjs",
     "test:rules:phase4a2": "node --test tests/firestore-rules/phase4a2.test.mjs",
     "test:rules:phase2a": "node --test tests/firestore-rules/phase2a.test.mjs",
+    "test:rules:community-restrictions": "node --test tests/firestore-rules/community-restrictions.test.mjs",
     "test:rules:community-slugs": "node --test tests/firestore-rules/community-slugs.test.mjs",
     "test:rules:community-images": "node --test tests/firestore-rules/community-images.test.mjs",
     "test:rules:community-asks": "node --test tests/firestore-rules/community-asks.test.mjs",
     "test:rules:community-guidelines": "node --test tests/firestore-rules/community-guidelines.test.mjs",
     "test:rules:notification-history": "node --test tests/firestore-rules/private-notification-history-boundary.test.mjs",
-    "test:rules:all": "node --test --test-concurrency=1 tests/firestore-rules/structural-smoke.test.mjs tests/firestore-rules/phase2a.test.mjs tests/firestore-rules/phase3a.test.mjs tests/firestore-rules/phase3b.test.mjs tests/firestore-rules/phase3c.test.mjs tests/firestore-rules/phase3d.test.mjs tests/firestore-rules/phase4a2.test.mjs tests/firestore-rules/private-notification-history-boundary.test.mjs tests/firestore-rules/community-asks.test.mjs tests/firestore-rules/community-guidelines.test.mjs tests/firestore-rules/community-moderation.test.mjs tests/firestore-rules/user-blocking.test.mjs tests/firestore-rules/platform-community-admin.test.mjs"
+    "test:rules:push-notifications": "node --test tests/firestore-rules/push-notifications.test.mjs",
+    "test:rules:all": "node --test --test-concurrency=1 tests/firestore-rules/structural-smoke.test.mjs tests/firestore-rules/phase2a.test.mjs tests/firestore-rules/phase3a.test.mjs tests/firestore-rules/phase3b.test.mjs tests/firestore-rules/phase3c.test.mjs tests/firestore-rules/phase3d.test.mjs tests/firestore-rules/phase4a2.test.mjs tests/firestore-rules/private-notification-history-boundary.test.mjs tests/firestore-rules/push-notifications.test.mjs tests/firestore-rules/community-asks.test.mjs tests/firestore-rules/community-guidelines.test.mjs tests/firestore-rules/community-moderation.test.mjs tests/firestore-rules/community-restrictions.test.mjs tests/firestore-rules/user-blocking.test.mjs tests/firestore-rules/platform-community-admin.test.mjs"
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "^5.0.1",

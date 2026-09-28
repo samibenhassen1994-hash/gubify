@@ -5,6 +5,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import '../modules/community/services/community_current_user_xp_sync.dart';
 import '../repositories/user_repository.dart';
 import 'user_service.dart';
+import '../modules/push_notifications/services/push_device_service.dart';
 
 enum GoogleLinkStatus {
   success,
@@ -380,6 +381,7 @@ class AuthService {
     AccountDeletionAuthGateway? accountDeletionAuthGateway,
     GoogleSignOutGateway? googleSignOutGateway,
     Future<void> Function()? onCurrentAccountLinked,
+    Future<bool> Function(String uid)? beforeSignOut,
     this.clearUserCache,
     this.userProfileExists,
   }) : _auth = auth ?? (authLinkGateway == null ? FirebaseAuth.instance : null),
@@ -424,7 +426,12 @@ class AuthService {
            onCurrentAccountLinked ??
            (authLinkGateway == null
                ? CommunityCurrentUserXpSync.instance.refresh
-               : null) {
+               : null),
+       _beforeSignOut =
+           beforeSignOut ??
+           (authLinkGateway == null
+               ? PushDeviceService.instance.detachBeforeSignOut
+               : (_) async => true) {
     _userService = userService;
   }
 
@@ -439,6 +446,7 @@ class AuthService {
   final AccountDeletionAuthGateway _accountDeletionAuthGateway;
   final GoogleSignOutGateway _googleSignOutGateway;
   final Future<void> Function()? _onCurrentAccountLinked;
+  final Future<bool> Function(String uid) _beforeSignOut;
   final void Function()? clearUserCache;
   final Future<bool> Function(String userId)? userProfileExists;
 
@@ -730,6 +738,10 @@ class AuthService {
 
     final wasGoogleLinked = isGoogleLinked;
 
+    if (!await _beforeSignOut(currentUserId!)) {
+      return const LogoutResult.failure(LogoutStatus.unknownFailure);
+    }
+
     try {
       await _authVerificationGateway.signOut();
       (clearUserCache ?? _clearCachedUsers).call();
@@ -908,7 +920,13 @@ class AuthService {
     }
   }
 
-  Future<void> signOutForAuthSwitch() => _authVerificationGateway.signOut();
+  Future<void> signOutForAuthSwitch() async {
+    final uid = currentUserId;
+    if (uid != null && !await _beforeSignOut(uid)) {
+      throw StateError('Unable to unregister this device before signing out.');
+    }
+    await _authVerificationGateway.signOut();
+  }
 
   Future<IncompleteProfileExitResult> exitIncompleteProfileOnboarding() async {
     final uid = _authVerificationGateway.currentUserId;

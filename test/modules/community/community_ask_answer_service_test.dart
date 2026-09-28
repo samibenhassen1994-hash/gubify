@@ -29,6 +29,42 @@ CommunityAskAnswerModel _answer({String authorId = 'winner'}) =>
     );
 
 void main() {
+  test('emits global push events only after Answer and Best Answer succeed',
+      () async {
+    final events = <Map<String, String>>[];
+    final service = CommunityAskAnswerService.forTesting(
+      currentAccount: () =>
+          const CommunityAskAccount(userId: 'member', isAnonymous: false),
+      currentDisplayName: () async => 'Member',
+      createAnswer: ({required communityId, required askId, required authorId,
+          required askAuthorId, required authorDisplayName, required answerText}) async => CommunityAnswerCreateResult.created,
+      submitPushEvent: (event) async => events.add(event.toJson()),
+    );
+
+    await service.createAnswer(
+      communityId: 'community-1',
+      askId: 'ask-1',
+      askAuthorId: 'asker',
+      text: 'Answer',
+      askStatus: CommunityAskStatus.active,
+    );
+    expect(events.single['type'], 'community_answer_created');
+
+    final resolver = CommunityAskAnswerService.forTesting(
+      currentAccount: () =>
+          const CommunityAskAccount(userId: 'asker', isAnonymous: false),
+      currentDisplayName: () async => 'Asker',
+      createAnswer: ({required communityId, required askId, required authorId,
+          required askAuthorId, required authorDisplayName, required answerText}) async => CommunityAnswerCreateResult.created,
+      resolveAsk: ({required communityId, required askId, required answerId,
+          required resolverId}) async => const CommunityAskResolution(
+            result: CommunityAskResolveResult.resolved,
+          ),
+      submitPushEvent: (event) async => events.add(event.toJson()),
+    );
+    await resolver.selectBestAnswer(ask: _ask(), answer: _answer());
+    expect(events.last['type'], 'community_best_answer_selected');
+  });
   test('linked member creates a trimmed Answer with cached identity', () async {
     String? text;
     String? displayName;

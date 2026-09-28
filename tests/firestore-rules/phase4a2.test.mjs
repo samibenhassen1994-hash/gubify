@@ -445,7 +445,7 @@ async function assertCommunityPublicMemberCount(memberCount) {
 function createCommunityRequest(actor = ids.communityMember) {
   return setDoc(doc(db(actor), 'communities', 'c1', 'joinRequests', actor), {
     userId: actor, displayName: actor, status: 'pending',
-    createdAt: serverTimestamp(),
+    createdAt: serverTimestamp(), requestedAt: serverTimestamp(),
   });
 }
 
@@ -808,7 +808,7 @@ describe('Step 1B persistent bans', () => {
       await updateDoc(doc(seedDb, 'communities', 'c1'), { accessMode: 'approval' });
       await setDoc(doc(seedDb, 'communities', 'c1', 'joinRequests', ids.outsider), {
         userId: ids.outsider, displayName: ids.outsider, status: 'pending',
-        createdAt: now(),
+        createdAt: now(), requestedAt: now(),
       });
       await setDoc(doc(seedDb, 'communities', 'c1', 'bans', ids.outsider), {
         userId: ids.outsider, displayName: ids.outsider, photoUrl: null, bannedBy: ids.communityOwner, bannedAt: now(),
@@ -823,7 +823,7 @@ describe('Step 1B persistent bans', () => {
       await updateDoc(doc(seedDb, 'communities', 'c1'), { accessMode: 'approval' });
       await setDoc(doc(seedDb, 'communities', 'c1', 'joinRequests', ids.outsider), {
         userId: ids.outsider, displayName: ids.outsider, status: 'pending',
-        createdAt: now(),
+        createdAt: now(), requestedAt: now(),
       });
     });
     await assertSucceeds(approveCommunityRequestTransaction(ids.outsider));
@@ -838,7 +838,8 @@ describe('Step 1B persistent bans', () => {
       await updateDoc(doc(seedDb, 'communities', 'c1'), { accessMode: 'approval' });
       await setDoc(doc(seedDb, 'communities', 'c1', 'joinRequests', ids.outsider), {
         userId: ids.outsider, displayName: ids.outsider, status: 'approved',
-        createdAt: now(), resolvedAt: now(), resolvedBy: ids.communityOwner,
+        createdAt: now(), requestedAt: now(),
+        resolvedAt: now(), resolvedBy: ids.communityOwner,
       });
     });
     await assertSucceeds(finalizeApprovedCommunityRequest());
@@ -853,7 +854,8 @@ describe('Step 1B persistent bans', () => {
       await updateDoc(doc(seedDb, 'communities', 'c1'), { accessMode: 'approval' });
       await setDoc(doc(seedDb, 'communities', 'c1', 'joinRequests', ids.outsider), {
         userId: ids.outsider, displayName: ids.outsider, status: 'approved',
-        createdAt: now(), resolvedAt: now(), resolvedBy: ids.communityOwner,
+        createdAt: now(), requestedAt: now(),
+        resolvedAt: now(), resolvedBy: ids.communityOwner,
       });
       await deleteDoc(doc(seedDb, 'communityGuidelinesAcceptances', ids.outsider));
     });
@@ -866,7 +868,7 @@ describe('Step 1B persistent bans', () => {
       await updateDoc(doc(seedDb, 'communities', 'c1'), { accessMode: 'approval' });
       await setDoc(doc(seedDb, 'communities', 'c1', 'joinRequests', ids.outsider), {
         userId: ids.outsider, displayName: ids.outsider, status: 'pending',
-        createdAt: now(),
+        createdAt: now(), requestedAt: now(),
       });
     });
     await assertSucceeds(updateDoc(
@@ -889,12 +891,16 @@ describe('Step 1B persistent bans', () => {
       await updateDoc(doc(seedDb, 'communities', 'c1'), { accessMode: 'approval' });
       await setDoc(doc(seedDb, 'communities', 'c1', 'joinRequests', ids.outsider), {
         userId: ids.outsider, displayName: ids.outsider, status: 'rejected',
-        createdAt: now(), resolvedAt: now(), resolvedBy: ids.communityOwner,
+        createdAt: now(), requestedAt: now(),
+        resolvedAt: now(), resolvedBy: ids.communityOwner,
       });
     });
     await assertSucceeds(updateDoc(
       doc(db(ids.outsider), 'communities', 'c1', 'joinRequests', ids.outsider),
-      { status: 'pending', resolvedAt: deleteField(), resolvedBy: deleteField() },
+      {
+        status: 'pending', requestedAt: serverTimestamp(),
+        resolvedAt: deleteField(), resolvedBy: deleteField(),
+      },
     ));
   });
   test('79 an unbanned former member can reset an approved request and be approved again', async () => {
@@ -917,6 +923,7 @@ describe('Step 1B persistent bans', () => {
           displayName: ids.communityMember,
           status: 'approved',
           createdAt: now(),
+          requestedAt: now(),
           resolvedAt: now(),
           resolvedBy: ids.communityOwner,
         },
@@ -932,7 +939,10 @@ describe('Step 1B persistent bans', () => {
         'joinRequests',
         ids.communityMember,
       ),
-      { status: 'pending', resolvedAt: deleteField(), resolvedBy: deleteField() },
+      {
+        status: 'pending', requestedAt: serverTimestamp(),
+        resolvedAt: deleteField(), resolvedBy: deleteField(),
+      },
     ));
     await assertSucceeds(deleteDoc(
       doc(
@@ -951,7 +961,10 @@ describe('Step 1B persistent bans', () => {
         'joinRequests',
         ids.communityMember,
       ),
-      { status: 'pending', resolvedAt: deleteField(), resolvedBy: deleteField() },
+      {
+        status: 'pending', requestedAt: serverTimestamp(),
+        resolvedAt: deleteField(), resolvedBy: deleteField(),
+      },
     ));
     await assertSucceeds(approveCommunityRequest(ids.communityMember));
     await assertSucceeds(getDoc(
@@ -1319,6 +1332,7 @@ describe('Phase F account self-cleanup permissions', () => {
           displayName: ids.communityMember,
           status: 'approved',
           createdAt: now(),
+          requestedAt: now(),
           resolvedAt: now(),
           resolvedBy: ids.communityOwner,
         },

@@ -8,6 +8,7 @@ import {
 } from '@firebase/rules-unit-testing';
 import {
   collection,
+  deleteField,
   deleteDoc,
   doc,
   getDoc,
@@ -73,6 +74,7 @@ const accessRequest = (userId = uid.requester, overrides = {}) => ({
   displayName: userId,
   status: 'pending',
   createdAt: now(),
+  requestedAt: now(),
   ...overrides,
 });
 
@@ -337,9 +339,14 @@ describe('Approval requests', () => {
       setDoc(ref, {
         ...accessRequest(),
         createdAt: serverTimestamp(),
+        requestedAt: serverTimestamp(),
       }),
     );
-    await assertSucceeds(getDoc(ref));
+    const snapshot = await assertSucceeds(getDoc(ref));
+    assert.equal(
+      snapshot.data().requestedAt.isEqual(snapshot.data().createdAt),
+      true,
+    );
   });
   test('wrong uid, extra fields, blank and long names are denied', async () => {
     const ref = doc(
@@ -359,6 +366,7 @@ describe('Approval requests', () => {
         setDoc(ref, {
           ...accessRequest(uid.requester, overrides),
           createdAt: serverTimestamp(),
+          requestedAt: serverTimestamp(),
         }),
       );
     }
@@ -372,9 +380,63 @@ describe('Approval requests', () => {
       uid.requester,
     );
     await assertFails(setDoc(ref, accessRequest()));
+    const { requestedAt: _, ...withoutRequestedAt } = accessRequest();
+    await assertFails(setDoc(ref, {
+      ...withoutRequestedAt,
+      createdAt: serverTimestamp(),
+    }));
     await seedRequest();
     await assertFails(
-      setDoc(ref, { ...accessRequest(), createdAt: serverTimestamp() }),
+      setDoc(ref, {
+        ...accessRequest(),
+        createdAt: serverTimestamp(),
+        requestedAt: serverTimestamp(),
+      }),
+    );
+  });
+  test('reset rotates requestedAt, preserves createdAt, and rejects tampering', async () => {
+    const ref = doc(
+      db(uid.requester),
+      'communities',
+      'c1',
+      'joinRequests',
+      uid.requester,
+    );
+    const rejected = {
+      status: 'rejected',
+      resolvedAt: now(),
+      resolvedBy: uid.owner,
+    };
+    for (const requestedAt of [
+      deleteField(),
+      new Date('2025-01-01T00:00:00Z'),
+      new Date('2027-01-01T00:00:00Z'),
+    ]) {
+      await seedRequest(uid.requester, rejected);
+      await assertFails(updateDoc(ref, {
+        status: 'pending',
+        requestedAt,
+        resolvedAt: deleteField(),
+        resolvedBy: deleteField(),
+      }));
+    }
+
+    await seedRequest(uid.requester, rejected);
+    const before = await getDoc(ref);
+    await assertSucceeds(updateDoc(ref, {
+      status: 'pending',
+      requestedAt: serverTimestamp(),
+      resolvedAt: deleteField(),
+      resolvedBy: deleteField(),
+    }));
+    const after = await getDoc(ref);
+    assert.equal(
+      after.data().createdAt.isEqual(before.data().createdAt),
+      true,
+    );
+    assert.equal(
+      after.data().requestedAt.isEqual(before.data().requestedAt),
+      false,
     );
   });
   test('request in Open or deleting Community is denied', async () => {
@@ -388,7 +450,11 @@ describe('Approval requests', () => {
           'joinRequests',
           uid.requester,
         ),
-        { ...accessRequest(), createdAt: serverTimestamp() },
+        {
+          ...accessRequest(),
+          createdAt: serverTimestamp(),
+          requestedAt: serverTimestamp(),
+        },
       ),
     );
     await replaceRoot(
@@ -407,7 +473,11 @@ describe('Approval requests', () => {
           'joinRequests',
           uid.requester,
         ),
-        { ...accessRequest(), createdAt: serverTimestamp() },
+        {
+          ...accessRequest(),
+          createdAt: serverTimestamp(),
+          requestedAt: serverTimestamp(),
+        },
       ),
     );
   });
@@ -512,11 +582,45 @@ describe('Approval requests', () => {
 describe('Owner request resolution', () => {
   beforeEach(() => seedRequest());
   test('owner approval changes only the pending request', async () => {
+    const requestRef = doc(
+      db(uid.owner),
+      'communities',
+      'c1',
+      'joinRequests',
+      uid.requester,
+    );
+    const before = await getDoc(requestRef);
     await assertSucceeds(approveRequest());
+    const after = await getDoc(requestRef);
+    assert.equal(
+      after.data().requestedAt.isEqual(before.data().requestedAt),
+      true,
+    );
     await assertApprovalOnly();
   });
   test('non-owner approval fails', () =>
     assertFails(approveRequest({ actor: uid.outsider })));
+  test('resolution cannot remove, backdate, or otherwise change requestedAt', async () => {
+    const requestRef = doc(
+      db(uid.owner),
+      'communities',
+      'c1',
+      'joinRequests',
+      uid.requester,
+    );
+    for (const requestedAt of [
+      deleteField(),
+      new Date('2025-01-01T00:00:00Z'),
+      serverTimestamp(),
+    ]) {
+      await assertFails(updateDoc(requestRef, {
+        status: 'approved',
+        requestedAt,
+        resolvedAt: serverTimestamp(),
+        resolvedBy: uid.owner,
+      }));
+    }
+  });
   test('owner cannot approve a banned requester', async () => {
     await env.withSecurityRulesDisabled((context) =>
       setDoc(doc(context.firestore(), 'communities', 'c1', 'bans', uid.requester), {
@@ -596,23 +700,53 @@ describe('Owner request resolution', () => {
     });
     await assertFails(approveRequest());
   });
-  test('owner can reject pending request without changing membership', () =>
-    assertSucceeds(
-      updateDoc(
-        doc(
-          db(uid.owner),
-          'communities',
-          'c1',
-          'joinRequests',
-          uid.requester,
-        ),
-        {
-          status: 'rejected',
-          resolvedAt: serverTimestamp(),
-          resolvedBy: uid.owner,
-        },
+  test('owner can reject pending request without changing membership or requestedAt', async () => {
+    const requestRef = doc(
+      db(uid.owner),
+      'communities',
+      'c1',
+      'joinRequests',
+      uid.requester,
+    );
+    const before = await getDoc(requestRef);
+    await assertSucceeds(updateDoc(requestRef, {
+      status: 'rejected',
+      resolvedAt: serverTimestamp(),
+      resolvedBy: uid.owner,
+    }));
+    const after = await getDoc(requestRef);
+    assert.equal(
+      after.data().requestedAt.isEqual(before.data().requestedAt),
+      true,
+    );
+  });
+  test('migrated legacy requestedAt equal to createdAt can be approved and rejected', async () => {
+    const legacyTimestamp = new Date('2025-06-01T00:00:00Z');
+    await seedRequest(uid.requester, {
+      createdAt: legacyTimestamp,
+      requestedAt: legacyTimestamp,
+    });
+    await assertSucceeds(approveRequest());
+
+    await seedRequest(uid.requester, {
+      createdAt: legacyTimestamp,
+      requestedAt: legacyTimestamp,
+    });
+    await assertSucceeds(updateDoc(
+      doc(
+        db(uid.owner),
+        'communities',
+        'c1',
+        'joinRequests',
+        uid.requester,
       ),
+      {
+        status: 'rejected',
+        resolvedAt: serverTimestamp(),
+        resolvedBy: uid.owner,
+      },
     ));
+  });
   test('non-owner reject and reject with memberCount change fail', async () => {
     await assertFails(
       updateDoc(

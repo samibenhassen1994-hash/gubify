@@ -16,6 +16,8 @@ import '../repositories/community_name_registry_repository.dart';
 import '../repositories/community_repository.dart';
 import '../restrictions/services/community_restriction_service.dart';
 import '../utils/community_name_key.dart';
+import '../../push_notifications/models/push_event.dart';
+import '../../push_notifications/services/push_event_client.dart';
 
 class CommunityService {
   CommunityService._();
@@ -200,11 +202,17 @@ class CommunityService {
 
   Future<CommunityExplorerPage> loadPublicCommunitiesPage({
     CommunityExplorerCursor? after,
+    int limit = 20,
+    String? namePrefix,
   }) {
     if (_auth.currentUser == null) {
       throw StateError("You must be signed in to explore communities.");
     }
-    return CommunityRepository.instance.loadPublicCommunitiesPage(after: after);
+    return CommunityRepository.instance.loadPublicCommunitiesPage(
+      after: after,
+      limit: limit,
+      namePrefix: namePrefix,
+    );
   }
 
   Future<CommunityPublicAccessState?> loadPublicAccessState(
@@ -494,6 +502,12 @@ class CommunityService {
         userId: user.uid,
         displayName: identity.displayName,
       );
+      unawaited(PushEventClient.instance.submit(
+        PushEvent.communityJoinRequestCreated(
+          communityId: normalizedId,
+          requesterUid: user.uid,
+        ),
+      ));
     });
   }
 
@@ -552,13 +566,19 @@ class CommunityService {
     required String userId,
   }) async {
     final owner = _requireUser("approve community requests");
-    await _guardAccessOperation("approve/$communityId/$userId", () {
-      return CommunityRepository.instance.approveJoinRequest(
+    await _guardAccessOperation("approve/$communityId/$userId", () async {
+      await CommunityRepository.instance.approveJoinRequest(
         isPlatformAdmin: PlatformAdminService.instance.isAdmin,
         communityId: communityId,
         ownerId: owner.uid,
         userId: userId,
       );
+      unawaited(PushEventClient.instance.submit(
+        PushEvent.communityJoinRequestResolved(
+          communityId: communityId,
+          requesterUid: userId,
+        ),
+      ));
     });
   }
 
@@ -567,13 +587,19 @@ class CommunityService {
     required String userId,
   }) async {
     final owner = _requireUser("reject community requests");
-    await _guardAccessOperation("reject/$communityId/$userId", () {
-      return CommunityRepository.instance.rejectJoinRequest(
+    await _guardAccessOperation("reject/$communityId/$userId", () async {
+      await CommunityRepository.instance.rejectJoinRequest(
         isPlatformAdmin: PlatformAdminService.instance.isAdmin,
         communityId: communityId,
         ownerId: owner.uid,
         userId: userId,
       );
+      unawaited(PushEventClient.instance.submit(
+        PushEvent.communityJoinRequestResolved(
+          communityId: communityId,
+          requesterUid: userId,
+        ),
+      ));
     });
   }
 

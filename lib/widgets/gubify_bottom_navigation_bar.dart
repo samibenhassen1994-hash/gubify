@@ -10,6 +10,7 @@ class GubifyBottomNavigationBar extends StatelessWidget {
     this.compact = false,
     this.profileDisplayName,
     this.profilePhotoUrl,
+    this.hasUnreadNotifications = false,
   });
 
   static const double regularHeight = 64;
@@ -21,6 +22,7 @@ class GubifyBottomNavigationBar extends StatelessWidget {
   final bool compact;
   final String? profileDisplayName;
   final String? profilePhotoUrl;
+  final bool hasUnreadNotifications;
 
   static const _destinations = <_BottomDestination>[
     _BottomDestination(
@@ -93,6 +95,7 @@ class GubifyBottomNavigationBar extends StatelessWidget {
                           compact: compact,
                           profileDisplayName: profileDisplayName,
                           profilePhotoUrl: profilePhotoUrl,
+                          hasUnread: index == 2 && hasUnreadNotifications,
                         ),
                       ),
                     ],
@@ -115,6 +118,7 @@ class _BottomNavigationItem extends StatelessWidget {
     required this.compact,
     this.profileDisplayName,
     this.profilePhotoUrl,
+    required this.hasUnread,
   });
 
   final _BottomDestination destination;
@@ -123,6 +127,7 @@ class _BottomNavigationItem extends StatelessWidget {
   final bool compact;
   final String? profileDisplayName;
   final String? profilePhotoUrl;
+  final bool hasUnread;
 
   @override
   Widget build(BuildContext context) {
@@ -152,12 +157,25 @@ class _BottomNavigationItem extends StatelessWidget {
                       photoUrl: profilePhotoUrl,
                       selected: selected,
                     )
-                  : Icon(
-                      selected ? destination.selectedIcon : destination.icon,
-                      color: selected
-                          ? const Color(0xFF0F172A)
-                          : const Color(0xFF475569),
-                      size: selected ? 27 : 25,
+                  : Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        Icon(
+                          selected ? destination.selectedIcon : destination.icon,
+                          color: selected ? const Color(0xFF0F172A) : const Color(0xFF475569),
+                          size: selected ? 27 : 25,
+                        ),
+                        if (hasUnread)
+                          const Positioned(
+                            right: -2,
+                            top: -2,
+                            child: DecoratedBox(
+                              key: Key('global-notification-unread-dot'),
+                              decoration: BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                              child: SizedBox(width: 8, height: 8),
+                            ),
+                          ),
+                      ],
                     ),
             ),
           ),

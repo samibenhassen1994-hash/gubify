@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
@@ -10,6 +12,8 @@ import '../../../services/app_sound_service.dart';
 import '../models/task_model.dart';
 import '../repositories/task_repository.dart';
 import 'task_notification_service.dart';
+import '../../push_notifications/models/push_event.dart';
+import '../../push_notifications/services/push_event_client.dart';
 
 class TaskService {
   TaskService._();
@@ -96,6 +100,16 @@ class TaskService {
       }
 
       await TaskRepository.instance.createTask(task);
+
+      final assigneeId = task.assignedUserId?.trim();
+      if (assigneeId != null &&
+          assigneeId.isNotEmpty &&
+          assigneeId != task.creatorId) {
+        unawaited(PushEventClient.instance.submit(PushEvent.taskAssigned(
+          gubId: task.gubId,
+          taskId: task.taskId,
+        )));
+      }
 
       await TaskNotificationService.instance.sendTaskCreated(task);
       await AppSoundService.instance.playCreated();

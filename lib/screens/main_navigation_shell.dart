@@ -4,6 +4,7 @@ import '../modules/community/screens/community_explorer_screen.dart';
 import '../modules/community/screens/gub_community_home_screen.dart';
 import '../modules/community/models/community_model.dart';
 import '../modules/notifications/screens/global_notifications_screen.dart';
+import '../modules/push_notifications/services/global_push_notification_service.dart';
 import '../modules/profile/models/user_profile_model.dart';
 import '../modules/profile/screens/personal_profile_screen.dart';
 import '../modules/profile/services/user_profile_service.dart';
@@ -307,14 +308,18 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
               child: SafeArea(
                 top: false,
                 minimum: EdgeInsets.only(bottom: compactNavigation ? 4 : 12),
-                child: FutureBuilder<UserProfileModel>(
-                  future: _currentUserProfile,
-                  builder: (context, snapshot) => GubifyBottomNavigationBar(
-                    selectedIndex: _selectedIndex,
-                    onDestinationSelected: _select,
-                    compact: compactNavigation,
-                    profileDisplayName: snapshot.data?.displayName,
-                    profilePhotoUrl: snapshot.data?.photoUrl,
+                child: StreamBuilder<bool>(
+                  stream: GlobalPushNotificationService.instance.watchHasUnread(),
+                  builder: (context, unreadSnapshot) => FutureBuilder<UserProfileModel>(
+                    future: _currentUserProfile,
+                    builder: (context, snapshot) => GubifyBottomNavigationBar(
+                      selectedIndex: _selectedIndex,
+                      onDestinationSelected: _select,
+                      compact: compactNavigation,
+                      profileDisplayName: snapshot.data?.displayName,
+                      profilePhotoUrl: snapshot.data?.photoUrl,
+                      hasUnreadNotifications: unreadSnapshot.data == true,
+                    ),
                   ),
                 ),
               ),

@@ -775,6 +775,7 @@ describe('Community creation, join, reads, and membership', () => {
           displayName: ids.communityOutsider,
           status: 'pending',
           createdAt: serverTimestamp(),
+          requestedAt: serverTimestamp(),
         },
       ));
     });

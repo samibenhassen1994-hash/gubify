@@ -27,6 +27,36 @@ class CommunityRepository {
   static const String _deletionMembersSubcollection = "deletionMembers";
 
   @visibleForTesting
+  static Map<String, dynamic> joinRequestCreatePayload({
+    required String userId,
+    required String displayName,
+  }) => {
+    "userId": userId,
+    "displayName": displayName,
+    "status": CommunityAccessRequestModel.pendingStatus,
+    "createdAt": FieldValue.serverTimestamp(),
+    "requestedAt": FieldValue.serverTimestamp(),
+  };
+
+  @visibleForTesting
+  static Map<String, dynamic> joinRequestResetPayload() => {
+    "status": CommunityAccessRequestModel.pendingStatus,
+    "requestedAt": FieldValue.serverTimestamp(),
+    "resolvedAt": FieldValue.delete(),
+    "resolvedBy": FieldValue.delete(),
+  };
+
+  @visibleForTesting
+  static Map<String, dynamic> joinRequestResolutionPayload({
+    required String status,
+    required String ownerId,
+  }) => {
+    "status": status,
+    "resolvedAt": FieldValue.serverTimestamp(),
+    "resolvedBy": ownerId,
+  };
+
+  @visibleForTesting
   static const List<String> rewardReferenceFieldsForDeletion = [
     'lastRewardCommunityId',
     'lastRewardAskId',
@@ -1272,7 +1302,11 @@ class CommunityRepository {
   Future<CommunityExplorerPage> loadPublicCommunitiesPage({
     CommunityExplorerCursor? after,
     int limit = 20,
+    String? namePrefix,
   }) async {
+    final normalizedNamePrefix = namePrefix == null
+        ? ''
+        : CommunityNameKey.fromName(namePrefix);
     Query<Map<String, dynamic>> query = _communities
         .where("visibility", isEqualTo: CommunityModel.publicVisibility)
         .where(
@@ -1281,11 +1315,20 @@ class CommunityRepository {
             CommunityModel.openAccessMode,
             CommunityModel.approvalAccessMode,
           ],
-        )
-        .orderBy("createdAt", descending: true)
-        .orderBy(FieldPath.documentId, descending: true)
-        .limit(limit);
-    if (after != null) query = query.startAfterDocument(after._document);
+        );
+    if (normalizedNamePrefix.isEmpty) {
+      query = query
+          .orderBy("createdAt", descending: true)
+          .orderBy(FieldPath.documentId, descending: true);
+    } else {
+      query = query
+          .orderBy('nameKey')
+          .orderBy(FieldPath.documentId)
+          .startAt([normalizedNamePrefix])
+          .endAt(['$normalizedNamePrefix\uf8ff']);
+    }
+    query = query.limit(limit);
+    if (after != null) query = query.startAfterDocument(after._document!);
 
     final snapshot = await query.get();
     final communities = snapshot.docs
@@ -1696,18 +1739,12 @@ class CommunityRepository {
         return "A request for this Community already exists.";
       }
       if (request.exists) {
-        transaction.update(requestReference, {
-          "status": CommunityAccessRequestModel.pendingStatus,
-          "resolvedAt": FieldValue.delete(),
-          "resolvedBy": FieldValue.delete(),
-        });
+        transaction.update(requestReference, joinRequestResetPayload());
       } else {
-        transaction.set(requestReference, {
-          "userId": userId,
-          "displayName": displayName,
-          "status": CommunityAccessRequestModel.pendingStatus,
-          "createdAt": FieldValue.serverTimestamp(),
-        });
+        transaction.set(
+          requestReference,
+          joinRequestCreatePayload(userId: userId, displayName: displayName),
+        );
       }
       return null;
     });
@@ -1805,11 +1842,13 @@ class CommunityRepository {
               CommunityAccessRequestModel.pendingStatus) {
         return "This request is no longer pending.";
       }
-      transaction.update(requestReference, {
-        "status": CommunityAccessRequestModel.approvedStatus,
-        "resolvedAt": FieldValue.serverTimestamp(),
-        "resolvedBy": ownerId,
-      });
+      transaction.update(
+        requestReference,
+        joinRequestResolutionPayload(
+          status: CommunityAccessRequestModel.approvedStatus,
+          ownerId: ownerId,
+        ),
+      );
       return null;
     });
     if (failure != null) throw StateError(failure);
@@ -1839,11 +1878,13 @@ class CommunityRepository {
               CommunityAccessRequestModel.pendingStatus) {
         return "This request is no longer pending.";
       }
-      transaction.update(requestReference, {
-        "status": CommunityAccessRequestModel.rejectedStatus,
-        "resolvedAt": FieldValue.serverTimestamp(),
-        "resolvedBy": ownerId,
-      });
+      transaction.update(
+        requestReference,
+        joinRequestResolutionPayload(
+          status: CommunityAccessRequestModel.rejectedStatus,
+          ownerId: ownerId,
+        ),
+      );
       return null;
     });
     if (failure != null) throw StateError(failure);
@@ -1868,9 +1909,12 @@ enum _CommunityImageWriteOutcome {
 }
 
 class CommunityExplorerCursor {
-  final QueryDocumentSnapshot<Map<String, dynamic>> _document;
+  final QueryDocumentSnapshot<Map<String, dynamic>>? _document;
 
   const CommunityExplorerCursor._(this._document);
+
+  @visibleForTesting
+  const CommunityExplorerCursor.forTesting() : _document = null;
 }
 
 class CommunityExplorerPage {

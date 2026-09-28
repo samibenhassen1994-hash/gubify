@@ -22,7 +22,7 @@ beforeEach(async () => {
       'communities/c/members/member': {uid:'member',displayName:'Member',role:'member',joinedAt:at},
       'users/member/communities/c': {communityId:'c',role:'member'},
       'communityUserProgress/member': {xp:42,communityIds:['c','other']},
-      'communities/c/joinRequests/applicant': {userId:'applicant',displayName:'Applicant',status:'pending',createdAt:at},
+      'communities/c/joinRequests/applicant': {userId:'applicant',displayName:'Applicant',status:'pending',createdAt:at,requestedAt:at},
       'communities/c/messages/m': {messageId:'m',communityId:'c',senderId:'member',senderName:'Member',text:'Original message',createdAt:at},
       'communities/c/asks/a': {askId:'a',communityId:'c',authorId:'owner',authorDisplayName:'Owner',text:'Original ask',type:'help',status:'resolved',bestAnswerId:'member',bestAnswerAuthorId:'member',xpAwarded:true,createdAt:at},
       'communities/c/asks/a/answers/member': {answerId:'member',authorId:'member',authorDisplayName:'Member',text:'Original best answer',createdAt:at},

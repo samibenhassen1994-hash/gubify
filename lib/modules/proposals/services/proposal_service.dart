@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:firebase_auth/firebase_auth.dart';
 
 import '../../../core/errors/active_creation_limit_exception.dart';
@@ -11,6 +13,8 @@ import '../repositories/proposal_repository.dart';
 import 'proposal_engine.dart';
 import '../../gub_calendar/services/event_service.dart';
 import '../../notifications/services/notification_service.dart';
+import '../../push_notifications/models/push_event.dart';
+import '../../push_notifications/services/push_event_client.dart';
 
 class ProposalService {
   ProposalService._();
@@ -111,6 +115,10 @@ class ProposalService {
       }
 
       await ProposalRepository.instance.createProposal(proposal);
+      unawaited(PushEventClient.instance.submit(PushEvent.proposalCreated(
+        gubId: proposal.gubId,
+        proposalId: proposal.proposalId,
+      )));
       await AppSoundService.instance.playCreated();
 
       await NotificationService.instance.send(
