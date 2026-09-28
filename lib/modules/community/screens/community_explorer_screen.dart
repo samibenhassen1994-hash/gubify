@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../../widgets/gub_screen_background.dart';
@@ -6,6 +8,7 @@ import '../models/community_model.dart';
 import '../repositories/community_repository.dart';
 import '../restrictions/services/community_restriction_service.dart';
 import '../services/community_service.dart';
+import '../utils/community_name_key.dart';
 import '../widgets/community_explorer_card.dart';
 import '../widgets/community_filters_sheet.dart';
 import '../widgets/community_linked_account_gate.dart';
@@ -14,6 +17,11 @@ import 'gub_community_home_screen.dart';
 
 typedef CommunityExplorerPageLoader =
     Future<CommunityExplorerPage> Function(CommunityExplorerCursor? after);
+typedef CommunityExplorerSearchPageLoader =
+    Future<CommunityExplorerPage> Function(
+      CommunityExplorerCursor? after,
+      String searchKey,
+    );
 typedef CommunityDiscoveryFilter =
     Future<List<CommunityModel>> Function(List<CommunityModel> communities);
 typedef CommunityOpenHandler =
@@ -21,6 +29,7 @@ typedef CommunityOpenHandler =
 
 class CommunityExplorerScreen extends StatefulWidget {
   final CommunityExplorerPageLoader? pageLoader;
+  final CommunityExplorerSearchPageLoader? searchPageLoader;
   final CommunityDiscoveryFilter? discoveryFilter;
   final Stream<Set<String>>? joinedCommunityIdsStream;
   final bool Function()? isAnonymous;
@@ -34,6 +43,7 @@ class CommunityExplorerScreen extends StatefulWidget {
   const CommunityExplorerScreen({
     super.key,
     this.pageLoader,
+    this.searchPageLoader,
     this.discoveryFilter,
     this.joinedCommunityIdsStream,
     this.isAnonymous,
@@ -51,20 +61,25 @@ class CommunityExplorerScreen extends StatefulWidget {
 }
 
 class _CommunityExplorerScreenState extends State<CommunityExplorerScreen> {
+  static const _pageSize = 10;
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final List<CommunityModel> _communities = [];
   final Set<String> _seenCommunityIds = {};
+  final List<CommunityExplorerCursor?> _pageStarts = [null];
 
   late Stream<Set<String>> _joinedCommunityIdsStream;
   late final bool Function() _isAnonymous;
   late final bool Function(CommunityModel community) _isOwner;
   CommunityExplorerFilters _filters = const CommunityExplorerFilters();
-  CommunityExplorerCursor? _cursor;
+  Timer? _searchDebounce;
+  String _searchKey = '';
+  CommunityExplorerCursor? _nextCursor;
   Object? _loadError;
   bool _loadingInitial = true;
-  bool _loadingMore = false;
+  bool _loadingPage = false;
   bool _hasMore = true;
+  int _currentPage = 0;
 
   @override
   void initState() {
@@ -74,12 +89,10 @@ class _CommunityExplorerScreenState extends State<CommunityExplorerScreen> {
         () =>
             widget.joinedCommunityIdsStream == null &&
             CommunityService.instance.isCurrentUserAnonymous;
-    _isOwner =
-        widget.isOwner ?? CommunityService.instance.isCurrentUserOwner;
+    _isOwner = widget.isOwner ?? CommunityService.instance.isCurrentUserOwner;
     _joinedCommunityIdsStream = _createJoinedCommunityIdsStream();
     _searchController.addListener(_onSearchChanged);
-    _scrollController.addListener(_onScroll);
-    _loadNextPage();
+    _loadInitialPage();
   }
 
   Stream<Set<String>> _createJoinedCommunityIdsStream() {
@@ -89,28 +102,42 @@ class _CommunityExplorerScreenState extends State<CommunityExplorerScreen> {
   }
 
   void _onSearchChanged() {
-    if (mounted) setState(() {});
+    final nextSearchKey = CommunityNameKey.fromName(_searchController.text);
+    _searchDebounce?.cancel();
+    if (nextSearchKey == _searchKey) return;
+    _searchDebounce = Timer(const Duration(milliseconds: 500), () {
+      if (!mounted ||
+          nextSearchKey != CommunityNameKey.fromName(_searchController.text) ||
+          nextSearchKey == _searchKey) {
+        return;
+      }
+      _searchKey = nextSearchKey;
+      _retryInitialLoad();
+    });
   }
 
-  void _onScroll() {
-    if (!_scrollController.hasClients ||
-        _scrollController.position.extentAfter > 320) {
-      return;
-    }
-    _loadNextPage();
-  }
+  Future<void> _loadInitialPage() =>
+      _loadPage(after: null, pageIndex: 0, resetPageStarts: true);
 
-  Future<void> _loadNextPage() async {
-    if (_loadingMore || !_hasMore) return;
+  Future<void> _loadPage({
+    required CommunityExplorerCursor? after,
+    required int pageIndex,
+    bool resetPageStarts = false,
+  }) async {
+    if (_loadingPage) return;
     setState(() {
-      _loadingMore = true;
+      _loadingPage = true;
       _loadError = null;
+      if (pageIndex == 0) _loadingInitial = true;
     });
     try {
       final page =
-          await (widget.pageLoader?.call(_cursor) ??
+          await (widget.searchPageLoader?.call(after, _searchKey) ??
+              widget.pageLoader?.call(after) ??
               CommunityService.instance.loadPublicCommunitiesPage(
-                after: _cursor,
+                after: after,
+                limit: _pageSize,
+                namePrefix: _searchKey,
               ));
       final discoverableCommunities =
           await (widget.discoveryFilter?.call(page.communities) ??
@@ -118,15 +145,25 @@ class _CommunityExplorerScreenState extends State<CommunityExplorerScreen> {
                   .filterDiscoverableCommunities(page.communities));
       if (!mounted) return;
       setState(() {
+        _communities.clear();
+        _seenCommunityIds.clear();
         for (final community in discoverableCommunities) {
-          if (_seenCommunityIds.add(community.communityId)) {
+          if (_seenCommunityIds.add(community.communityId) &&
+              _communities.length < _pageSize) {
             _communities.add(community);
           }
         }
-        _cursor = page.nextCursor;
-        _hasMore = page.hasMore;
+        if (resetPageStarts) {
+          _pageStarts
+            ..clear()
+            ..add(null);
+        }
+        _currentPage = pageIndex;
+        _nextCursor = page.nextCursor;
+        _hasMore = page.hasMore && page.nextCursor != null;
         _loadingInitial = false;
       });
+      _scrollToTop();
     } catch (error) {
       if (!mounted) return;
       setState(() {
@@ -134,35 +171,62 @@ class _CommunityExplorerScreenState extends State<CommunityExplorerScreen> {
         _loadingInitial = false;
       });
     } finally {
-      if (mounted) setState(() => _loadingMore = false);
+      if (mounted) setState(() => _loadingPage = false);
     }
   }
 
-  void _retryInitialLoad() {
+  Future<void> _retryInitialLoad() async {
     setState(() {
       _communities.clear();
       _seenCommunityIds.clear();
-      _cursor = null;
+      _pageStarts
+        ..clear()
+        ..add(null);
+      _currentPage = 0;
+      _nextCursor = null;
       _hasMore = true;
       _loadError = null;
       _loadingInitial = true;
       _joinedCommunityIdsStream = _createJoinedCommunityIdsStream();
     });
-    _loadNextPage();
+    await _loadPage(after: null, pageIndex: 0, resetPageStarts: true);
+  }
+
+  Future<void> _nextPage() async {
+    final nextCursor = _nextCursor;
+    if (_loadingPage || !_hasMore || nextCursor == null) return;
+    final nextPageIndex = _currentPage + 1;
+    if (_pageStarts.length <= nextPageIndex) _pageStarts.add(nextCursor);
+    await _loadPage(
+      after: _pageStarts[nextPageIndex],
+      pageIndex: nextPageIndex,
+    );
+  }
+
+  Future<void> _previousPage() async {
+    if (_loadingPage || _currentPage == 0) return;
+    final previousPageIndex = _currentPage - 1;
+    await _loadPage(
+      after: _pageStarts[previousPageIndex],
+      pageIndex: previousPageIndex,
+    );
+  }
+
+  void _scrollToTop() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients) _scrollController.jumpTo(0);
+    });
   }
 
   List<CommunityModel> get _filteredCommunities {
-    final query = _searchController.text.trim().toLowerCase();
     return _communities
         .where((community) {
-          final matchesQuery =
-              query.isEmpty || community.name.toLowerCase().contains(query);
           final matchesType =
               _filters.type == null || community.type == _filters.type;
           final matchesLanguage =
               _filters.language == null ||
               community.language == _filters.language;
-          return matchesQuery && matchesType && matchesLanguage;
+          return matchesType && matchesLanguage;
         })
         .toList(growable: false);
   }
@@ -209,12 +273,11 @@ class _CommunityExplorerScreenState extends State<CommunityExplorerScreen> {
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     _searchController
       ..removeListener(_onSearchChanged)
       ..dispose();
-    _scrollController
-      ..removeListener(_onScroll)
-      ..dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -250,7 +313,7 @@ class _CommunityExplorerScreenState extends State<CommunityExplorerScreen> {
                     Expanded(
                       child: SearchBar(
                         controller: _searchController,
-                        hintText: "Search loaded communities",
+                        hintText: "Search communities",
                         leading: const Icon(Icons.search_rounded),
                         padding: const WidgetStatePropertyAll(
                           EdgeInsets.symmetric(horizontal: 16),
@@ -298,61 +361,57 @@ class _CommunityExplorerScreenState extends State<CommunityExplorerScreen> {
           return _ExplorerErrorState(onRetry: _retryInitialLoad);
         }
         final filtered = _filteredCommunities;
-        if (filtered.isEmpty && !_hasMore) {
-          return _ExplorerEmptyState(
-            isSearching:
-                _searchController.text.trim().isNotEmpty ||
-                _filters.hasActiveFilters,
-          );
-        }
         final joinedIds = joinedSnapshot.data ?? const <String>{};
-        return ListView.separated(
-          controller: _scrollController,
-          padding: EdgeInsets.fromLTRB(
-            20,
-            4,
-            20,
-            28 + widget.additionalBottomScrollPadding,
-          ),
-          itemCount: filtered.length + 1,
-          separatorBuilder: (_, _) => const SizedBox(height: 12),
-          itemBuilder: (context, index) {
-            if (index == filtered.length) {
-              if (_loadingMore) {
-                return const Padding(
-                  padding: EdgeInsets.all(20),
-                  child: Center(child: CircularProgressIndicator()),
-                );
-              }
-              if (_loadError != null) {
-                return Center(
+        return RefreshIndicator(
+          onRefresh: _retryInitialLoad,
+          child: ListView(
+            controller: _scrollController,
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: EdgeInsets.fromLTRB(
+              20,
+              4,
+              20,
+              28 + widget.additionalBottomScrollPadding,
+            ),
+            children: [
+              if (filtered.isEmpty)
+                _ExplorerEmptyState(
+                  isSearching:
+                      _searchKey.isNotEmpty || _filters.hasActiveFilters,
+                )
+              else
+                for (final community in filtered) ...[
+                  CommunityExplorerCard(
+                    community: community,
+                    isJoined: joinedIds.contains(community.communityId),
+                    isOwner: _isOwner(community),
+                    onOpen: () => _openCommunity(
+                      community,
+                      joinedIds.contains(community.communityId),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                ],
+              if (_loadError != null)
+                Center(
                   child: OutlinedButton.icon(
-                    onPressed: _loadNextPage,
+                    onPressed: () => _loadPage(
+                      after: _pageStarts[_currentPage],
+                      pageIndex: _currentPage,
+                    ),
                     icon: const Icon(Icons.refresh_rounded),
-                    label: const Text("Retry loading more"),
+                    label: const Text("Retry loading page"),
                   ),
-                );
-              }
-              if (_hasMore) {
-                return Center(
-                  child: OutlinedButton.icon(
-                    onPressed: _loadNextPage,
-                    icon: const Icon(Icons.expand_more_rounded),
-                    label: const Text("Load more communities"),
-                  ),
-                );
-              }
-              return const SizedBox.shrink();
-            }
-            final community = filtered[index];
-            final isJoined = joinedIds.contains(community.communityId);
-            return CommunityExplorerCard(
-              community: community,
-              isJoined: isJoined,
-              isOwner: _isOwner(community),
-              onOpen: () => _openCommunity(community, isJoined),
-            );
-          },
+                ),
+              _CommunityExplorerPagination(
+                currentPage: _currentPage + 1,
+                canGoPrevious: _currentPage > 0 && !_loadingPage,
+                canGoNext: _hasMore && !_loadingPage,
+                onPrevious: _previousPage,
+                onNext: _nextPage,
+              ),
+            ],
+          ),
         );
       },
     );
@@ -379,8 +438,45 @@ class _ExplorerEmptyState extends StatelessWidget {
   );
 }
 
+class _CommunityExplorerPagination extends StatelessWidget {
+  final int currentPage;
+  final bool canGoPrevious;
+  final bool canGoNext;
+  final VoidCallback onPrevious;
+  final VoidCallback onNext;
+
+  const _CommunityExplorerPagination({
+    required this.currentPage,
+    required this.canGoPrevious,
+    required this.canGoNext,
+    required this.onPrevious,
+    required this.onNext,
+  });
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(top: 8),
+    child: Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        OutlinedButton(
+          key: const Key('community-explorer-previous-page'),
+          onPressed: canGoPrevious ? onPrevious : null,
+          child: const Text('Previous'),
+        ),
+        Text('Page $currentPage'),
+        OutlinedButton(
+          key: const Key('community-explorer-next-page'),
+          onPressed: canGoNext ? onNext : null,
+          child: const Text('Next'),
+        ),
+      ],
+    ),
+  );
+}
+
 class _ExplorerErrorState extends StatelessWidget {
-  final VoidCallback onRetry;
+  final Future<void> Function() onRetry;
 
   const _ExplorerErrorState({required this.onRetry});
 

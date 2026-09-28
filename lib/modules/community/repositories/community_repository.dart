@@ -1302,7 +1302,11 @@ class CommunityRepository {
   Future<CommunityExplorerPage> loadPublicCommunitiesPage({
     CommunityExplorerCursor? after,
     int limit = 20,
+    String? namePrefix,
   }) async {
+    final normalizedNamePrefix = namePrefix == null
+        ? ''
+        : CommunityNameKey.fromName(namePrefix);
     Query<Map<String, dynamic>> query = _communities
         .where("visibility", isEqualTo: CommunityModel.publicVisibility)
         .where(
@@ -1311,11 +1315,20 @@ class CommunityRepository {
             CommunityModel.openAccessMode,
             CommunityModel.approvalAccessMode,
           ],
-        )
-        .orderBy("createdAt", descending: true)
-        .orderBy(FieldPath.documentId, descending: true)
-        .limit(limit);
-    if (after != null) query = query.startAfterDocument(after._document);
+        );
+    if (normalizedNamePrefix.isEmpty) {
+      query = query
+          .orderBy("createdAt", descending: true)
+          .orderBy(FieldPath.documentId, descending: true);
+    } else {
+      query = query
+          .orderBy('nameKey')
+          .orderBy(FieldPath.documentId)
+          .startAt([normalizedNamePrefix])
+          .endAt(['$normalizedNamePrefix\uf8ff']);
+    }
+    query = query.limit(limit);
+    if (after != null) query = query.startAfterDocument(after._document!);
 
     final snapshot = await query.get();
     final communities = snapshot.docs
@@ -1896,9 +1909,12 @@ enum _CommunityImageWriteOutcome {
 }
 
 class CommunityExplorerCursor {
-  final QueryDocumentSnapshot<Map<String, dynamic>> _document;
+  final QueryDocumentSnapshot<Map<String, dynamic>>? _document;
 
   const CommunityExplorerCursor._(this._document);
+
+  @visibleForTesting
+  const CommunityExplorerCursor.forTesting() : _document = null;
 }
 
 class CommunityExplorerPage {

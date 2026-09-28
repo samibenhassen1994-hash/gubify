@@ -202,11 +202,17 @@ class CommunityService {
 
   Future<CommunityExplorerPage> loadPublicCommunitiesPage({
     CommunityExplorerCursor? after,
+    int limit = 20,
+    String? namePrefix,
   }) {
     if (_auth.currentUser == null) {
       throw StateError("You must be signed in to explore communities.");
     }
-    return CommunityRepository.instance.loadPublicCommunitiesPage(after: after);
+    return CommunityRepository.instance.loadPublicCommunitiesPage(
+      after: after,
+      limit: limit,
+      namePrefix: namePrefix,
+    );
   }
 
   Future<CommunityPublicAccessState?> loadPublicAccessState(
