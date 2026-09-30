@@ -42,7 +42,6 @@ class _GlobalBestAnswerRankingPreviewState
         ),
     borderRadius: BorderRadius.circular(18),
     child: Container(
-      height: widget.compact ? 136 : 178,
       padding: EdgeInsets.all(widget.compact ? 4 : 12),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(18),
@@ -92,7 +91,7 @@ class _GlobalBestAnswerRankingPreviewState
                       ),
                     ),
                   ),
-                  Expanded(child: _buildContent(snapshot, items)),
+                  _buildContent(snapshot, items),
                 ],
               ),
             );
@@ -138,11 +137,12 @@ class _GlobalBestAnswerRankingPreviewState
         ),
       );
     }
-    return Stack(
+    return Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
         content,
         Align(
-          alignment: Alignment.bottomRight,
+          alignment: Alignment.centerRight,
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [

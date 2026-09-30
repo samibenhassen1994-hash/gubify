@@ -25,7 +25,7 @@ Future<CommunityLeaderboardPage> _fiveRankedUsers({
 );
 
 void main() {
-  testWidgets('fits a short screen without scrolling or overflow', (
+  testWidgets('keeps the ranking reachable on a compact Huawei viewport', (
     tester,
   ) async {
     await tester.binding.setSurfaceSize(const Size(320, 426));
@@ -45,9 +45,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.byType(SingleChildScrollView), findsNothing);
+    expect(find.byType(SingleChildScrollView), findsOneWidget);
     expect(find.byType(ListView), findsNothing);
-    expect(find.byType(Scrollable), findsNothing);
+    expect(find.byType(Scrollable), findsOneWidget);
     expect(find.text('Explore Communities'), findsNothing);
     expect(
       find.textContaining('Create your Gub or join an existing one'),
@@ -58,17 +58,20 @@ void main() {
     expect(find.byIcon(Icons.add_rounded), findsOneWidget);
     expect(find.text('My Gubs'), findsOneWidget);
     expect(find.text('Join a Gub'), findsOneWidget);
+    expect(
+      find.byKey(const Key('global-best-answer-ranking-preview')),
+      findsOneWidget,
+    );
     expect(find.text('Learn More'), findsNothing);
     expect(find.text('Support Us'), findsNothing);
     expect(tester.takeException(), isNull);
 
-    for (final action in [
-      find.byTooltip('Create Gub'),
-      find.text('My Gubs'),
-      find.text('Join a Gub'),
-    ]) {
-      expect(tester.getBottomRight(action).dy, lessThanOrEqualTo(426));
-    }
+    await tester.drag(
+      find.byType(SingleChildScrollView),
+      const Offset(0, -220),
+    );
+    await tester.pump();
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('keeps the normal layout non-scrollable', (tester) async {

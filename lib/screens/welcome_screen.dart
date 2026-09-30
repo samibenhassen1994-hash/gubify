@@ -5,10 +5,10 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../repositories/user_repository.dart';
-import '../modules/community/screens/community_explorer_screen.dart';
 import '../modules/community/screens/global_best_answer_ranking_screen.dart';
 import '../modules/community/widgets/global_best_answer_ranking_preview.dart';
 import '../widgets/gubify_background.dart';
+import '../widgets/gubify_bottom_navigation_bar.dart';
 import '../widgets/gubify_logo.dart';
 import '../widgets/user_header.dart';
 import 'gub/create_gub_screen.dart';
@@ -111,18 +111,6 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     );
   }
 
-  void _goToCommunityExplorer() {
-    final onExploreCommunities = widget.onExploreCommunities;
-    if (onExploreCommunities != null) {
-      onExploreCommunities();
-      return;
-    }
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const CommunityExplorerScreen()),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return GubifyBackground(
@@ -133,112 +121,126 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
             final veryCompact = constraints.maxHeight < 480;
             final compactActionHeight =
                 veryCompact && widget.compactForBottomNavigation ? 30.0 : 44.0;
-            final compactLogoSize = (constraints.maxHeight *
-                    (veryCompact ? 0.06 : 0.105))
-                .clamp(veryCompact ? 22.0 : 40.0, veryCompact ? 32.0 : 52.0)
-                .toDouble();
-            return Padding(
-              padding: EdgeInsets.symmetric(horizontal: compact ? 16 : 20),
+            final compactLogoSize =
+                (constraints.maxHeight * (veryCompact ? 0.06 : 0.105))
+                    .clamp(veryCompact ? 22.0 : 40.0, veryCompact ? 32.0 : 52.0)
+                    .toDouble();
+            final shouldScroll = compact || widget.compactForBottomNavigation;
+            final content = Padding(
+              padding: EdgeInsets.fromLTRB(
+                compact ? 16 : 20,
+                0,
+                compact ? 16 : 20,
+                widget.compactForBottomNavigation
+                    ? GubifyBottomNavigationBar.overlayScrollClearance
+                    : 0,
+              ),
               child: Column(
-                    children: [
-                      widget.headerOverride ??
-                          UserHeader(
-                            darkMode: true,
-                            personalProfileEnabled: true,
-                            showCard: !compact,
-                            darkCard: !compact,
+                children: [
+                  widget.headerOverride ??
+                      UserHeader(
+                        darkMode: true,
+                        personalProfileEnabled: true,
+                        showCard: !compact,
+                        darkCard: !compact,
                         bottomPadding: compact ? (veryCompact ? 0 : 4) : null,
-                            onExploreCommunities: _goToCommunityExplorer,
-                            onOpenPersonalProfile:
-                                widget.onOpenPersonalProfile,
-                            onLearnMore: _openWebsite,
-                            onSupport: _openSupport,
-                          ),
+                        onOpenPersonalProfile: widget.onOpenPersonalProfile,
+                        onLearnMore: _openWebsite,
+                        onSupport: _openSupport,
+                      ),
 
-                      if (compact)
-                        Flexible(
-                          fit: FlexFit.loose,
+                  if (compact)
+                    SizedBox(
+                      height: compactLogoSize,
+                      child: Center(
+                        child: SizedBox(
+                          height: compactLogoSize,
                           child: Center(
-                            child: SizedBox(
-                              height: compactLogoSize,
-                              child: Center(
-                                child: _buildLogo(
-                                  glowSize: compactLogoSize,
-                                  logoWidth: compactLogoSize,
-                                ),
-                              ),
+                            child: _buildLogo(
+                              glowSize: compactLogoSize,
+                              logoWidth: compactLogoSize,
                             ),
                           ),
-                        )
-                      else
-                        Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            SizedBox(
-                              height: 190,
-                              child: Center(
-                                child: _buildLogo(
-                                  glowSize: 190,
-                                  logoWidth: 260,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 20),
-                          ],
                         ),
-
-                      widget.greetingOverride ??
-                          _buildGreeting(
-                            compact: compact,
-                            veryCompact: veryCompact,
+                      ),
+                    )
+                  else
+                    Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        SizedBox(
+                          height: 190,
+                          child: Center(
+                            child: _buildLogo(glowSize: 190, logoWidth: 260),
                           ),
+                        ),
+                        const SizedBox(height: 20),
+                      ],
+                    ),
 
-              SizedBox(height: veryCompact ? 4 : (compact ? 8 : 16)),
+                  widget.greetingOverride ??
+                      _buildGreeting(
+                        compact: compact,
+                        veryCompact: veryCompact,
+                      ),
 
-              _CreateGubGlassAction(
-                onPressed: _goToCreateGub,
-                size: veryCompact ? 48 : 52,
-              ),
+                  SizedBox(height: veryCompact ? 4 : (compact ? 8 : 16)),
 
-              SizedBox(height: veryCompact ? 4 : (compact ? 8 : 16)),
-
-              _outlinedButton(
-                icon: Icons.home_work_outlined,
-                label: 'My Gubs',
-                onPressed: _goToMyGubs,
-                height: veryCompact
-                    ? compactActionHeight
-                    : (compact ? 44 : 54),
-              ),
-
-              SizedBox(height: veryCompact ? 2 : (compact ? 4 : 12)),
-
-              _outlinedButton(
-                icon: Icons.group_outlined,
-                label: 'Join a Gub',
-                onPressed: _goToJoinGub,
-                height: veryCompact
-                    ? compactActionHeight
-                    : (compact ? 44 : 54),
-              ),
-
-              SizedBox(height: veryCompact ? 2 : 6),
-              GlobalBestAnswerRankingPreview(
-                compact: compact,
-                loadPage: widget.globalRankingLoader,
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute<void>(
-                    builder: widget.globalRankingScreenBuilder ??
-                        (_) => const GlobalBestAnswerRankingScreen(),
+                  _CreateGubGlassAction(
+                    onPressed: _goToCreateGub,
+                    size: veryCompact ? 48 : 52,
                   ),
-                ),
-              ),
 
-              SizedBox(height: veryCompact ? 0 : (compact ? 2 : 4)),
-            ],
-          ),
-        );
+                  SizedBox(height: veryCompact ? 4 : (compact ? 8 : 16)),
+
+                  _outlinedButton(
+                    icon: Icons.home_work_outlined,
+                    label: 'My Gubs',
+                    onPressed: _goToMyGubs,
+                    height: veryCompact
+                        ? compactActionHeight
+                        : (compact ? 44 : 54),
+                  ),
+
+                  SizedBox(height: veryCompact ? 2 : (compact ? 4 : 12)),
+
+                  _outlinedButton(
+                    icon: Icons.group_outlined,
+                    label: 'Join a Gub',
+                    onPressed: _goToJoinGub,
+                    height: veryCompact
+                        ? compactActionHeight
+                        : (compact ? 44 : 54),
+                  ),
+
+                  SizedBox(height: veryCompact ? 2 : 6),
+                  GlobalBestAnswerRankingPreview(
+                    compact: compact,
+                    loadPage: widget.globalRankingLoader,
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute<void>(
+                        builder:
+                            widget.globalRankingScreenBuilder ??
+                            (_) => const GlobalBestAnswerRankingScreen(),
+                      ),
+                    ),
+                  ),
+
+                  SizedBox(height: veryCompact ? 0 : (compact ? 2 : 4)),
+                ],
+              ),
+            );
+            return shouldScroll
+                ? SingleChildScrollView(
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(
+                        minHeight: constraints.maxHeight,
+                      ),
+                      child: content,
+                    ),
+                  )
+                : content;
           },
         ),
       ),
@@ -268,10 +270,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     );
   }
 
-  Widget _buildGreeting({
-    required bool compact,
-    required bool veryCompact,
-  }) {
+  Widget _buildGreeting({required bool compact, required bool veryCompact}) {
     final user = FirebaseAuth.instance.currentUser;
 
     if (user == null) {
@@ -346,10 +345,7 @@ class _CreateGubGlassAction extends StatelessWidget {
   final VoidCallback onPressed;
   final double size;
 
-  const _CreateGubGlassAction({
-    required this.onPressed,
-    required this.size,
-  });
+  const _CreateGubGlassAction({required this.onPressed, required this.size});
 
   @override
   Widget build(BuildContext context) {

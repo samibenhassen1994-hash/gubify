@@ -156,6 +156,9 @@ class _UserHeaderState extends State<UserHeader> {
             Expanded(
               child: Text(
                 displayName,
+                maxLines: 1,
+                softWrap: false,
+                overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   color: useLightForeground ? Colors.white : Colors.black87,
                   fontSize: 18,

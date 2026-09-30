@@ -144,6 +144,7 @@ class _BottomNavigationItem extends StatelessWidget {
           highlightShape: BoxShape.circle,
           child: Center(
             child: AnimatedContainer(
+              key: Key('bottom-navigation-selection-${destination.label}'),
               duration: const Duration(milliseconds: 180),
               width: compact ? 40 : 44,
               height: compact ? 40 : 44,
@@ -157,25 +158,39 @@ class _BottomNavigationItem extends StatelessWidget {
                       photoUrl: profilePhotoUrl,
                       selected: selected,
                     )
-                  : Stack(
-                      clipBehavior: Clip.none,
-                      children: [
-                        Icon(
-                          selected ? destination.selectedIcon : destination.icon,
-                          color: selected ? const Color(0xFF0F172A) : const Color(0xFF475569),
-                          size: selected ? 27 : 25,
-                        ),
-                        if (hasUnread)
-                          const Positioned(
-                            right: -2,
-                            top: -2,
-                            child: DecoratedBox(
-                              key: Key('global-notification-unread-dot'),
-                              decoration: BoxDecoration(color: Colors.red, shape: BoxShape.circle),
-                              child: SizedBox(width: 8, height: 8),
-                            ),
+                  : SizedBox.square(
+                      key: Key(
+                        'bottom-navigation-icon-frame-${destination.label}',
+                      ),
+                      dimension: selected ? 27 : 25,
+                      child: Stack(
+                        clipBehavior: Clip.none,
+                        alignment: Alignment.center,
+                        children: [
+                          Icon(
+                            selected
+                                ? destination.selectedIcon
+                                : destination.icon,
+                            color: selected
+                                ? const Color(0xFF0F172A)
+                                : const Color(0xFF475569),
+                            size: selected ? 27 : 25,
                           ),
-                      ],
+                          if (hasUnread)
+                            const Positioned(
+                              right: -2,
+                              top: -2,
+                              child: DecoratedBox(
+                                key: Key('global-notification-unread-dot'),
+                                decoration: BoxDecoration(
+                                  color: Colors.red,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: SizedBox(width: 8, height: 8),
+                              ),
+                            ),
+                        ],
+                      ),
                     ),
             ),
           ),

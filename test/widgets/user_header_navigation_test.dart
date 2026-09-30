@@ -98,4 +98,42 @@ void main() {
       );
     });
   }
+
+  testWidgets(
+    'keeps a long Home display name on one line without moving actions',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(320, 426));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      const displayName =
+          'A deliberately very long display name that must be truncated';
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: UserHeader(
+              personalProfileEnabled: true,
+              currentUserIdOverride: 'user-1',
+              userFutureOverride: Future.value(const {
+                'displayName': displayName,
+              }),
+              onExploreCommunities: () {},
+              onLearnMore: () {},
+              onSupport: () {},
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final name = tester.widget<Text>(find.text(displayName));
+      expect(name.maxLines, 1);
+      expect(name.softWrap, isFalse);
+      expect(name.overflow, TextOverflow.ellipsis);
+      expect(
+        tester.getBottomRight(find.byTooltip('Settings')).dx,
+        lessThanOrEqualTo(320),
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
 }

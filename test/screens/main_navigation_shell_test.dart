@@ -13,6 +13,21 @@ Future<CommunityLeaderboardPage> _emptyRanking({
   required int limit,
 }) async => const CommunityLeaderboardPage(members: []);
 
+Future<CommunityLeaderboardPage> _fiveRankedUsers({
+  Object? after,
+  required int limit,
+}) async => CommunityLeaderboardPage(
+  members: List.generate(
+    5,
+    (index) => CommunityLeaderboardMember(
+      userId: 'ranking-$index',
+      displayName: 'Ranked ${index + 1}',
+      xp: 0,
+      bestAnswerCount: 5 - index,
+    ),
+  ),
+);
+
 void main() {
   Widget buildShell({
     Size size = const Size(390, 844),
@@ -99,6 +114,48 @@ void main() {
       ['Home', 'Explore', 'Notifications', 'Profile'],
     );
     expect(find.text('Home root'), findsOneWidget);
+  });
+
+  testWidgets('keeps a selected navigation icon centered in its selection', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: SizedBox(
+              width: 390,
+              height: GubifyBottomNavigationBar.regularHeight,
+              child: GubifyBottomNavigationBar(
+                selectedIndex: 2,
+                hasUnreadNotifications: true,
+                onDestinationSelected: (_) {},
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final selection = find.byKey(
+      const Key('bottom-navigation-selection-Notifications'),
+    );
+    final bellFrame = find.byKey(
+      const Key('bottom-navigation-icon-frame-Notifications'),
+    );
+    final dot = find.byKey(const Key('global-notification-unread-dot'));
+
+    expect(selection, findsOneWidget);
+    expect(bellFrame, findsOneWidget);
+    expect(dot, findsOneWidget);
+    expect(tester.getCenter(bellFrame), tester.getCenter(selection));
+
+    final bellBounds = tester.getRect(bellFrame);
+    final dotBounds = tester.getRect(dot);
+    final selectionBounds = tester.getRect(selection);
+    expect(dotBounds.center.dx, greaterThan(bellBounds.center.dx));
+    expect(dotBounds.center.dy, lessThan(bellBounds.center.dy));
+    expect(dotBounds.right, lessThanOrEqualTo(selectionBounds.right + 2));
   });
 
   testWidgets('Profile destination uses the current user initial', (
@@ -589,7 +646,9 @@ void main() {
     );
   });
 
-  testWidgets('real non-scrollable Home and bar fit 320x426', (tester) async {
+  testWidgets('real compact Home keeps the ranking scrollable above the bar', (
+    tester,
+  ) async {
     await tester.binding.setSurfaceSize(const Size(320, 426));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
@@ -635,9 +694,70 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.byType(SingleChildScrollView), findsNothing);
+    expect(find.byType(SingleChildScrollView), findsOneWidget);
     expect(find.byTooltip('Create Gub'), findsOneWidget);
     expect(find.byType(GubifyBottomNavigationBar), findsOneWidget);
+    await tester.drag(
+      find.byType(SingleChildScrollView),
+      const Offset(0, -220),
+    );
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Home stays scrollable on the Huawei app viewport', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(360, 748));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MainNavigationShell(
+          userId: 'user-1',
+          isAnonymous: false,
+          currentUserProfile: Future.value(
+            const UserProfileModel(
+              userId: 'user-1',
+              displayName: 'Test',
+              isCurrentUser: true,
+            ),
+          ),
+          homeBuilder:
+              (
+                context,
+                onExplore,
+                onProfile,
+                onCreateGub,
+                onMyGubs,
+                onJoinGub,
+              ) => WelcomeScreen(
+                headerOverride: const SizedBox(height: 64),
+                greetingOverride: const Text('Hi, Test'),
+                onCreateGub: onCreateGub,
+                onOpenMyGubs: onMyGubs,
+                onOpenJoinGub: onJoinGub,
+                globalRankingLoader: _fiveRankedUsers,
+                compactForBottomNavigation: true,
+              ),
+          exploreBuilder: (_) => const SizedBox(),
+          notificationsBuilder: (_) => const SizedBox(),
+          profileBuilder: (_, _) => const SizedBox(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(SingleChildScrollView), findsOneWidget);
+    expect(
+      find.byKey(const Key('global-best-answer-ranking-preview')),
+      findsOneWidget,
+    );
+    await tester.drag(
+      find.byType(SingleChildScrollView),
+      const Offset(0, -220),
+    );
+    await tester.pump();
     expect(tester.takeException(), isNull);
   });
 }
