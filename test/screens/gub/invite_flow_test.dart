@@ -25,7 +25,9 @@ void main() {
         content.payload,
         'Join my Gub “Sam’s Gub 🚀” on Gubify.\n\n'
         'Invite code: K7M4-P9Q2\n'
-        'https://gubify.com/join/K7M4-P9Q2',
+        'https://gubify.com/join/K7M4-P9Q2\n\n'
+        'Download Gubify on Google Play:\n'
+        'https://play.google.com/store/apps/details?id=com.gubify.app',
       );
       expect(content.payload, isNot(contains('gubId')));
       expect(content.payload, isNot(contains('ownerId')));
@@ -297,6 +299,10 @@ void main() {
     expect(payload, contains("L'été 🚀"));
     expect(payload, contains('Invite code: K7M4-P9Q2'));
     expect(payload, contains('https://gubify.com/join/K7M4-P9Q2'));
+    expect(
+      payload,
+      contains('https://play.google.com/store/apps/details?id=com.gubify.app'),
+    );
     expect(origin, isNotNull);
     expect(origin!.isEmpty, isFalse);
   });
