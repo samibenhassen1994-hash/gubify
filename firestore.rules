@@ -41,6 +41,19 @@ service cloud.firestore {
         && request.resource.data.moderatedBy == request.auth.uid
         && request.resource.data.moderatedAt == request.time;
     }
+    function validPlatformModerationReportUpdate() {
+      let data = request.resource.data;
+      let changed = data.diff(resource.data).affectedKeys();
+      return isPlatformAdmin()
+        && changed.hasAny(['status'])
+        && changed.hasOnly(['status','reviewedBy','reviewedAt','actionNote'])
+        && data.status in ['open','reviewed','action_taken','escalated','closed']
+        && data.status != resource.data.status
+        && data.reviewedBy == request.auth.uid
+        && data.reviewedAt == request.time
+        && data.actionNote is string
+        && data.actionNote.size() <= 500;
+    }
     // Un solo membro per transazione; il segnale non conferisce permessi futuri.
     function validAdminMemberRemoval(id) {
       let marker = getAfter(/databases/$(database)/documents/communities/$(id)/membershipMutations/admin).data;
@@ -1477,6 +1490,13 @@ service cloud.firestore {
         && data.memberCount == rootAfter.memberCount
         && data.updatedAt == request.time;
     }
+    function validModerationReportPriority(data) {
+      return !data.keys().hasAny(['priority'])
+        || (data.reason == 'child_safety_or_sexual_exploitation'
+          && data.priority == 'critical')
+        || (data.reason != 'child_safety_or_sexual_exploitation'
+          && data.priority == 'normal');
+    }
     function validModerationReportCommon(reportId) {
       let data = request.resource.data;
       return data.reportId == reportId
@@ -1488,8 +1508,10 @@ service cloud.firestore {
         && data.targetId.size() >= 1
         && data.reason in [
           'spam','harassment_or_bullying','hate_or_abusive_content',
-          'inappropriate_content','scam_or_fraud','impersonation','other'
+          'inappropriate_content','child_safety_or_sexual_exploitation',
+          'scam_or_fraud','impersonation','other'
         ]
+        && validModerationReportPriority(data)
         && data.details is string
         && data.details.size() <= 500
         && data.createdAt == request.time
@@ -1502,7 +1524,7 @@ service cloud.firestore {
       let data = request.resource.data;
       return data.keys().hasOnly([
           'reportId','reporterId','communityId','targetType','targetId',
-          'reason','details','createdAt','status','communityNameSnapshot'
+          'reason','priority','details','createdAt','status','communityNameSnapshot'
         ])
         && validModerationReportCommon(reportId)
         && data.targetType == 'community'
@@ -1515,7 +1537,7 @@ service cloud.firestore {
       let target = get(communityMemberPath(data.communityId, data.targetUserId)).data;
       return data.keys().hasOnly([
           'reportId','reporterId','communityId','targetType','targetId',
-          'targetUserId','reason','details','createdAt','status',
+          'targetUserId','reason','priority','details','createdAt','status',
           'communityNameSnapshot','targetNameSnapshot'
         ])
         && validModerationReportCommon(reportId)
@@ -1535,7 +1557,7 @@ service cloud.firestore {
       let message = get(messagePath).data;
       return data.keys().hasOnly([
           'reportId','reporterId','communityId','targetType','targetId',
-          'targetUserId','messageId','reason','details','createdAt','status',
+          'targetUserId','messageId','reason','priority','details','createdAt','status',
           'communityNameSnapshot','targetNameSnapshot','contentSnapshot'
         ])
         && validModerationReportCommon(reportId)
@@ -1561,7 +1583,7 @@ service cloud.firestore {
       let ask = get(communityAskPath(data.communityId, data.targetId)).data;
       return data.keys().hasOnly([
           'reportId','reporterId','communityId','targetType','targetId',
-          'targetUserId','reason','details','createdAt','status',
+          'targetUserId','reason','priority','details','createdAt','status',
           'communityNameSnapshot','targetNameSnapshot','contentSnapshot'
         ])
         && validModerationReportCommon(reportId)
@@ -1580,7 +1602,7 @@ service cloud.firestore {
       let answer = get(communityAnswerPath(data.communityId, data.askId, data.targetId)).data;
       return data.keys().hasOnly([
           'reportId','reporterId','communityId','askId','targetType','targetId',
-          'targetUserId','reason','details','createdAt','status',
+          'targetUserId','reason','priority','details','createdAt','status',
           'communityNameSnapshot','targetNameSnapshot','contentSnapshot'
         ])
         && validModerationReportCommon(reportId)
@@ -1601,7 +1623,7 @@ service cloud.firestore {
       let target = get(gubMemberPath(data.gubId, data.targetUserId)).data;
       return data.keys().hasOnly([
           'reportId','reporterId','gubId','targetType','targetId',
-          'targetUserId','reason','details','createdAt','status',
+          'targetUserId','reason','priority','details','createdAt','status',
           'gubNameSnapshot','targetNameSnapshot'
         ])
         && data.reportId == reportId
@@ -1622,8 +1644,10 @@ service cloud.firestore {
         && data.targetNameSnapshot == target.displayName
         && data.reason in [
           'spam','harassment_or_bullying','hate_or_abusive_content',
-          'inappropriate_content','scam_or_fraud','impersonation','other'
+          'inappropriate_content','child_safety_or_sexual_exploitation',
+          'scam_or_fraud','impersonation','other'
         ]
+        && validModerationReportPriority(data)
         && data.details is string
         && data.details.size() <= 500
         && data.createdAt == request.time
@@ -1636,7 +1660,7 @@ service cloud.firestore {
       let message = get(messagePath(data.gubId, data.messageId)).data;
       return data.keys().hasOnly([
           'reportId','reporterId','gubId','targetType','targetId',
-          'targetUserId','messageId','reason','details','createdAt','status',
+          'targetUserId','messageId','reason','priority','details','createdAt','status',
           'gubNameSnapshot','targetNameSnapshot','contentSnapshot'
         ])
         && data.reportId == reportId
@@ -1665,8 +1689,10 @@ service cloud.firestore {
         && data.contentSnapshot == message.text
         && data.reason in [
           'spam','harassment_or_bullying','hate_or_abusive_content',
-          'inappropriate_content','scam_or_fraud','impersonation','other'
+          'inappropriate_content','child_safety_or_sexual_exploitation',
+          'scam_or_fraud','impersonation','other'
         ]
+        && validModerationReportPriority(data)
         && data.details is string
         && data.details.size() <= 500
         && data.createdAt == request.time
@@ -2821,16 +2847,47 @@ service cloud.firestore {
         && communityFinalizingDeletion(resource.data.communityId);
     }
     match /moderationReports/{reportId} {
-      allow get: if signedIn()
-        && reportId.matches('^.*__' + request.auth.uid + '$')
-        && (!exists(moderationReportPath(reportId))
-          || resource.data.reporterId == request.auth.uid);
+      allow get: if isPlatformAdmin()
+        || (signedIn()
+          && reportId.matches('^.*__' + request.auth.uid + '    match /moderationTargets/{targetKey} {
+      allow get: if false;
       allow list: if false;
+      allow create: if accountActive()
+        && !exists(moderationTargetPath(targetKey))
+        && validModerationTargetCreate(targetKey);
+      allow update: if signedIn()
+        && validModerationTargetUpdate(targetKey);
+      allow delete: if false;
+    }
+    match /platformAdmins/{uid} {
+      allow get: if own(uid);
+      allow list, create, update, delete: if false;
+    }
+    match /platformRestrictions/{uid} {
+      allow get: if own(uid);
+      allow list: if false;
+      allow create: if validPlatformRestrictionInitialization(uid);
+      allow update, delete: if false;
+    }
+    match /communityRestrictions/{communityId} {
+      allow get: if signedIn();
+      allow list: if false;
+      allow create: if validCommunityRestrictionInitialization(communityId);
+      allow update: if false;
+      allow delete: if communityFinalizingDeletion(communityId);
+    }
+  }
+}
+)
+          && (!exists(moderationReportPath(reportId))
+            || resource.data.reporterId == request.auth.uid));
+      allow list: if isPlatformAdmin();
       allow create: if accountActive()
         && !exists(moderationReportPath(reportId))
         && validModerationReportCreate(reportId)
         && validModerationReportTargetLink(reportId);
-      allow update, delete: if false;
+      allow update: if validPlatformModerationReportUpdate();
+      allow delete: if false;
     }
     match /moderationTargets/{targetKey} {
       allow get: if false;
