@@ -37,69 +37,14 @@ class _PlatformReportsScreenState extends State<PlatformReportsScreen> {
 
   Future<void> _changeStatus(PlatformReportItem report) async {
     if (_busy.contains(report.id)) return;
-    var status = report.status;
-    final note = TextEditingController(text: report.actionNote);
     final result = await showDialog<_StatusUpdate>(
       context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: const Text('Update report'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                DropdownButtonFormField<String>(
-                  initialValue:
-                      PlatformModerationService.reportStatuses.contains(status)
-                      ? status
-                      : 'open',
-                  decoration: const InputDecoration(labelText: 'Status'),
-                  items: [
-                    for (final item in PlatformModerationService.reportStatuses)
-                      DropdownMenuItem(value: item, child: Text(_label(item))),
-                  ],
-                  onChanged: (value) {
-                    if (value != null) {
-                      setDialogState(() => status = value);
-                    }
-                  },
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: note,
-                  maxLength: 500,
-                  maxLines: 4,
-                  decoration: const InputDecoration(
-                    labelText: 'Action note (optional)',
-                  ),
-                ),
-                if (status == 'escalated')
-                  const Text(
-                    'Escalated is an internal tracking status. No external report is sent automatically.',
-                    style: TextStyle(fontSize: 12),
-                  ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: status == report.status
-                  ? null
-                  : () => Navigator.pop(
-                      dialogContext,
-                      _StatusUpdate(status: status, actionNote: note.text),
-                    ),
-              child: const Text('Save'),
-            ),
-          ],
-        ),
+      builder: (_) => _ReportStatusDialog(
+        currentStatus: report.status,
+        currentActionNote: report.actionNote,
+        statusLabel: _label,
       ),
     );
-    note.dispose();
     if (result == null || !mounted) return;
 
     setState(() => _busy.add(report.id));
@@ -249,6 +194,101 @@ class _PlatformReportsScreenState extends State<PlatformReportsScreen> {
         },
       ),
     ),
+  );
+}
+
+class _ReportStatusDialog extends StatefulWidget {
+  const _ReportStatusDialog({
+    required this.currentStatus,
+    required this.currentActionNote,
+    required this.statusLabel,
+  });
+
+  final String currentStatus;
+  final String currentActionNote;
+  final String Function(String) statusLabel;
+
+  @override
+  State<_ReportStatusDialog> createState() => _ReportStatusDialogState();
+}
+
+class _ReportStatusDialogState extends State<_ReportStatusDialog> {
+  late String _status;
+  late final TextEditingController _note;
+
+  @override
+  void initState() {
+    super.initState();
+    _status = PlatformModerationService.reportStatuses.contains(
+      widget.currentStatus,
+    )
+        ? widget.currentStatus
+        : 'open';
+    _note = TextEditingController(text: widget.currentActionNote);
+  }
+
+  @override
+  void dispose() {
+    _note.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: const Text('Update report'),
+    content: SingleChildScrollView(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          DropdownButtonFormField<String>(
+            initialValue: _status,
+            decoration: const InputDecoration(labelText: 'Status'),
+            items: [
+              for (final item in PlatformModerationService.reportStatuses)
+                DropdownMenuItem(
+                  value: item,
+                  child: Text(widget.statusLabel(item)),
+                ),
+            ],
+            onChanged: (value) {
+              if (value != null) setState(() => _status = value);
+            },
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _note,
+            maxLength: 500,
+            maxLines: 4,
+            decoration: const InputDecoration(
+              labelText: 'Action note (optional)',
+            ),
+          ),
+          if (_status == 'escalated')
+            const Text(
+              'Escalated is an internal tracking status. No external report is sent automatically.',
+              style: TextStyle(fontSize: 12),
+            ),
+        ],
+      ),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('Cancel'),
+      ),
+      FilledButton(
+        onPressed: _status == widget.currentStatus
+            ? null
+            : () => Navigator.pop(
+                context,
+                _StatusUpdate(
+                  status: _status,
+                  actionNote: _note.text,
+                ),
+              ),
+        child: const Text('Save'),
+      ),
+    ],
   );
 }
 
