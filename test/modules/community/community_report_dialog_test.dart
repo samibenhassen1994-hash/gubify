@@ -37,6 +37,22 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  test('child-safety reports use critical priority', () {
+    expect(
+      CommunityReportReason.values.any(
+        (reason) =>
+            reason.value == CommunityReportReason.childSafetyValue &&
+            reason.label == 'Child safety or sexual exploitation',
+      ),
+      isTrue,
+    );
+    expect(
+      CommunityReportReason.priorityFor(CommunityReportReason.childSafetyValue),
+      'critical',
+    );
+    expect(CommunityReportReason.priorityFor('spam'), 'normal');
+  });
+
   testWidgets('requires a reason and limits details to 500 characters', (
     tester,
   ) async {
