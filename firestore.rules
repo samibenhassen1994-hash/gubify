@@ -2849,7 +2849,18 @@ service cloud.firestore {
     match /moderationReports/{reportId} {
       allow get: if isPlatformAdmin()
         || (signedIn()
-          && reportId.matches('^.*__' + request.auth.uid + '    match /moderationTargets/{targetKey} {
+          && reportId.matches('^.*__' + request.auth.uid + '$')
+          && (!exists(moderationReportPath(reportId))
+            || resource.data.reporterId == request.auth.uid));
+      allow list: if isPlatformAdmin();
+      allow create: if accountActive()
+        && !exists(moderationReportPath(reportId))
+        && validModerationReportCreate(reportId)
+        && validModerationReportTargetLink(reportId);
+      allow update: if validPlatformModerationReportUpdate();
+      allow delete: if false;
+    }
+    match /moderationTargets/{targetKey} {
       allow get: if false;
       allow list: if false;
       allow create: if accountActive()
