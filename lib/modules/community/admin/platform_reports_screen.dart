@@ -188,14 +188,11 @@ class _PlatformReportsScreenState extends State<PlatformReportsScreen> {
                             fontWeight: FontWeight.bold,
                           ),
                         ),
-                        Text(report.sourceKind + ': ' + report.sourceName),
+                        Text('\${report.sourceKind}: \${report.sourceName}'),
                         Text(
-                          'Target: ' +
-                              (report.targetName ?? report.targetId) +
-                              ' · ' +
-                              report.targetType,
+                          'Target: \${report.targetName ?? report.targetId} · \${report.targetType}',
                         ),
-                        Text('Status: ' + _label(report.status)),
+                        Text('Status: \${_label(report.status)}'),
                         if (report.contentSnapshot?.trim().isNotEmpty == true) ...[
                           const SizedBox(height: 8),
                           const Text(
