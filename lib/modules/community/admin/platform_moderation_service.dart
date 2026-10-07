@@ -8,11 +8,26 @@ class PlatformModerationService {
     required this.role,
     PlatformModerationRepository? repository,
   }) : _repository = repository ?? PlatformModerationRepository();
+
+  static const reportStatuses = <String>[
+    'open',
+    'reviewed',
+    'action_taken',
+    'escalated',
+    'closed',
+  ];
+
   final PlatformAdminService role;
   final PlatformModerationRepository _repository;
+
   Stream<List<CommunityModel>> communities(int limit) {
     role.requireAdmin();
     return _repository.communities(limit);
+  }
+
+  Stream<List<PlatformReportItem>> reports(int limit) {
+    role.requireAdmin();
+    return _repository.reports(limit);
   }
 
   Stream<List<PlatformModerationItem>> content(
@@ -23,6 +38,26 @@ class PlatformModerationService {
   ) {
     role.requireAdmin();
     return _repository.content(communityId, kind, askId, limit);
+  }
+
+  Future<void> updateReportStatus({
+    required String reportId,
+    required String status,
+    required String actionNote,
+  }) async {
+    role.requireAdmin();
+    if (!reportStatuses.contains(status)) {
+      throw ArgumentError.value(status, 'status', 'Unsupported report status.');
+    }
+    if (actionNote.trim().length > 500) {
+      throw ArgumentError('Action note must be 500 characters or fewer.');
+    }
+    await _repository.updateReportStatus(
+      reportId: reportId,
+      status: status,
+      actorId: role.adminUid!,
+      actionNote: actionNote,
+    );
   }
 
   Future<void> setHidden({
