@@ -30,6 +30,11 @@ class PlatformModerationService {
     return _repository.reports(limit);
   }
 
+  Stream<List<PlatformReportEvent>> reportEvents(String reportId) {
+    role.requireAdmin();
+    return _repository.reportEvents(reportId);
+  }
+
   Stream<List<PlatformModerationItem>> content(
     String communityId,
     PlatformContentKind kind,

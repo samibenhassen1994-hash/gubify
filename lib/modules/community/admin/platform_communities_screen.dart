@@ -7,6 +7,7 @@ import 'platform_admin_service.dart';
 import 'platform_admin_gate.dart';
 import 'platform_community_screen.dart';
 import 'platform_moderation_service.dart';
+import 'platform_moderation_model.dart';
 import 'platform_reports_screen.dart';
 
 class PlatformCommunitiesScreen extends StatefulWidget {
@@ -37,6 +38,44 @@ class _PlatformCommunitiesScreenState extends State<PlatformCommunitiesScreen> {
         final communities = snapshot.data!;
         return ListView(
           children: [
+            StreamBuilder<List<PlatformReportItem>>(
+              stream: service.reports(100),
+              builder: (context, reportsSnapshot) {
+                if (reportsSnapshot.hasError) {
+                  return const ListTile(
+                    leading: Icon(Icons.warning_amber_outlined),
+                    title: Text('Unable to check child-safety reports'),
+                    subtitle: Text('Open Reports inbox and verify access.'),
+                  );
+                }
+                if (!reportsSnapshot.hasData) {
+                  return const ListTile(
+                    leading: Icon(Icons.hourglass_empty),
+                    title: Text('Checking pending safety reports…'),
+                  );
+                }
+                final pending = reportsSnapshot.data!
+                    .where((report) => report.isCritical &&
+                        (report.status == 'open' || report.status == 'reviewed'))
+                    .length;
+                if (pending == 0) {
+                  return const SizedBox.shrink();
+                }
+                return ListTile(
+                  leading: const Icon(Icons.notification_important_outlined),
+                  title: Text('$pending high-priority safety report(s) to review'),
+                  subtitle: const Text('Check these reports promptly. Only the 100 newest reports are counted.'),
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => PlatformAdminGate(
+                        service: widget.role,
+                        builder: (_) => PlatformReportsScreen(role: widget.role),
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
             ListTile(
               leading: const Icon(Icons.report_outlined),
               title: const Text('Reports inbox'),
