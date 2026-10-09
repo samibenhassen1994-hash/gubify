@@ -105,3 +105,33 @@ class PlatformReportItem {
     );
   }
 }
+
+class PlatformReportEvent {
+  const PlatformReportEvent({
+    required this.id,
+    required this.previousStatus,
+    required this.status,
+    required this.actorId,
+    required this.actionNote,
+    this.createdAt,
+  });
+
+  final String id;
+  final String previousStatus;
+  final String status;
+  final String actorId;
+  final String actionNote;
+  final Timestamp? createdAt;
+
+  factory PlatformReportEvent.fromFirestore(
+    String id,
+    Map<String, dynamic> data,
+  ) => PlatformReportEvent(
+    id: id,
+    previousStatus: data['previousStatus'] as String? ?? '',
+    status: data['status'] as String? ?? '',
+    actorId: data['actorId'] as String? ?? '',
+    actionNote: data['actionNote'] as String? ?? '',
+    createdAt: data['createdAt'] as Timestamp?,
+  );
+}

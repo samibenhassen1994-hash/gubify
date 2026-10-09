@@ -100,13 +100,36 @@ test('admin can review and classify submitted reports',async()=>{
   await assertSucceeds(getDocs(collection(f,'moderationReports')));
   await assertSucceeds(getDoc(report));
   await assertFails(getDocs(collection(db('member'),'moderationReports')));
-  await assertSucceeds(updateDoc(report,{
+  const event=doc(f,'moderationReports/child-report/events/escalation-1');
+  const batch=writeBatch(f);
+  batch.update(report,{
     status:'escalated',
     reviewedBy:'admin',
     reviewedAt:serverTimestamp(),
-    actionNote:'Reviewed and escalated manually.'
-  }));
+    actionNote:'Reviewed and escalated manually.',
+    lastEventId:'escalation-1'
+  });
+  batch.set(event,{
+    reportId:'child-report',
+    previousStatus:'open',
+    status:'escalated',
+    actorId:'admin',
+    actionNote:'Reviewed and escalated manually.',
+    createdAt:serverTimestamp()
+  });
+  await assertSucceeds(batch.commit());
   assert.equal((await getDoc(report)).data().status,'escalated');
+  assert.equal((await getDoc(event)).data().status,'escalated');
+  await assertFails(updateDoc(event,{status:'closed'}));
+  await assertFails(deleteDoc(event));
+  await assertFails(getDocs(collection(db('member'),'moderationReports/child-report/events')));
+  await assertFails(updateDoc(report,{
+    status:'closed',reviewedBy:'admin',reviewedAt:serverTimestamp(),actionNote:'No event'
+  }));
+  await assertFails(setDoc(doc(f,'moderationReports/child-report/events/forged'),{
+    reportId:'child-report',previousStatus:'escalated',status:'closed',
+    actorId:'admin',actionNote:'Forger',createdAt:serverTimestamp()
+  }));
   await assertFails(updateDoc(report,{
     reason:'spam',
     status:'closed',
