@@ -26,7 +26,9 @@ class InviteShareContent {
       payload:
           'Join my Gub “$gubName” on Gubify.\n\n'
           'Invite code: $visibleCode\n'
-          '$url',
+          '$url\n\n'
+          'Download Gubify on Google Play:\n'
+          'https://play.google.com/store/apps/details?id=com.gubify.app',
     );
   }
 }

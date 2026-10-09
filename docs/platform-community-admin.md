@@ -15,6 +15,10 @@ I client possono leggere soltanto il proprio documento ruolo. Non possono elenca
 
 L'area dedicata elenca tutte le community, incluse quelle non mostrate nell'Explorer e quelle con approvazione richiesta. Gli elenchi caricano inizialmente 50 documenti e **Load more** estende la finestra di altri 50. Le community in eliminazione sono visibili nell'elenco ma non apribili per moderazione.
 
+La stessa area include una **Reports inbox**. Le segnalazioni con motivo `child_safety_or_sexual_exploitation` sono evidenziate come priorità alta. Gli stati disponibili sono `open`, `reviewed`, `action_taken`, `escalated` e `closed`. Lo stato `escalated` documenta una decisione manuale dell'amministratore: non invia automaticamente dati o segnalazioni a servizi esterni o autorità.
+
+Per i Gub privati, la Reports inbox espone soltanto i dati e lo snapshot allegati dall'utente alla segnalazione; non concede al platform admin accesso generale alla cronologia privata del Gub.
+
 L'admin può vedere membri, richieste, utenti bannati, chat e tutti gli Ask/Answer; approvare/rifiutare richieste, rimuovere/bannare/sbannare membri. L'ingresso non iscrive l'admin né mostra un composer. Il proprietario e l'attore non sono rimovibili/bannabili tramite i controlli di moderazione. Le operazioni strutturali (proprietà, eliminazione community, impostazioni) restano separate.
 
 **Hide** e **Unhide** richiedono conferma e aggiornano soltanto `moderationHidden`, `moderatedBy`, `moderatedAt`. L'area amministrativa mostra ancora il testo originale per consentire la revisione; l'interfaccia ordinaria mostra **Removed by moderation** per messaggi, card Ask, riepiloghi Ask e Answer. Stato, Best Answer, relazioni, slot e XP non cambiano. Modificare un contenuto nascosto o convertirne un messaggio in Ask non è proposto dalla UI ordinaria.

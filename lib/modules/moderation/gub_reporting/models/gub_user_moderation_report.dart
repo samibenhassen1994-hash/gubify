@@ -1,5 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../../../community/moderation/models/community_report_model.dart';
+
 class GubUserModerationReport {
   static const int maxDetailsLength = 500;
 
@@ -37,6 +39,7 @@ class GubUserModerationReport {
     'targetId': targetId,
     'targetUserId': targetUserId,
     'reason': reason,
+    'priority': CommunityReportReason.priorityFor(reason),
     'details': details,
     'createdAt': FieldValue.serverTimestamp(),
     'status': 'open',

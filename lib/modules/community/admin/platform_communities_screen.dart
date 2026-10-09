@@ -7,6 +7,7 @@ import 'platform_admin_service.dart';
 import 'platform_admin_gate.dart';
 import 'platform_community_screen.dart';
 import 'platform_moderation_service.dart';
+import 'platform_reports_screen.dart';
 
 class PlatformCommunitiesScreen extends StatefulWidget {
   const PlatformCommunitiesScreen({super.key, required this.role});
@@ -34,11 +35,27 @@ class _PlatformCommunitiesScreenState extends State<PlatformCommunitiesScreen> {
           return const Center(child: CircularProgressIndicator());
         }
         final communities = snapshot.data!;
-        if (communities.isEmpty) {
-          return const Center(child: Text('No communities.'));
-        }
         return ListView(
           children: [
+            ListTile(
+              leading: const Icon(Icons.report_outlined),
+              title: const Text('Reports inbox'),
+              subtitle: const Text(
+                'Review user reports. Child-safety reports are high priority.',
+              ),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => PlatformAdminGate(
+                    service: widget.role,
+                    builder: (_) => PlatformReportsScreen(role: widget.role),
+                  ),
+                ),
+              ),
+            ),
+            const Divider(),
+            if (communities.isEmpty)
+              const ListTile(title: Text('No communities.')),
             for (final community in communities)
               ListTile(
                 title: Text(community.name),

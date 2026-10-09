@@ -5,6 +5,7 @@ import 'platform_moderation_model.dart';
 
 class PlatformModerationRepository {
   FirebaseFirestore get _db => FirebaseFirestore.instance;
+
   Stream<List<CommunityModel>> communities(int limit) => _db
       .collection('communities')
       .orderBy(FieldPath.documentId)
@@ -12,6 +13,17 @@ class PlatformModerationRepository {
       .snapshots()
       .map(
         (snapshot) => snapshot.docs.map(CommunityModel.fromFirestore).toList(),
+      );
+
+  Stream<List<PlatformReportItem>> reports(int limit) => _db
+      .collection('moderationReports')
+      .orderBy('createdAt', descending: true)
+      .limit(limit)
+      .snapshots()
+      .map(
+        (snapshot) => snapshot.docs
+            .map((doc) => PlatformReportItem.fromFirestore(doc.id, doc.data()))
+            .toList(),
       );
 
   CollectionReference<Map<String, dynamic>> _content(
@@ -41,6 +53,7 @@ class PlatformModerationRepository {
             )
             .toList(),
       );
+
   Future<void> setHidden({
     required String communityId,
     required PlatformContentKind kind,
@@ -52,5 +65,17 @@ class PlatformModerationRepository {
     'moderationHidden': hidden,
     'moderatedBy': actorId,
     'moderatedAt': FieldValue.serverTimestamp(),
+  });
+
+  Future<void> updateReportStatus({
+    required String reportId,
+    required String status,
+    required String actorId,
+    required String actionNote,
+  }) => _db.collection('moderationReports').doc(reportId).update({
+    'status': status,
+    'reviewedBy': actorId,
+    'reviewedAt': FieldValue.serverTimestamp(),
+    'actionNote': actionNote.trim(),
   });
 }

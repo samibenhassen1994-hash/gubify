@@ -6,15 +6,21 @@ class CommunityReportReason {
 
   const CommunityReportReason(this.value, this.label);
 
+  static const childSafetyValue = 'child_safety_or_sexual_exploitation';
+
   static const values = <CommunityReportReason>[
     CommunityReportReason('spam', 'Spam'),
     CommunityReportReason('harassment_or_bullying', 'Harassment or bullying'),
     CommunityReportReason('hate_or_abusive_content', 'Hate or abusive content'),
     CommunityReportReason('inappropriate_content', 'Inappropriate content'),
+    CommunityReportReason(childSafetyValue, 'Child safety or sexual exploitation'),
     CommunityReportReason('scam_or_fraud', 'Scam or fraud'),
     CommunityReportReason('impersonation', 'Impersonation'),
     CommunityReportReason('other', 'Other'),
   ];
+
+  static bool isChildSafety(String value) => value == childSafetyValue;
+  static String priorityFor(String value) => isChildSafety(value) ? 'critical' : 'normal';
 }
 
 class CommunityModerationReport {
@@ -50,6 +56,8 @@ class CommunityModerationReport {
     this.targetNameSnapshot,
   });
 
+  String get priority => CommunityReportReason.priorityFor(reason);
+
   String get moderationTargetKey => switch (targetType) {
     'community' => 'community__$targetId',
     'user' => 'user__$targetId',
@@ -72,6 +80,7 @@ class CommunityModerationReport {
     if (targetUserId != null) 'targetUserId': targetUserId,
     if (contentSnapshot != null) 'contentSnapshot': contentSnapshot,
     'reason': reason,
+    'priority': priority,
     'details': details,
     'createdAt': FieldValue.serverTimestamp(),
     'status': 'open',

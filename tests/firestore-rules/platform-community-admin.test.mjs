@@ -28,6 +28,14 @@ beforeEach(async () => {
       'communities/c/asks/a/answers/member': {answerId:'member',authorId:'member',authorDisplayName:'Member',text:'Original best answer',createdAt:at},
       'gubs/private': {ownerId:'owner',name:'Private',memberCount:1},
       'gubs/private/messages/m': {text:'Private message',createdAt:at},
+      'moderationReports/child-report': {
+        reportId:'child-report',reporterId:'member',gubId:'private',
+        targetType:'user',targetId:'owner',targetUserId:'owner',
+        messageId:'m',reason:'child_safety_or_sexual_exploitation',
+        priority:'critical',details:'Urgent child-safety concern',
+        createdAt:at,status:'open',gubNameSnapshot:'Private',
+        targetNameSnapshot:'Owner',contentSnapshot:'Reported snapshot'
+      },
     };
     for (const [path,value] of Object.entries(data)) await setDoc(doc(f,path),value);
   });
@@ -86,6 +94,28 @@ test('revocation and deletion immediately deny reads and writes',async()=>{
     await assertFails(updateDoc(doc(db(),'communities/c/asks/a'),moderation()));
   }
 });
+test('admin can review and classify submitted reports',async()=>{
+  const f=db();
+  const report=doc(f,'moderationReports/child-report');
+  await assertSucceeds(getDocs(collection(f,'moderationReports')));
+  await assertSucceeds(getDoc(report));
+  await assertFails(getDocs(collection(db('member'),'moderationReports')));
+  await assertSucceeds(updateDoc(report,{
+    status:'escalated',
+    reviewedBy:'admin',
+    reviewedAt:serverTimestamp(),
+    actionNote:'Reviewed and escalated manually.'
+  }));
+  assert.equal((await getDoc(report)).data().status,'escalated');
+  await assertFails(updateDoc(report,{
+    reason:'spam',
+    status:'closed',
+    reviewedBy:'admin',
+    reviewedAt:serverTimestamp(),
+    actionNote:'Forged reason change'
+  }));
+});
+
 test('admin has no private Gub, user account, ownership, XP or posting privilege',async()=>{
   const f=db();
   for(const path of ['gubs/private','gubs/private/messages/m','users/member/communities/c','communityOwnership/owner']) await assertFails(getDoc(doc(f,path)));

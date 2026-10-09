@@ -703,4 +703,19 @@ describe('central Community moderation reports', () => {
     await assertFails(setDoc(reportRef(ids.member, 'user__c1__other__member'), userReport(ids.member, { reportId: 'user__c1__other__member', targetId: ids.other, targetUserId: ids.other })));
   });
 
+  test('child-safety reports require critical priority when priority is present', async () => {
+    await assertFails(submitReport(ids.member, communityMessageReport(ids.member, {
+      reason: 'child_safety_or_sexual_exploitation',
+      priority: 'normal',
+    })));
+    await assertSucceeds(submitReport(ids.member, communityMessageReport(ids.member, {
+      reportId: 'message__community__c1__community-message-2__' + ids.member,
+      messageId: 'community-message-2',
+      contentSnapshot: 'Second Community message',
+      reason: 'child_safety_or_sexual_exploitation',
+      priority: 'critical',
+    })));
+  });
+
+
 });
