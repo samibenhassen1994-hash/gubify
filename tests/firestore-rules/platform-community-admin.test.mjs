@@ -139,6 +139,31 @@ test('admin can review and classify submitted reports',async()=>{
   }));
 });
 
+test('audit event cannot be attached to another report or spoof another actor',async()=>{
+  const f=db();
+  const report=doc(f,'moderationReports/child-report');
+  const wrong=writeBatch(f);
+  wrong.update(report,{
+    status:'closed',reviewedBy:'admin',reviewedAt:serverTimestamp(),
+    actionNote:'Escalated',lastEventId:'bad-1'
+  });
+  wrong.set(doc(f,'moderationReports/child-report/events/bad-1'),{
+    reportId:'other-report',previousStatus:'open',status:'closed',
+    actorId:'admin',actionNote:'Escalated',createdAt:serverTimestamp()
+  });
+  await assertFails(wrong.commit());
+  const forged=writeBatch(f);
+  forged.update(report,{
+    status:'closed',reviewedBy:'admin',reviewedAt:serverTimestamp(),
+    actionNote:'Escalated',lastEventId:'bad-2'
+  });
+  forged.set(doc(f,'moderationReports/child-report/events/bad-2'),{
+    reportId:'child-report',previousStatus:'open',status:'closed',
+    actorId:'member',actionNote:'Escalated',createdAt:serverTimestamp()
+  });
+  await assertFails(forged.commit());
+});
+
 test('admin has no private Gub, user account, ownership, XP or posting privilege',async()=>{
   const f=db();
   for(const path of ['gubs/private','gubs/private/messages/m','users/member/communities/c','communityOwnership/owner']) await assertFails(getDoc(doc(f,path)));
