@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../widgets/gubify_swipe_back.dart';
 import 'platform_admin_service.dart';
+import 'authority_reporting_dialog.dart';
 import 'platform_moderation_model.dart';
 import 'platform_moderation_service.dart';
 
@@ -209,6 +210,21 @@ class _PlatformReportsScreenState extends State<PlatformReportsScreen> {
                           Text(report.actionNote),
                         ],
                         const SizedBox(height: 8),
+                        if (report.isChildSafety)
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: OutlinedButton.icon(
+                              onPressed: () => showDialog<void>(
+                                context: context,
+                                builder: (_) => AuthorityReportingDialog(
+                                  report: report,
+                                  service: service,
+                                ),
+                              ),
+                              icon: const Icon(Icons.gavel_outlined),
+                              label: const Text('Authority reporting'),
+                            ),
+                          ),
                         Align(
                           alignment: Alignment.centerRight,
                           child: TextButton.icon(
