@@ -26,6 +26,53 @@ class PlatformModerationRepository {
             .toList(),
       );
 
+  Stream<List<PlatformReportEvent>> reportEvents(String reportId) => _db
+      .collection('moderationReports')
+      .doc(reportId)
+      .collection('events')
+      .orderBy('createdAt', descending: true)
+      .limit(50)
+      .snapshots()
+      .map((snapshot) => snapshot.docs
+          .map((doc) => PlatformReportEvent.fromFirestore(doc.id, doc.data()))
+          .toList());
+
+  Stream<List<PlatformAuthorityReferral>> authorityReferrals(
+    String reportId,
+  ) => _db.collection('moderationReports')
+      .doc(reportId)
+      .collection('authorityReferrals')
+      .orderBy('recordedAt', descending: true)
+      .limit(30)
+      .snapshots()
+      .map((snapshot) => snapshot.docs
+          .map((doc) => PlatformAuthorityReferral.fromFirestore(doc.id, doc.data()))
+          .toList());
+
+  /// The administrator confirms the referral was submitted externally.
+  /// No contact with law enforcement is initiated here.
+  Future<void> recordAuthorityReferral({
+    required String reportId,
+    required String actorId,
+    required String channel,
+    required String authorityName,
+    required String reference,
+    required String note,
+  }) => _db.collection('moderationReports')
+      .doc(reportId)
+      .collection('authorityReferrals')
+      .add({
+        'reportId': reportId,
+        'actorId': actorId,
+        'channel': channel,
+        'authorityName': authorityName.trim(),
+        'reference': reference.trim(),
+        'note': note.trim(),
+        'confirmedManualSubmission': true,
+        'recordedAt': FieldValue.serverTimestamp(),
+      })
+      .then((_) {});
+
   CollectionReference<Map<String, dynamic>> _content(
     String communityId,
     PlatformContentKind kind,
@@ -72,10 +119,30 @@ class PlatformModerationRepository {
     required String status,
     required String actorId,
     required String actionNote,
-  }) => _db.collection('moderationReports').doc(reportId).update({
-    'status': status,
-    'reviewedBy': actorId,
-    'reviewedAt': FieldValue.serverTimestamp(),
-    'actionNote': actionNote.trim(),
-  });
+  }) async {
+    final report = _db.collection('moderationReports').doc(reportId);
+    final event = report.collection('events').doc();
+    final trimmedNote = actionNote.trim();
+    await _db.runTransaction((transaction) async {
+      final snapshot = await transaction.get(report);
+      if (!snapshot.exists) throw StateError('Report no longer exists.');
+      final previous = snapshot.data()?['status'] as String? ?? 'open';
+      if (previous == status) throw StateError('Report status is unchanged.');
+      transaction.update(report, {
+        'status': status,
+        'reviewedBy': actorId,
+        'reviewedAt': FieldValue.serverTimestamp(),
+        'actionNote': trimmedNote,
+        'lastEventId': event.id,
+      });
+      transaction.set(event, {
+        'reportId': reportId,
+        'previousStatus': previous,
+        'status': status,
+        'actorId': actorId,
+        'actionNote': trimmedNote,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+    });
+  }
 }

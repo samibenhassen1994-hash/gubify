@@ -41,18 +41,52 @@ service cloud.firestore {
         && request.resource.data.moderatedBy == request.auth.uid
         && request.resource.data.moderatedAt == request.time;
     }
-    function validPlatformModerationReportUpdate() {
+    // Every status transition must atomically create an immutable audit event.
+    function validPlatformModerationReportUpdate(reportId) {
       let data = request.resource.data;
       let changed = data.diff(resource.data).affectedKeys();
+      let event = getAfter(
+        /databases/$(database)/documents/moderationReports/$(reportId)/events/$(data.lastEventId)
+      ).data;
       return isPlatformAdmin()
-        && changed.hasAny(['status'])
-        && changed.hasOnly(['status','reviewedBy','reviewedAt','actionNote'])
+        && changed.hasAll(['status','lastEventId'])
+        && changed.hasOnly(['status','reviewedBy','reviewedAt','actionNote','lastEventId'])
         && data.status in ['open','reviewed','action_taken','escalated','closed']
         && data.status != resource.data.status
+        && data.lastEventId is string
+        && data.lastEventId.size() > 0
+        && !exists(/databases/$(database)/documents/moderationReports/$(reportId)/events/$(data.lastEventId))
         && data.reviewedBy == request.auth.uid
         && data.reviewedAt == request.time
         && data.actionNote is string
-        && data.actionNote.size() <= 500;
+        && data.actionNote.size() <= 500
+        && event.reportId == reportId
+        && event.previousStatus == resource.data.status
+        && event.status == data.status
+        && event.actionNote == data.actionNote
+        && event.actorId == request.auth.uid
+        && event.createdAt == request.time;
+    }
+    function validPlatformModerationEventCreate(reportId, eventId) {
+      let data = request.resource.data;
+      let before = get(moderationReportPath(reportId)).data;
+      let after = getAfter(moderationReportPath(reportId)).data;
+      return isPlatformAdmin()
+        && data.keys().hasOnly(['reportId','previousStatus','status','actionNote','actorId','createdAt'])
+        && data.keys().hasAll(['reportId','previousStatus','status','actionNote','actorId','createdAt'])
+        && data.reportId == reportId
+        && data.previousStatus == before.status
+        && data.status == after.status
+        && data.status in ['open','reviewed','action_taken','escalated','closed']
+        && data.previousStatus != data.status
+        && data.actionNote is string
+        && data.actionNote.size() <= 500
+        && data.actionNote == after.actionNote
+        && data.actorId == request.auth.uid
+        && data.createdAt == request.time
+        && after.lastEventId == eventId
+        && after.reviewedAt == request.time
+        && after.reviewedBy == request.auth.uid;
     }
     // Un solo membro per transazione; il segnale non conferisce permessi futuri.
     function validAdminMemberRemoval(id) {
@@ -2857,8 +2891,45 @@ service cloud.firestore {
         && !exists(moderationReportPath(reportId))
         && validModerationReportCreate(reportId)
         && validModerationReportTargetLink(reportId);
-      allow update: if validPlatformModerationReportUpdate();
+      allow update: if validPlatformModerationReportUpdate(reportId);
       allow delete: if false;
+      match /events/{eventId} {
+        allow get, list: if isPlatformAdmin();
+        allow create: if validPlatformModerationEventCreate(reportId, eventId);
+        allow update, delete: if false;
+      }
+      // Written ONLY after an admin has already contacted an external authority.
+      // This subcollection does not send any data to that authority.
+      match /authorityReferrals/{referralId} {
+        allow get, list: if isPlatformAdmin();
+        allow create: if isPlatformAdmin()
+          && exists(moderationReportPath(reportId))
+          && get(moderationReportPath(reportId)).data.reason
+            == 'child_safety_or_sexual_exploitation'
+          && request.resource.data.keys().hasOnly([
+            'reportId','actorId','channel','authorityName','reference',
+            'note','confirmedManualSubmission','recordedAt'
+          ])
+          && request.resource.data.keys().hasAll([
+            'reportId','actorId','channel','authorityName','reference',
+            'note','confirmedManualSubmission','recordedAt'
+          ])
+          && request.resource.data.reportId == reportId
+          && request.resource.data.actorId == request.auth.uid
+          && request.resource.data.channel in [
+            'italian_police','ncmec','other_competent_authority'
+          ]
+          && request.resource.data.authorityName is string
+          && request.resource.data.authorityName.size() > 0
+          && request.resource.data.authorityName.size() <= 100
+          && request.resource.data.reference is string
+          && request.resource.data.reference.size() <= 120
+          && request.resource.data.note is string
+          && request.resource.data.note.size() <= 300
+          && request.resource.data.confirmedManualSubmission == true
+          && request.resource.data.recordedAt == request.time;
+        allow update, delete: if false;
+      }
     }
     match /moderationTargets/{targetKey} {
       allow get: if false;

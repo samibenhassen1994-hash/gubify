@@ -19,7 +19,7 @@ class PlatformAdminGate extends StatelessWidget {
         : Scaffold(
             appBar: AppBar(),
             body: const Center(
-              child: Text('Community moderation access is unavailable.'),
+              child: Text('Moderation Center access is unavailable.'),
             ),
           ),
   );
@@ -38,7 +38,7 @@ class PlatformAdminEntry extends StatelessWidget {
           ? const SizedBox.shrink()
           : ListTile(
               leading: const Icon(Icons.admin_panel_settings_outlined),
-              title: const Text('Community moderation'),
+              title: const Text('Moderation Center'),
               onTap: () => Navigator.of(context).push(
                 MaterialPageRoute<void>(
                   builder: (_) => PlatformAdminGate(

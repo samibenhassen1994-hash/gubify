@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../widgets/gubify_swipe_back.dart';
 import 'platform_admin_service.dart';
+import 'authority_reporting_dialog.dart';
 import 'platform_moderation_model.dart';
 import 'platform_moderation_service.dart';
 
@@ -68,6 +69,52 @@ class _PlatformReportsScreenState extends State<PlatformReportsScreen> {
     } finally {
       if (mounted) setState(() => _busy.remove(report.id));
     }
+  }
+
+  void _showHistory(PlatformReportItem report) {
+    showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Moderation history'),
+        content: SizedBox(
+          width: 420,
+          height: 340,
+          child: StreamBuilder<List<PlatformReportEvent>>(
+            stream: service.reportEvents(report.id),
+            builder: (context, snapshot) {
+              if (snapshot.hasError) {
+                return const Text('Unable to read the audit history.');
+              }
+              if (!snapshot.hasData) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              if (snapshot.data!.isEmpty) {
+                return const Text('No recorded transitions. Older decisions may predate the audit log.');
+              }
+              return ListView(
+                children: [
+                  for (final event in snapshot.data!)
+                    ListTile(
+                      isThreeLine: true,
+                      title: Text('${_label(event.previousStatus)} → ${_label(event.status)}'),
+                      subtitle: Text(
+                        'By ${event.actorId} · ${event.createdAt?.toDate().toLocal().toString() ?? 'Pending'}'
+                        '\n${event.actionNote}',
+                      ),
+                    ),
+                ],
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -163,6 +210,29 @@ class _PlatformReportsScreenState extends State<PlatformReportsScreen> {
                           Text(report.actionNote),
                         ],
                         const SizedBox(height: 8),
+                        if (report.isChildSafety)
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: OutlinedButton.icon(
+                              onPressed: () => showDialog<void>(
+                                context: context,
+                                builder: (_) => AuthorityReportingDialog(
+                                  report: report,
+                                  service: service,
+                                ),
+                              ),
+                              icon: const Icon(Icons.gavel_outlined),
+                              label: const Text('Authority reporting'),
+                            ),
+                          ),
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: TextButton.icon(
+                            onPressed: () => _showHistory(report),
+                            icon: const Icon(Icons.history),
+                            label: const Text('History'),
+                          ),
+                        ),
                         Align(
                           alignment: Alignment.centerRight,
                           child: FilledButton.tonalIcon(

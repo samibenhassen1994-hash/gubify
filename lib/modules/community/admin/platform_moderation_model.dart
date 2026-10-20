@@ -105,3 +105,68 @@ class PlatformReportItem {
     );
   }
 }
+
+class PlatformReportEvent {
+  const PlatformReportEvent({
+    required this.id,
+    required this.previousStatus,
+    required this.status,
+    required this.actorId,
+    required this.actionNote,
+    this.createdAt,
+  });
+
+  final String id;
+  final String previousStatus;
+  final String status;
+  final String actorId;
+  final String actionNote;
+  final Timestamp? createdAt;
+
+  factory PlatformReportEvent.fromFirestore(
+    String id,
+    Map<String, dynamic> data,
+  ) => PlatformReportEvent(
+    id: id,
+    previousStatus: data['previousStatus'] as String? ?? '',
+    status: data['status'] as String? ?? '',
+    actorId: data['actorId'] as String? ?? '',
+    actionNote: data['actionNote'] as String? ?? '',
+    createdAt: data['createdAt'] as Timestamp?,
+  );
+}
+
+/// Internal record of an external authority notification made by a human.
+/// Never equate this object with automated submission or legal confirmation.
+class PlatformAuthorityReferral {
+  const PlatformAuthorityReferral({
+    required this.id,
+    required this.actorId,
+    required this.channel,
+    required this.authorityName,
+    required this.reference,
+    required this.note,
+    this.recordedAt,
+  });
+
+  final String id;
+  final String actorId;
+  final String channel;
+  final String authorityName;
+  final String reference;
+  final String note;
+  final Timestamp? recordedAt;
+
+  factory PlatformAuthorityReferral.fromFirestore(
+    String id,
+    Map<String, dynamic> data,
+  ) => PlatformAuthorityReferral(
+    id: id,
+    actorId: data['actorId'] as String? ?? '',
+    channel: data['channel'] as String? ?? '',
+    authorityName: data['authorityName'] as String? ?? '',
+    reference: data['reference'] as String? ?? '',
+    note: data['note'] as String? ?? '',
+    recordedAt: data['recordedAt'] as Timestamp?,
+  );
+}

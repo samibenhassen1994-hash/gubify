@@ -53,3 +53,29 @@ Questo lavoro non esegue deploy, attivazione live, merge o caricamento Play Cons
 3. Incrementare il numero dopo `+` in `pubspec.yaml` oltre il massimo versionCode già caricato su Play Console (il branch parte da `0.8.0+3`; verificare il valore effettivo in console).
 4. Eseguire `flutter build appbundle --release` con firma release configurata e caricare l'AAB prima nel canale di test. Favorire l'aggiornamento degli utenti prima di affidarsi ai tombstone.
 5. Attivare lo UID autorizzato dalla Console Firebase e verificare le operazioni con la nuova build. Per interrompere la moderazione revocare il ruolo; i tombstone esistenti restano fino a esplicito Unhide.
+
+
+## Child Safety hardening branch
+
+A partire dal branch `feature/child-safety-compliance-hardening`:
+
+- Ogni cambio di stato dei report è una transazione atomica con un evento
+  `moderationReports/{reportId}/events/{eventId}`, non modificabile e leggibile
+  solo dall'admin. La regola vieta un cambio di stato senza evento abbinato.
+  Non è un registro certificato contro chi amministra Firebase; si tratta di
+  una protezione contro scritture client non autorizzate.
+- La Reports Inbox visualizza la cronologia degli eventi. I report precedenti
+  possono non avere eventi storici.
+- La home della moderazione evidenzia gli eventuali report Child Safety ancora
+  `open` o `reviewed` presenti fra i 100 più recenti. **Non è una notifica push
+  né un monitoraggio affidabile senza l'app aperta.**
+- Lo stato `escalated` resta manuale: non conferma l'inoltro alle autorità.
+  Inserire nella nota identificativo del canale/riferimento esterno ove
+  appropriato e senza riportare materiale illecito.
+- Prima di pubblicare le nuove versioni Flutter, le regole del nuovo audit
+  richiedono test emulator e rollout coordinato; **non fare il deploy delle
+  nuove regole prima che i client amministrativi siano pronti**, perché i
+  vecchi client non creano gli eventi obbligatori.
+
+Per il processo completo vedere `docs/child-safety-escalation.md` e
+`docs/child-safety-release-checklist.md`.

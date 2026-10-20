@@ -30,6 +30,46 @@ class PlatformModerationService {
     return _repository.reports(limit);
   }
 
+  Stream<List<PlatformReportEvent>> reportEvents(String reportId) {
+    role.requireAdmin();
+    return _repository.reportEvents(reportId);
+  }
+
+  Stream<List<PlatformAuthorityReferral>> authorityReferrals(String reportId) {
+    role.requireAdmin();
+    return _repository.authorityReferrals(reportId);
+  }
+
+  Future<void> recordAuthorityReferral({
+    required PlatformReportItem report,
+    required String channel,
+    required String authorityName,
+    required String reference,
+    required String note,
+  }) async {
+    role.requireAdmin();
+    if (!report.isChildSafety) {
+      throw ArgumentError('Authority reporting workflow requires a Child Safety report.');
+    }
+    if (!const [
+      'italian_police', 'ncmec', 'other_competent_authority',
+    ].contains(channel)) {
+      throw ArgumentError.value(channel, 'channel', 'Unsupported channel.');
+    }
+    if (authorityName.trim().isEmpty || authorityName.trim().length > 100 ||
+        reference.trim().length > 120 || note.trim().length > 300) {
+      throw ArgumentError('Invalid referral details.');
+    }
+    await _repository.recordAuthorityReferral(
+      reportId: report.id,
+      actorId: role.adminUid!,
+      channel: channel,
+      authorityName: authorityName,
+      reference: reference,
+      note: note,
+    );
+  }
+
   Stream<List<PlatformModerationItem>> content(
     String communityId,
     PlatformContentKind kind,
