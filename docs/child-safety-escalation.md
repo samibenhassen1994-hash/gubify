@@ -54,3 +54,25 @@ Do **not** mark the Google Play declaration fully compliant based on this docume
 - NCMEC CyberTipline: https://report.cybertip.org/
 
 **Maintenance:** review this procedure when products, reporting laws, or Google Play policies change.
+
+## Moderation Center authority reporting workflow
+
+On a report labelled **Child safety or sexual exploitation**, the authorised
+platform admin can select **Authority reporting**, open a relevant official
+external channel, and—only after actually filing the report—record the channel,
+authority name, and any acknowledgement/reference returned by that authority.
+The admin must explicitly confirm the external submission. The record is
+append-only for client users under
+`moderationReports/{reportId}/authorityReferrals/{referralId}`; it is not a
+police-reporting integration or proof that an authority accepted the report.
+
+For safety, do not paste CSAM, child-identifying details, or copied chat
+evidence into free-text notes. Report original identifiers and facts through
+the authority's secure procedures. Some situations require contacting
+authorities when there is a qualifying suspicion or immediate risk, even if
+CSAM is not conclusively confirmed.
+
+Before release: verify operational mailbox and external links, train the
+responsible admin, run Flutter/Firebase tests and coordinate the client/rules
+rollout. Google Play declarations also require actual operational adoption of
+this process, not just a UI button.
