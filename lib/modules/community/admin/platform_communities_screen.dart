@@ -25,7 +25,7 @@ class _PlatformCommunitiesScreenState extends State<PlatformCommunitiesScreen> {
   @override
   Widget build(BuildContext context) => GubifySwipeBack(
     child: Scaffold(
-    appBar: AppBar(title: const Text('Community moderation')),
+    appBar: AppBar(title: const Text('Moderation Center')),
     body: StreamBuilder<List<CommunityModel>>(
       stream: _communities,
       builder: (context, snapshot) {
