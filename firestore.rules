@@ -42,52 +42,6 @@ service cloud.firestore {
         && request.resource.data.moderatedAt == request.time;
     }
     // Every status transition must atomically create an immutable audit event.
-    function validPlatformModerationReportUpdate(reportId) {
-      let data = request.resource.data;
-      let changed = data.diff(resource.data).affectedKeys();
-      let event = getAfter(
-        /databases/$(database)/documents/moderationReports/$(reportId)/events/$(data.lastEventId)
-      ).data;
-      return isPlatformAdmin()
-        && changed.hasAll(['status','lastEventId'])
-        && changed.hasOnly(['status','reviewedBy','reviewedAt','actionNote','lastEventId'])
-        && data.status in ['open','reviewed','action_taken','escalated','closed']
-        && data.status != resource.data.status
-        && data.lastEventId is string
-        && data.lastEventId.size() > 0
-        && !exists(/databases/$(database)/documents/moderationReports/$(reportId)/events/$(data.lastEventId))
-        && data.reviewedBy == request.auth.uid
-        && data.reviewedAt == request.time
-        && data.actionNote is string
-        && data.actionNote.size() <= 500
-        && event.reportId == reportId
-        && event.previousStatus == resource.data.status
-        && event.status == data.status
-        && event.actionNote == data.actionNote
-        && event.actorId == request.auth.uid
-        && event.createdAt == request.time;
-    }
-    function validPlatformModerationEventCreate(reportId, eventId) {
-      let data = request.resource.data;
-      let before = get(moderationReportPath(reportId)).data;
-      let after = getAfter(moderationReportPath(reportId)).data;
-      return isPlatformAdmin()
-        && data.keys().hasOnly(['reportId','previousStatus','status','actionNote','actorId','createdAt'])
-        && data.keys().hasAll(['reportId','previousStatus','status','actionNote','actorId','createdAt'])
-        && data.reportId == reportId
-        && data.previousStatus == before.status
-        && data.status == after.status
-        && data.status in ['open','reviewed','action_taken','escalated','closed']
-        && data.previousStatus != data.status
-        && data.actionNote is string
-        && data.actionNote.size() <= 500
-        && data.actionNote == after.actionNote
-        && data.actorId == request.auth.uid
-        && data.createdAt == request.time
-        && after.lastEventId == eventId
-        && after.reviewedAt == request.time
-        && after.reviewedBy == request.auth.uid;
-    }
     // Un solo membro per transazione; il segnale non conferisce permessi futuri.
     function validAdminMemberRemoval(id) {
       let marker = getAfter(/databases/$(database)/documents/communities/$(id)/membershipMutations/admin).data;
@@ -150,19 +104,6 @@ service cloud.firestore {
         && (data.get('photoUrl', null) == null || data.photoUrl is string)
         && (data.get('photoURL', null) == null || data.photoURL is string);
     }
-    function validDeviceRegistration(deviceId) {
-      let data = request.resource.data;
-      return data.keys().hasOnly(['deviceId','token','platform','updatedAt'])
-        && data.deviceId == deviceId
-        && validText(data.token, 1, 4096)
-        && data.platform in ['android', 'ios']
-        && data.updatedAt == request.time;
-    }
-    function validPushNotificationReadUpdate() {
-      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read'])
-        && resource.data.read == false
-        && request.resource.data.read == true;
-    }
     function validGubRootCreate(id) {
       let data = request.resource.data;
       let token = getAfter(inviteTokenPath(data.inviteTokenId));
@@ -220,14 +161,6 @@ service cloud.firestore {
         && data.role == role
         && data.joinedAt is timestamp;
     }
-    function validGubCopyRoleBackfill(data, id, uid) {
-      return data.keys().hasOnly([
-          'gubId','name','ownerId','role','joinedAt','inviteCode','memberCount'
-        ])
-        && data.gubId == id
-        && data.ownerId == gubAfter(id).data.ownerId
-        && data.role == (gubAfter(id).data.ownerId == uid ? 'owner' : 'member');
-    }
     function validGubJoin(id, uid) {
       let member = getAfter(gubMemberPath(id, uid)).data;
       let root = gubDoc(id).data;
@@ -244,11 +177,6 @@ service cloud.firestore {
         && token.gubName == root.name
         && token.active == true;
     }
-    function gubOwnerRemovingMember(id, uid) {
-      return isGubOwner(id) && uid != request.auth.uid
-        && exists(gubMemberPath(id, uid))
-        && !existsAfter(gubMemberPath(id, uid));
-    }
     function validGubOwnerMember(id, uid) {
       let member = getAfter(gubMemberPath(id, uid));
       return validGubMemberData(member.data, uid, 'owner');
@@ -262,37 +190,6 @@ service cloud.firestore {
         && (role == 'owner' || validGubJoin(id, uid));
     }
 
-    function validInviteTokenCreate(code) {
-      let data = request.resource.data;
-      let root = getAfter(gubPath(data.gubId)).data;
-      return signedIn()
-        && validInviteTokenCode(code)
-        && data.keys().hasOnly(['gubId','ownerId','gubName','active','createdAt'])
-        && data.gubId is string
-        && data.ownerId == request.auth.uid
-        && data.gubName is string
-        && data.active == true
-        && data.createdAt == request.time
-        && root.gubId == data.gubId
-        && root.ownerId == data.ownerId
-        && root.name == data.gubName
-        && root.inviteTokenId == code;
-    }
-    function validInviteTokenRevocation(code) {
-      let data = resource.data;
-      let root = gubDoc(data.gubId).data;
-      let afterRoot = gubAfter(data.gubId).data;
-      return signedIn()
-        && data.ownerId == request.auth.uid
-        && root.ownerId == request.auth.uid
-        && root.inviteTokenId == code
-        && data.gubName == root.name
-        && request.resource.data.diff(data).affectedKeys().hasOnly(['active'])
-        && data.active == true
-        && request.resource.data.active == false
-        && afterRoot.deletionStatus == 'deleting'
-        && afterRoot.deletionRequestedBy == request.auth.uid;
-    }
     function validInviteRegeneration(id) {
       let root = gubDoc(id).data;
       let afterRoot = gubAfter(id).data;
@@ -305,13 +202,6 @@ service cloud.firestore {
         && (!root.keys().hasAny(['inviteRegeneratedAt'])
           || request.time >= root.inviteRegeneratedAt + duration.value(60, 's'))
         && existsAfter(inviteTokenPath(newCode));
-    }
-    function validInviteTokenRegeneration(code) {
-      let data = resource.data;
-      return signedIn() && data.ownerId == request.auth.uid && data.active == true
-        && request.resource.data.diff(data).affectedKeys().hasOnly(['active'])
-        && request.resource.data.active == false
-        && validInviteRegeneration(data.gubId);
     }
     function inviteTokenRevokedAfter(id, code) {
       return !existsAfter(inviteTokenPath(code))
@@ -341,7 +231,6 @@ service cloud.firestore {
 
     function messagePath(id, messageId) { return /databases/$(database)/documents/gubs/$(id)/messages/$(messageId); }
     function taskPath(id, taskId) { return /databases/$(database)/documents/gubs/$(id)/tasks/$(taskId); }
-    function eventPath(id, eventId) { return /databases/$(database)/documents/gubs/$(id)/events/$(eventId); }
     function organizedEventPath(id, eventId) { return /databases/$(database)/documents/gubs/$(id)/organizedEvents/$(eventId); }
     function proposalPath(id, proposalId) { return /databases/$(database)/documents/gubs/$(id)/proposals/$(proposalId); }
     function votePath(id, proposalId, uid) { return /databases/$(database)/documents/gubs/$(id)/proposals/$(proposalId)/votes/$(uid); }
@@ -940,12 +829,6 @@ service cloud.firestore {
         .replace('\\s+', '').replace('[\\r\\n]', '')
         .replace('/', '∕');
     }
-    function communityOwnerRemovingMember(id, uid) {
-      return canModerateCommunity(id) && uid != request.auth.uid
-        && uid != communityDoc(id).data.ownerId
-        && exists(communityMemberPath(id, uid))
-        && !existsAfter(communityMemberPath(id, uid));
-    }
     function communityExists(id) { return exists(communityPath(id)); }
     function isCommunityMember(id) {
       return linkedCommunityAccount() && communityExists(id)
@@ -985,46 +868,6 @@ service cloud.firestore {
         && uid != askAfter.authorId
         && afterMember.bestAnswerCount == oldBest + 1;
     }
-    function validCommunityProgressReward(uid) {
-      let afterProgress = request.resource.data;
-      let id = afterProgress.get('lastRewardCommunityId', '');
-      let askId = afterProgress.get('lastRewardAskId', '');
-      let role = afterProgress.get('lastRewardRole', '');
-      let askBefore = get(communityAskPath(id, askId)).data;
-      let askAfter = getAfter(communityAskPath(id, askId)).data;
-      let oldXp = exists(communityUserProgressPath(uid))
-        ? get(communityUserProgressPath(uid)).data.get('xp', 0)
-        : 0;
-      return linkedCommunityAccount()
-        && afterProgress.keys().hasOnly([
-          'xp','updatedAt','lastRewardCommunityId','lastRewardAskId','lastRewardRole',
-          'communityIds','membershipProjectionCommunityId',
-          'membershipProjectionAction','membershipProjectionUpdatedAt',
-          'communityProjectionVersion'
-        ])
-        && afterProgress.xp is int
-        && afterProgress.xp >= 0
-        && afterProgress.updatedAt == request.time
-        && id is string && id.size() > 0
-        && askId is string && askId.size() > 0
-        && exists(communityMemberPath(id, uid))
-        && afterProgress.get('communityIds', []).toSet().hasAny([id])
-        && afterProgress.get('communityIds', []).toSet()
-          == (exists(communityUserProgressPath(uid))
-            ? get(communityUserProgressPath(uid)).data.get('communityIds', []).toSet()
-            : [].toSet()).union([id].toSet())
-        && askBefore.status == 'active'
-        && askBefore.authorId == request.auth.uid
-        && askAfter.status == 'resolved'
-        && askAfter.xpAwarded == true
-        && ((role == 'bestAnswer'
-            && uid == askAfter.bestAnswerAuthorId
-            && uid != askAfter.authorId
-            && afterProgress.xp == oldXp + 20)
-          || (role == 'askAuthor'
-            && uid == askAfter.authorId
-            && afterProgress.xp == oldXp + 2));
-    }
     function validCommunityProgressSchema(data) {
       return data.keys().hasOnly([
           'xp','updatedAt','lastRewardCommunityId','lastRewardAskId','lastRewardRole',
@@ -1034,55 +877,6 @@ service cloud.firestore {
         ])
         && data.xp is int && data.xp >= 0
         && data.get('communityIds', []) is list;
-    }
-    function validCommunityProjectionJoin(uid) {
-      let after = request.resource.data;
-      let id = after.get('membershipProjectionCommunityId', '');
-      let beforeIds = exists(communityUserProgressPath(uid))
-        ? resource.data.get('communityIds', []).toSet()
-        : [].toSet();
-      let afterIds = after.get('communityIds', []).toSet();
-      return linkedCommunityAccount()
-        && validCommunityProgressSchema(after)
-        && id is string && id.size() > 0
-        && after.membershipProjectionAction in ['join','backfill']
-        && after.membershipProjectionUpdatedAt == request.time
-        && afterIds == beforeIds.union([id].toSet())
-        && existsAfter(communityMemberPath(id, uid))
-        && getAfter(communityMemberPath(id, uid)).data.uid == uid
-        && (own(uid) || validCommunityApprovalSignal(id, uid))
-        && (!exists(communityUserProgressPath(uid)) || after.xp == resource.data.xp);
-    }
-    function validCommunityProjectionRemoval(uid) {
-      let after = request.resource.data;
-      let id = after.get('membershipProjectionCommunityId', '');
-      let beforeIds = resource.data.get('communityIds', []).toSet();
-      let afterIds = after.get('communityIds', []).toSet();
-      let deletionCleanup = after.membershipProjectionAction == 'delete'
-        && communityDeletingOwner(id)
-        && exists(communityDeletionMemberPath(id, uid))
-        && !existsAfter(communityDeletionMemberPath(id, uid))
-        && !existsAfter(userCommunityPath(uid, id));
-      let orphanDeletionCleanup = after.membershipProjectionAction == 'delete'
-        && communityDeletingOwner(id)
-        && !exists(communityMemberPath(id, uid))
-        && !existsAfter(userCommunityPath(uid, id));
-      return (linkedCommunityAccount() || deletingOwnAccount(uid))
-        && validCommunityProgressSchema(after)
-        && id is string && id.size() > 0
-        && after.membershipProjectionAction in ['leave','ban','delete']
-        && after.membershipProjectionUpdatedAt == request.time
-        && beforeIds.hasAny([id])
-        && afterIds == beforeIds.difference([id].toSet())
-        && after.xp == resource.data.xp
-        && ((request.auth.uid == uid || isCommunityOwner(id)
-            || (isPlatformAdmin() && uid != communityDoc(id).data.ownerId
-              && after.diff(resource.data).affectedKeys().hasOnly([
-                'communityIds','membershipProjectionCommunityId',
-                'membershipProjectionAction','membershipProjectionUpdatedAt'])))
-          && !existsAfter(communityMemberPath(id, uid))
-          || deletionCleanup
-          || orphanDeletionCleanup);
     }
     function deletingOwnAccount(uid) {
       return signedIn() && own(uid)
@@ -1158,32 +952,6 @@ service cloud.firestore {
         && request.resource.data.deletionReplacementAnswerId.size() > 0
         && request.resource.data.deletionReplacementAnswerId != request.auth.uid;
     }
-    function validCommunityRewardReferenceCleanup(uid) {
-      let id = resource.data.get('lastRewardCommunityId', '');
-      let after = request.resource.data;
-      return linkedCommunityAccount()
-        && id is string && id.size() > 0
-        && communityDeletingOwner(id)
-        && validCommunityProgressSchema(after)
-        && after.diff(resource.data).affectedKeys().hasOnly([
-          'lastRewardCommunityId','lastRewardAskId','lastRewardRole'
-        ])
-        && !after.keys().hasAny([
-          'lastRewardCommunityId','lastRewardAskId','lastRewardRole'
-        ]);
-    }
-    function validCommunityProjectionVersion(uid) {
-      let after = request.resource.data;
-      return linkedCommunityAccount() && own(uid)
-        && validCommunityProgressSchema(after)
-        && after.communityProjectionVersion == 1
-        && ((!exists(communityUserProgressPath(uid))
-            && after.xp == 0
-            && after.get('communityIds', []).size() == 0)
-          || (exists(communityUserProgressPath(uid))
-            && after.diff(resource.data).affectedKeys()
-              .hasOnly(['communityProjectionVersion'])));
-    }
     function communityProjectionContains(id, uid) {
       return existsAfter(communityUserProgressPath(uid))
         && getAfter(communityUserProgressPath(uid)).data
@@ -1243,21 +1011,6 @@ service cloud.firestore {
           || (exists(rankingPath)
             && afterRanking.bestAnswerCount
               == get(rankingPath).data.bestAnswerCount + 1));
-    }
-    function validGlobalBestAnswerRankingReward(uid) {
-      let progress = getAfter(communityUserProgressPath(uid)).data;
-      let id = progress.get('lastRewardCommunityId', '');
-      let askId = progress.get('lastRewardAskId', '');
-      let askBefore = get(communityAskPath(id, askId)).data;
-      let askAfter = getAfter(communityAskPath(id, askId)).data;
-      return signedIn()
-        && progress.lastRewardRole == 'bestAnswer'
-        && askBefore.status == 'active'
-        && askBefore.authorId == request.auth.uid
-        && askAfter.status == 'resolved'
-        && askAfter.bestAnswerAuthorId == uid
-        && uid != askAfter.authorId
-        && validGlobalBestAnswerRankingAfter(id, askId, uid);
     }
     function validCommunityAskAuthorEdit(id) {
       let afterAsk = request.resource.data;
@@ -1321,28 +1074,6 @@ service cloud.firestore {
     function communityJoiningAllowed(id) {
       return !exists(communityRestrictionPath(id))
         || get(communityRestrictionPath(id)).data.get('joiningRestricted', false) != true;
-    }
-    function validPlatformRestrictionInitialization(uid) {
-      let data = request.resource.data;
-      return own(uid)
-        && !exists(platformRestrictionPath(uid))
-        && data.keys().hasOnly(['communityChatRestricted','updatedAt'])
-        && data.communityChatRestricted == false
-        && data.updatedAt == request.time;
-    }
-    function validCommunityRestrictionInitialization(id) {
-      let data = request.resource.data;
-      let community = communityAfter(id).data;
-      return signedIn()
-        && !exists(communityRestrictionPath(id))
-        && existsAfter(communityPath(id))
-        && community.ownerId == request.auth.uid
-        && community.visibility == 'public'
-        && community.get('deletionStatus', 'active') != 'deleting'
-        && data.keys().hasOnly(['hiddenFromDiscovery','joiningRestricted','updatedAt'])
-        && data.hiddenFromDiscovery == false
-        && data.joiningRestricted == false
-        && data.updatedAt == request.time;
     }
     function communityDeletingOwner(id) {
       let root = communityDoc(id).data;
@@ -1495,10 +1226,6 @@ service cloud.firestore {
         ])
         && data.updatedAt == request.time;
     }
-    function validCommunityImagePublicMutation(slug) {
-      return validCommunityImagePublicUpdate(slug)
-        || validCommunityImagePublicRemoval(slug);
-    }
     function validCommunityRootMemberCountProjection(id) {
       return !resource.data.keys().hasAny(['slug'])
         || (getAfter(communityPublicPath(resource.data.slug)).data.communityId == id
@@ -1506,23 +1233,6 @@ service cloud.firestore {
           && getAfter(communityPublicPath(resource.data.slug)).data.memberCount
             == request.resource.data.memberCount
           && getAfter(communityPublicPath(resource.data.slug)).data.updatedAt == request.time);
-    }
-    function validCommunityMemberCountPublicMutation(slug) {
-      let data = request.resource.data;
-      let rootBefore = communityDoc(resource.data.communityId).data;
-      let rootAfter = communityAfter(resource.data.communityId).data;
-      return signedIn()
-        && rootBefore.get('deletionStatus', 'active') != 'deleting'
-        && data.diff(resource.data).affectedKeys().hasOnly(['memberCount','updatedAt'])
-        && data.communityId == rootAfter.communityId
-        && data.slug == slug
-        && rootAfter.slug == slug
-        && rootAfter.diff(rootBefore).affectedKeys().hasOnly(['memberCount'])
-        && rootAfter.memberCount != rootBefore.memberCount
-        && rootAfter.memberCount is int
-        && data.memberCount != resource.data.memberCount
-        && data.memberCount == rootAfter.memberCount
-        && data.updatedAt == request.time;
     }
     function validModerationReportPriority(data) {
       return !data.keys().hasAny(['priority'])
@@ -1734,19 +1444,6 @@ service cloud.firestore {
         && reportId == 'message__gub__' + data.gubId + '__'
           + data.messageId + '__' + request.auth.uid;
     }
-    function validModerationReportCreate(reportId) {
-      let data = request.resource.data;
-      return data.keys().hasAny(['gubId'])
-        ? data.keys().hasAny(['messageId'])
-          ? validGubMessageReport(reportId)
-          : validGubUserReport(reportId)
-        : data.keys().hasAll(['communityId','messageId'])
-          ? validCommunityMessageReport(reportId)
-          : validCommunityReport(reportId)
-            || validCommunityUserReport(reportId)
-            || validCommunityAskReport(reportId)
-            || validCommunityAnswerReport(reportId);
-    }
     function moderationTargetKeyForReport(data) {
       return data.targetType == 'community'
         ? 'community__' + data.targetId
@@ -1755,13 +1452,6 @@ service cloud.firestore {
           : data.targetType == 'ask'
             ? 'ask__' + data.communityId + '__' + data.targetId
             : 'answer__' + data.communityId + '__' + data.askId + '__' + data.targetId;
-    }
-    function validModerationReportTargetLink(reportId) {
-      let report = request.resource.data;
-      return existsAfter(moderationTargetPath(moderationTargetKeyForReport(report)))
-        && getAfter(moderationTargetPath(moderationTargetKeyForReport(report))).data.targetType == report.targetType
-        && getAfter(moderationTargetPath(moderationTargetKeyForReport(report))).data.targetId == report.targetId
-        && getAfter(moderationTargetPath(moderationTargetKeyForReport(report))).data.lastReportId == reportId;
     }
     function validModerationTargetNameSnapshot(target, reportId) {
       return (target.targetType == 'community'
@@ -1811,59 +1501,6 @@ service cloud.firestore {
         && target.reportCount == previous.reportCount + 1
         && target.lastReportedAt == request.time;
     }
-    function validCommunitySlugRegistryCreate(slug) {
-      let root = communityAfter(request.resource.data.communityId).data;
-      return request.resource.data.keys().hasOnly([
-          'slug','communityId','ownerId','createdAt'
-        ])
-        && validCommunitySlug(slug)
-        && request.resource.data.slug == slug
-        && request.resource.data.communityId is string
-        && request.resource.data.ownerId == request.auth.uid
-        && request.resource.data.createdAt == request.time
-        && root.communityId == request.resource.data.communityId
-        && root.slug == slug
-        && root.ownerId == request.auth.uid;
-    }
-    function validCommunityNameRegistryCreate(nameKey) {
-      let root = communityAfter(request.resource.data.communityId).data;
-      return request.resource.data.keys().hasOnly([
-          'nameKey','communityId','ownerId','createdAt'
-        ])
-        && nameKey is string && nameKey.size() >= 1 && nameKey.size() <= 60
-        && request.resource.data.nameKey == nameKey
-        && request.resource.data.communityId is string
-        && request.resource.data.ownerId == request.auth.uid
-        && request.resource.data.createdAt == request.time
-        && root.communityId == request.resource.data.communityId
-        && root.nameKey == nameKey
-        && nameKey == canonicalCommunityNameKey(root.name)
-        && root.ownerId == request.auth.uid;
-    }
-    function validCommunityPublicCreate(slug) {
-      let root = communityAfter(request.resource.data.communityId).data;
-      let registry = getAfter(communitySlugPath(slug)).data;
-      return request.resource.data.keys().hasOnly([
-          'communityId','slug','name','description','type','language','accessMode','memberCount',
-          'createdAt','updatedAt'
-        ])
-        && validCommunitySlug(slug)
-        && request.resource.data.slug == slug
-        && request.resource.data.communityId is string
-        && root.communityId == request.resource.data.communityId
-        && root.slug == slug
-        && root.name == request.resource.data.name
-        && root.description == request.resource.data.description
-        && root.type == request.resource.data.type
-        && root.language == request.resource.data.language
-        && root.accessMode == request.resource.data.accessMode
-        && root.memberCount == request.resource.data.memberCount
-        && root.createdAt == request.resource.data.createdAt
-        && request.resource.data.updatedAt == request.time
-        && registry.slug == slug
-        && registry.communityId == root.communityId
-        && registry.ownerId == root.ownerId;
-    }
     function validCommunityRootSlugProjection(id) {
       let root = communityAfter(id).data;
       return existsAfter(communitySlugPath(root.slug))
@@ -1885,14 +1522,6 @@ service cloud.firestore {
         && data.visibility == root.visibility
         && data.role == role
         && data.joinedAt == getAfter(communityMemberPath(id, uid)).data.joinedAt;
-    }
-    function validCommunityCopyRoleBackfill(data, id, uid) {
-      return data.keys().hasOnly([
-          'communityId','name','ownerId','memberCount','visibility','role','joinedAt'
-        ])
-        && data.communityId == id
-        && data.ownerId == communityAfter(id).data.ownerId
-        && data.role == (communityAfter(id).data.ownerId == uid ? 'owner' : 'member');
     }
     function validCommunityJoin(id, uid) {
       return exists(communityPath(id))
@@ -1922,16 +1551,6 @@ service cloud.firestore {
         && ((role == 'owner' && exists(communityPath(id)))
           || member.data.joinedAt == request.time)
         && (role == 'owner' || validCommunityJoin(id, uid));
-    }
-    function validExistingCommunityCopy(id, uid) {
-      let member = getAfter(communityMemberPath(id, uid));
-      let role = communityAfter(id).data.ownerId == uid ? 'owner' : 'member';
-      return existsAfter(communityPath(id))
-        && existsAfter(communityMemberPath(id, uid))
-        && communityActive(id)
-        && member.data.uid == uid
-        && member.data.role == role
-        && validCommunityCopyData(request.resource.data, id, uid, role);
     }
     function validCommunityApprovalSignal(id, uid) {
       let mutation = getAfter(communityMembershipMutationPath(id));
@@ -1965,30 +1584,127 @@ service cloud.firestore {
         && after.data.resolvedAt == request.time
         && after.data.resolvedBy == request.auth.uid;
     }
-    function validCommunityApprovalMember(id, uid) {
-      let member = getAfter(communityMemberPath(id, uid));
-      return !exists(communityMemberPath(id, uid))
-        && !exists(communityBanPath(id, uid))
-        && validCommunityMemberData(member.data, uid, 'member')
-        && communityProjectionContains(id, uid)
-        && member.data.displayName == get(communityJoinRequestPath(id, uid)).data.displayName
-        && member.data.joinedAt == request.time;
-    }
-    function validCommunityApprovalMutation(id, uid) {
-      let root = communityDoc(id);
-      let rootAfter = communityAfter(id);
-      return validCommunityApprovalSignal(id, uid)
-        && root.data.get('accessMode','approval') == 'approval'
-        && rootAfter.data.diff(root.data).affectedKeys().hasOnly(['memberCount'])
-        && root.data.memberCount is int
-        && root.data.memberCount >= 1
-        && rootAfter.data.memberCount == root.data.memberCount + 1
-        && validCommunityApprovalRequest(id, uid)
-        && validCommunityApprovalMember(id, uid)
-        && validCommunityCopyData(getAfter(userCommunityPath(uid, id)).data, id, uid, 'member');
-    }
-
     match /communityUserProgress/{uid} {
+      function validCommunityProgressReward(uid) {
+        let afterProgress = request.resource.data;
+        let id = afterProgress.get('lastRewardCommunityId', '');
+        let askId = afterProgress.get('lastRewardAskId', '');
+        let role = afterProgress.get('lastRewardRole', '');
+        let askBefore = get(communityAskPath(id, askId)).data;
+        let askAfter = getAfter(communityAskPath(id, askId)).data;
+        let oldXp = exists(communityUserProgressPath(uid))
+          ? get(communityUserProgressPath(uid)).data.get('xp', 0)
+          : 0;
+        return linkedCommunityAccount()
+          && afterProgress.keys().hasOnly([
+            'xp','updatedAt','lastRewardCommunityId','lastRewardAskId','lastRewardRole',
+            'communityIds','membershipProjectionCommunityId',
+            'membershipProjectionAction','membershipProjectionUpdatedAt',
+            'communityProjectionVersion'
+          ])
+          && afterProgress.xp is int
+          && afterProgress.xp >= 0
+          && afterProgress.updatedAt == request.time
+          && id is string && id.size() > 0
+          && askId is string && askId.size() > 0
+          && exists(communityMemberPath(id, uid))
+          && afterProgress.get('communityIds', []).toSet().hasAny([id])
+          && afterProgress.get('communityIds', []).toSet()
+            == (exists(communityUserProgressPath(uid))
+              ? get(communityUserProgressPath(uid)).data.get('communityIds', []).toSet()
+              : [].toSet()).union([id].toSet())
+          && askBefore.status == 'active'
+          && askBefore.authorId == request.auth.uid
+          && askAfter.status == 'resolved'
+          && askAfter.xpAwarded == true
+          && ((role == 'bestAnswer'
+              && uid == askAfter.bestAnswerAuthorId
+              && uid != askAfter.authorId
+              && afterProgress.xp == oldXp + 20)
+            || (role == 'askAuthor'
+              && uid == askAfter.authorId
+              && afterProgress.xp == oldXp + 2));
+      }
+
+      function validCommunityProjectionJoin(uid) {
+        let after = request.resource.data;
+        let id = after.get('membershipProjectionCommunityId', '');
+        let beforeIds = exists(communityUserProgressPath(uid))
+          ? resource.data.get('communityIds', []).toSet()
+          : [].toSet();
+        let afterIds = after.get('communityIds', []).toSet();
+        return linkedCommunityAccount()
+          && validCommunityProgressSchema(after)
+          && id is string && id.size() > 0
+          && after.membershipProjectionAction in ['join','backfill']
+          && after.membershipProjectionUpdatedAt == request.time
+          && afterIds == beforeIds.union([id].toSet())
+          && existsAfter(communityMemberPath(id, uid))
+          && getAfter(communityMemberPath(id, uid)).data.uid == uid
+          && (own(uid) || validCommunityApprovalSignal(id, uid))
+          && (!exists(communityUserProgressPath(uid)) || after.xp == resource.data.xp);
+      }
+
+      function validCommunityProjectionRemoval(uid) {
+        let after = request.resource.data;
+        let id = after.get('membershipProjectionCommunityId', '');
+        let beforeIds = resource.data.get('communityIds', []).toSet();
+        let afterIds = after.get('communityIds', []).toSet();
+        let deletionCleanup = after.membershipProjectionAction == 'delete'
+          && communityDeletingOwner(id)
+          && exists(communityDeletionMemberPath(id, uid))
+          && !existsAfter(communityDeletionMemberPath(id, uid))
+          && !existsAfter(userCommunityPath(uid, id));
+        let orphanDeletionCleanup = after.membershipProjectionAction == 'delete'
+          && communityDeletingOwner(id)
+          && !exists(communityMemberPath(id, uid))
+          && !existsAfter(userCommunityPath(uid, id));
+        return (linkedCommunityAccount() || deletingOwnAccount(uid))
+          && validCommunityProgressSchema(after)
+          && id is string && id.size() > 0
+          && after.membershipProjectionAction in ['leave','ban','delete']
+          && after.membershipProjectionUpdatedAt == request.time
+          && beforeIds.hasAny([id])
+          && afterIds == beforeIds.difference([id].toSet())
+          && after.xp == resource.data.xp
+          && ((request.auth.uid == uid || isCommunityOwner(id)
+              || (isPlatformAdmin() && uid != communityDoc(id).data.ownerId
+                && after.diff(resource.data).affectedKeys().hasOnly([
+                  'communityIds','membershipProjectionCommunityId',
+                  'membershipProjectionAction','membershipProjectionUpdatedAt'])))
+            && !existsAfter(communityMemberPath(id, uid))
+            || deletionCleanup
+            || orphanDeletionCleanup);
+      }
+
+      function validCommunityRewardReferenceCleanup(uid) {
+        let id = resource.data.get('lastRewardCommunityId', '');
+        let after = request.resource.data;
+        return linkedCommunityAccount()
+          && id is string && id.size() > 0
+          && communityDeletingOwner(id)
+          && validCommunityProgressSchema(after)
+          && after.diff(resource.data).affectedKeys().hasOnly([
+            'lastRewardCommunityId','lastRewardAskId','lastRewardRole'
+          ])
+          && !after.keys().hasAny([
+            'lastRewardCommunityId','lastRewardAskId','lastRewardRole'
+          ]);
+      }
+
+      function validCommunityProjectionVersion(uid) {
+        let after = request.resource.data;
+        return linkedCommunityAccount() && own(uid)
+          && validCommunityProgressSchema(after)
+          && after.communityProjectionVersion == 1
+          && ((!exists(communityUserProgressPath(uid))
+              && after.xp == 0
+              && after.get('communityIds', []).size() == 0)
+            || (exists(communityUserProgressPath(uid))
+              && after.diff(resource.data).affectedKeys()
+                .hasOnly(['communityProjectionVersion'])));
+      }
+
       allow read: if linkedCommunityAccount() || deletingOwnAccount(uid);
       allow create, update: if accountActive() && (validCommunityProgressReward(uid)
         || validCommunityProjectionJoin(uid)
@@ -2000,6 +1716,22 @@ service cloud.firestore {
     }
 
     match /globalBestAnswerRanking/{uid} {
+      function validGlobalBestAnswerRankingReward(uid) {
+        let progress = getAfter(communityUserProgressPath(uid)).data;
+        let id = progress.get('lastRewardCommunityId', '');
+        let askId = progress.get('lastRewardAskId', '');
+        let askBefore = get(communityAskPath(id, askId)).data;
+        let askAfter = getAfter(communityAskPath(id, askId)).data;
+        return signedIn()
+          && progress.lastRewardRole == 'bestAnswer'
+          && askBefore.status == 'active'
+          && askBefore.authorId == request.auth.uid
+          && askAfter.status == 'resolved'
+          && askAfter.bestAnswerAuthorId == uid
+          && uid != askAfter.authorId
+          && validGlobalBestAnswerRankingAfter(id, askId, uid);
+      }
+
       allow read: if signedIn();
       allow create, update: if validGlobalBestAnswerRankingReward(uid);
     }
@@ -2045,6 +1777,21 @@ service cloud.firestore {
         );
 
       match /gubs/{id} {
+        function validGubCopyRoleBackfill(data, id, uid) {
+          return data.keys().hasOnly([
+              'gubId','name','ownerId','role','joinedAt','inviteCode','memberCount'
+            ])
+            && data.gubId == id
+            && data.ownerId == gubAfter(id).data.ownerId
+            && data.role == (gubAfter(id).data.ownerId == uid ? 'owner' : 'member');
+        }
+
+        function gubOwnerRemovingMember(id, uid) {
+          return isGubOwner(id) && uid != request.auth.uid
+            && exists(gubMemberPath(id, uid))
+            && !existsAfter(gubMemberPath(id, uid));
+        }
+
         allow read: if own(uid);
         allow create: if accountActive() && own(uid) && validGubMemberAndCopy(id, uid,
           gubAfter(id).data.ownerId == uid ? 'owner' : 'member');
@@ -2054,6 +1801,33 @@ service cloud.firestore {
         allow delete: if own(uid) || gubDeletingOwner(id) || gubOwnerRemovingMember(id, uid);
       }
       match /communities/{id} {
+        function communityOwnerRemovingMember(id, uid) {
+          return canModerateCommunity(id) && uid != request.auth.uid
+            && uid != communityDoc(id).data.ownerId
+            && exists(communityMemberPath(id, uid))
+            && !existsAfter(communityMemberPath(id, uid));
+        }
+
+        function validCommunityCopyRoleBackfill(data, id, uid) {
+          return data.keys().hasOnly([
+              'communityId','name','ownerId','memberCount','visibility','role','joinedAt'
+            ])
+            && data.communityId == id
+            && data.ownerId == communityAfter(id).data.ownerId
+            && data.role == (communityAfter(id).data.ownerId == uid ? 'owner' : 'member');
+        }
+
+        function validExistingCommunityCopy(id, uid) {
+          let member = getAfter(communityMemberPath(id, uid));
+          let role = communityAfter(id).data.ownerId == uid ? 'owner' : 'member';
+          return existsAfter(communityPath(id))
+            && existsAfter(communityMemberPath(id, uid))
+            && communityActive(id)
+            && member.data.uid == uid
+            && member.data.role == role
+            && validCommunityCopyData(request.resource.data, id, uid, role);
+        }
+
         allow read: if (own(uid)
             && (linkedCommunityAccount() || accountDeletionStarted(uid)))
           || (linkedCommunityAccount() && isCommunityMember(id)
@@ -2088,12 +1862,27 @@ service cloud.firestore {
         allow delete: if own(uid);
       }
       match /devices/{deviceId} {
+        function validDeviceRegistration(deviceId) {
+          let data = request.resource.data;
+          return data.keys().hasOnly(['deviceId','token','platform','updatedAt'])
+            && data.deviceId == deviceId
+            && validText(data.token, 1, 4096)
+            && data.platform in ['android', 'ios']
+            && data.updatedAt == request.time;
+        }
+
         allow get, list: if own(uid);
         allow create, update: if own(uid) && !accountDeletionStarted(uid)
           && validDeviceRegistration(deviceId);
         allow delete: if own(uid);
       }
       match /pushNotifications/{notificationId} {
+        function validPushNotificationReadUpdate() {
+          return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read'])
+            && resource.data.read == false
+            && request.resource.data.read == true;
+        }
+
         allow get, list: if own(uid);
         allow create, delete: if false;
         allow update: if own(uid) && validPushNotificationReadUpdate();
@@ -2130,6 +1919,47 @@ service cloud.firestore {
     }
 
     match /inviteTokens/{canonicalCode} {
+      function validInviteTokenCreate(code) {
+        let data = request.resource.data;
+        let root = getAfter(gubPath(data.gubId)).data;
+        return signedIn()
+          && validInviteTokenCode(code)
+          && data.keys().hasOnly(['gubId','ownerId','gubName','active','createdAt'])
+          && data.gubId is string
+          && data.ownerId == request.auth.uid
+          && data.gubName is string
+          && data.active == true
+          && data.createdAt == request.time
+          && root.gubId == data.gubId
+          && root.ownerId == data.ownerId
+          && root.name == data.gubName
+          && root.inviteTokenId == code;
+      }
+
+      function validInviteTokenRevocation(code) {
+        let data = resource.data;
+        let root = gubDoc(data.gubId).data;
+        let afterRoot = gubAfter(data.gubId).data;
+        return signedIn()
+          && data.ownerId == request.auth.uid
+          && root.ownerId == request.auth.uid
+          && root.inviteTokenId == code
+          && data.gubName == root.name
+          && request.resource.data.diff(data).affectedKeys().hasOnly(['active'])
+          && data.active == true
+          && request.resource.data.active == false
+          && afterRoot.deletionStatus == 'deleting'
+          && afterRoot.deletionRequestedBy == request.auth.uid;
+      }
+
+      function validInviteTokenRegeneration(code) {
+        let data = resource.data;
+        return signedIn() && data.ownerId == request.auth.uid && data.active == true
+          && request.resource.data.diff(data).affectedKeys().hasOnly(['active'])
+          && request.resource.data.active == false
+          && validInviteRegeneration(data.gubId);
+      }
+
       allow get: if signedIn() && validInviteTokenCode(canonicalCode);
       allow list: if signedIn()
         && resource.data.gubId is string
@@ -2842,6 +2672,21 @@ service cloud.firestore {
     }
 
     match /communitySlugs/{slug} {
+      function validCommunitySlugRegistryCreate(slug) {
+        let root = communityAfter(request.resource.data.communityId).data;
+        return request.resource.data.keys().hasOnly([
+            'slug','communityId','ownerId','createdAt'
+          ])
+          && validCommunitySlug(slug)
+          && request.resource.data.slug == slug
+          && request.resource.data.communityId is string
+          && request.resource.data.ownerId == request.auth.uid
+          && request.resource.data.createdAt == request.time
+          && root.communityId == request.resource.data.communityId
+          && root.slug == slug
+          && root.ownerId == request.auth.uid;
+      }
+
       allow get: if signedIn();
       allow list: if false;
       allow create: if accountActive() && linkedCommunityAccount() && !exists(communitySlugPath(slug))
@@ -2851,6 +2696,22 @@ service cloud.firestore {
         && resource.data.slug == slug;
     }
     match /communityNames/{nameKey} {
+      function validCommunityNameRegistryCreate(nameKey) {
+        let root = communityAfter(request.resource.data.communityId).data;
+        return request.resource.data.keys().hasOnly([
+            'nameKey','communityId','ownerId','createdAt'
+          ])
+          && nameKey is string && nameKey.size() >= 1 && nameKey.size() <= 60
+          && request.resource.data.nameKey == nameKey
+          && request.resource.data.communityId is string
+          && request.resource.data.ownerId == request.auth.uid
+          && request.resource.data.createdAt == request.time
+          && root.communityId == request.resource.data.communityId
+          && root.nameKey == nameKey
+          && nameKey == canonicalCommunityNameKey(root.name)
+          && root.ownerId == request.auth.uid;
+      }
+
       allow get: if signedIn();
       allow list: if false;
       allow create: if accountActive() && linkedCommunityAccount() && !exists(communityNamePath(nameKey))
@@ -2860,6 +2721,54 @@ service cloud.firestore {
         && resource.data.nameKey == nameKey;
     }
     match /communityPublic/{slug} {
+      function validCommunityImagePublicMutation(slug) {
+        return validCommunityImagePublicUpdate(slug)
+          || validCommunityImagePublicRemoval(slug);
+      }
+
+      function validCommunityMemberCountPublicMutation(slug) {
+        let data = request.resource.data;
+        let rootBefore = communityDoc(resource.data.communityId).data;
+        let rootAfter = communityAfter(resource.data.communityId).data;
+        return signedIn()
+          && rootBefore.get('deletionStatus', 'active') != 'deleting'
+          && data.diff(resource.data).affectedKeys().hasOnly(['memberCount','updatedAt'])
+          && data.communityId == rootAfter.communityId
+          && data.slug == slug
+          && rootAfter.slug == slug
+          && rootAfter.diff(rootBefore).affectedKeys().hasOnly(['memberCount'])
+          && rootAfter.memberCount != rootBefore.memberCount
+          && rootAfter.memberCount is int
+          && data.memberCount != resource.data.memberCount
+          && data.memberCount == rootAfter.memberCount
+          && data.updatedAt == request.time;
+      }
+
+      function validCommunityPublicCreate(slug) {
+        let root = communityAfter(request.resource.data.communityId).data;
+        let registry = getAfter(communitySlugPath(slug)).data;
+        return request.resource.data.keys().hasOnly([
+            'communityId','slug','name','description','type','language','accessMode','memberCount',
+            'createdAt','updatedAt'
+          ])
+          && validCommunitySlug(slug)
+          && request.resource.data.slug == slug
+          && request.resource.data.communityId is string
+          && root.communityId == request.resource.data.communityId
+          && root.slug == slug
+          && root.name == request.resource.data.name
+          && root.description == request.resource.data.description
+          && root.type == request.resource.data.type
+          && root.language == request.resource.data.language
+          && root.accessMode == request.resource.data.accessMode
+          && root.memberCount == request.resource.data.memberCount
+          && root.createdAt == request.resource.data.createdAt
+          && request.resource.data.updatedAt == request.time
+          && registry.slug == slug
+          && registry.communityId == root.communityId
+          && registry.ownerId == root.ownerId;
+      }
+
       allow get: if true;
       allow list: if request.query.limit != null
         && request.query.limit > 0
@@ -2881,6 +2790,54 @@ service cloud.firestore {
         && communityFinalizingDeletion(resource.data.communityId);
     }
     match /moderationReports/{reportId} {
+      function validPlatformModerationReportUpdate(reportId) {
+        let data = request.resource.data;
+        let changed = data.diff(resource.data).affectedKeys();
+        let event = getAfter(
+          /databases/$(database)/documents/moderationReports/$(reportId)/events/$(data.lastEventId)
+        ).data;
+        return isPlatformAdmin()
+          && changed.hasAll(['status','lastEventId'])
+          && changed.hasOnly(['status','reviewedBy','reviewedAt','actionNote','lastEventId'])
+          && data.status in ['open','reviewed','action_taken','escalated','closed']
+          && data.status != resource.data.status
+          && data.lastEventId is string
+          && data.lastEventId.size() > 0
+          && !exists(/databases/$(database)/documents/moderationReports/$(reportId)/events/$(data.lastEventId))
+          && data.reviewedBy == request.auth.uid
+          && data.reviewedAt == request.time
+          && data.actionNote is string
+          && data.actionNote.size() <= 500
+          && event.reportId == reportId
+          && event.previousStatus == resource.data.status
+          && event.status == data.status
+          && event.actionNote == data.actionNote
+          && event.actorId == request.auth.uid
+          && event.createdAt == request.time;
+      }
+
+      function validModerationReportCreate(reportId) {
+        let data = request.resource.data;
+        return data.keys().hasAny(['gubId'])
+          ? data.keys().hasAny(['messageId'])
+            ? validGubMessageReport(reportId)
+            : validGubUserReport(reportId)
+          : data.keys().hasAll(['communityId','messageId'])
+            ? validCommunityMessageReport(reportId)
+            : validCommunityReport(reportId)
+              || validCommunityUserReport(reportId)
+              || validCommunityAskReport(reportId)
+              || validCommunityAnswerReport(reportId);
+      }
+
+      function validModerationReportTargetLink(reportId) {
+        let report = request.resource.data;
+        return existsAfter(moderationTargetPath(moderationTargetKeyForReport(report)))
+          && getAfter(moderationTargetPath(moderationTargetKeyForReport(report))).data.targetType == report.targetType
+          && getAfter(moderationTargetPath(moderationTargetKeyForReport(report))).data.targetId == report.targetId
+          && getAfter(moderationTargetPath(moderationTargetKeyForReport(report))).data.lastReportId == reportId;
+      }
+
       allow get: if isPlatformAdmin()
         || (signedIn()
           && reportId.matches('^.*__' + request.auth.uid + '$')
@@ -2894,6 +2851,28 @@ service cloud.firestore {
       allow update: if validPlatformModerationReportUpdate(reportId);
       allow delete: if false;
       match /events/{eventId} {
+        function validPlatformModerationEventCreate(reportId, eventId) {
+          let data = request.resource.data;
+          let before = get(moderationReportPath(reportId)).data;
+          let after = getAfter(moderationReportPath(reportId)).data;
+          return isPlatformAdmin()
+            && data.keys().hasOnly(['reportId','previousStatus','status','actionNote','actorId','createdAt'])
+            && data.keys().hasAll(['reportId','previousStatus','status','actionNote','actorId','createdAt'])
+            && data.reportId == reportId
+            && data.previousStatus == before.status
+            && data.status == after.status
+            && data.status in ['open','reviewed','action_taken','escalated','closed']
+            && data.previousStatus != data.status
+            && data.actionNote is string
+            && data.actionNote.size() <= 500
+            && data.actionNote == after.actionNote
+            && data.actorId == request.auth.uid
+            && data.createdAt == request.time
+            && after.lastEventId == eventId
+            && after.reviewedAt == request.time
+            && after.reviewedBy == request.auth.uid;
+        }
+
         allow get, list: if isPlatformAdmin();
         allow create: if validPlatformModerationEventCreate(reportId, eventId);
         allow update, delete: if false;
@@ -2946,12 +2925,36 @@ service cloud.firestore {
       allow list, create, update, delete: if false;
     }
     match /platformRestrictions/{uid} {
+      function validPlatformRestrictionInitialization(uid) {
+        let data = request.resource.data;
+        return own(uid)
+          && !exists(platformRestrictionPath(uid))
+          && data.keys().hasOnly(['communityChatRestricted','updatedAt'])
+          && data.communityChatRestricted == false
+          && data.updatedAt == request.time;
+      }
+
       allow get: if own(uid);
       allow list: if false;
       allow create: if validPlatformRestrictionInitialization(uid);
       allow update, delete: if false;
     }
     match /communityRestrictions/{communityId} {
+      function validCommunityRestrictionInitialization(id) {
+        let data = request.resource.data;
+        let community = communityAfter(id).data;
+        return signedIn()
+          && !exists(communityRestrictionPath(id))
+          && existsAfter(communityPath(id))
+          && community.ownerId == request.auth.uid
+          && community.visibility == 'public'
+          && community.get('deletionStatus', 'active') != 'deleting'
+          && data.keys().hasOnly(['hiddenFromDiscovery','joiningRestricted','updatedAt'])
+          && data.hiddenFromDiscovery == false
+          && data.joiningRestricted == false
+          && data.updatedAt == request.time;
+      }
+
       allow get: if signedIn();
       allow list: if false;
       allow create: if validCommunityRestrictionInitialization(communityId);
