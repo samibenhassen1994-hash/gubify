@@ -139,6 +139,42 @@ test('admin can review and classify submitted reports',async()=>{
   }));
 });
 
+test('authority referral is admin-only, append-only, and cannot claim automated submission',async()=>{
+  const f=db();
+  const ref=doc(f,'moderationReports/child-report/authorityReferrals/ref-1');
+  const record={
+    reportId:'child-report',actorId:'admin',channel:'italian_police',
+    authorityName:'Polizia Postale',reference:'CASE-1',
+    note:'Submitted through official channel',confirmedManualSubmission:true,
+    recordedAt:serverTimestamp()
+  };
+  await assertFails(setDoc(doc(db('member'),'moderationReports/child-report/authorityReferrals/x'),record));
+  await assertFails(setDoc(doc(db('guest',true),'moderationReports/child-report/authorityReferrals/x'),record));
+  await assertSucceeds(setDoc(ref,record));
+  assert.equal((await getDoc(ref)).data().reference,'CASE-1');
+  await assertFails(updateDoc(ref,{reference:'forged'}));
+  await assertFails(deleteDoc(ref));
+  await assertFails(getDoc(doc(db('member'),'moderationReports/child-report/authorityReferrals/ref-1')));
+  await assertFails(getDocs(collection(db('member'),'moderationReports/child-report/authorityReferrals')));
+  await assertFails(setDoc(doc(f,'moderationReports/child-report/authorityReferrals/not-sent'),{
+    ...record,confirmedManualSubmission:false
+  }));
+  await assertFails(setDoc(doc(f,'moderationReports/child-report/authorityReferrals/another'),{
+    ...record,actorId:'member'
+  }));
+  await assertFails(setDoc(doc(f,'moderationReports/child-report/authorityReferrals/invalid'),{
+    ...record,note:'x'.repeat(301)
+  }));
+  await env.withSecurityRulesDisabled(async c=>{
+    await setDoc(doc(c.firestore(),'moderationReports/not-child'),{
+      reportId:'not-child',reporterId:'member',reason:'spam',status:'open'
+    });
+  });
+  await assertFails(setDoc(doc(f,'moderationReports/not-child/authorityReferrals/x'),{
+    ...record,reportId:'not-child'
+  }));
+});
+
 test('audit event cannot be attached to another report or spoof another actor',async()=>{
   const f=db();
   const report=doc(f,'moderationReports/child-report');

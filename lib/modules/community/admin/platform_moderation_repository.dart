@@ -37,6 +37,42 @@ class PlatformModerationRepository {
           .map((doc) => PlatformReportEvent.fromFirestore(doc.id, doc.data()))
           .toList());
 
+  Stream<List<PlatformAuthorityReferral>> authorityReferrals(
+    String reportId,
+  ) => _db.collection('moderationReports')
+      .doc(reportId)
+      .collection('authorityReferrals')
+      .orderBy('recordedAt', descending: true)
+      .limit(30)
+      .snapshots()
+      .map((snapshot) => snapshot.docs
+          .map((doc) => PlatformAuthorityReferral.fromFirestore(doc.id, doc.data()))
+          .toList());
+
+  /// The administrator confirms the referral was submitted externally.
+  /// No contact with law enforcement is initiated here.
+  Future<void> recordAuthorityReferral({
+    required String reportId,
+    required String actorId,
+    required String channel,
+    required String authorityName,
+    required String reference,
+    required String note,
+  }) => _db.collection('moderationReports')
+      .doc(reportId)
+      .collection('authorityReferrals')
+      .add({
+        'reportId': reportId,
+        'actorId': actorId,
+        'channel': channel,
+        'authorityName': authorityName.trim(),
+        'reference': reference.trim(),
+        'note': note.trim(),
+        'confirmedManualSubmission': true,
+        'recordedAt': FieldValue.serverTimestamp(),
+      })
+      .then((_) {});
+
   CollectionReference<Map<String, dynamic>> _content(
     String communityId,
     PlatformContentKind kind,
