@@ -3,37 +3,20 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:gubify/modules/community/models/community_access_request_model.dart';
 import 'package:gubify/modules/community/repositories/community_repository.dart';
 
-class _DocumentSnapshotFake implements DocumentSnapshot<Map<String, dynamic>> {
-  _DocumentSnapshotFake(this.id, this._data);
-
-  @override
-  final String id;
-
-  final Map<String, dynamic> _data;
-
-  @override
-  bool get exists => true;
-
-  @override
-  Map<String, dynamic>? data() => _data;
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
-}
-
 void main() {
   group('Community join request lifecycle', () {
-    test('fromFirestore reads requestedAt', () {
+    test('fromMap reads requestedAt', () {
       final requestedAt = Timestamp.fromMillisecondsSinceEpoch(1234);
 
-      final model = CommunityAccessRequestModel.fromFirestore(
-        _DocumentSnapshotFake('requester', {
+      final model = CommunityAccessRequestModel.fromMap(
+        'requester',
+        {
           'userId': 'requester',
           'displayName': 'Requester',
           'status': CommunityAccessRequestModel.pendingStatus,
           'createdAt': Timestamp.fromMillisecondsSinceEpoch(1000),
           'requestedAt': requestedAt,
-        }),
+        },
       );
 
       expect(model.requestedAt, same(requestedAt));

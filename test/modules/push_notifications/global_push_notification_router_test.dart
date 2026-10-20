@@ -16,7 +16,7 @@ void main() {
   testWidgets('routes all six approved event types to existing destinations', (tester) async {
     final pushed = <Widget>[];
     final private = <Map<String, String>>[];
-    final router = GlobalPushNotificationRouter(currentUserId: () => 'owner', loadCommunity: (_) async => community, loadMember: (_, __) async => Object(), loadAsk: (_, __) async => ask, push: (_, child) => pushed.add(child), openPrivate: (_, __, data) async => private.add(data));
+    final router = GlobalPushNotificationRouter(currentUserId: () => 'owner', loadCommunity: (_) async => community, loadMember: (_, _) async => Object(), loadAsk: (_, _) async => ask, push: (_, child) => pushed.add(child), openPrivate: (_, _, data) async => private.add(data));
     await tester.pumpWidget(const MaterialApp(home: Scaffold()));
     final context = tester.element(find.byType(Scaffold));
     for (final data in [
@@ -35,7 +35,7 @@ void main() {
 
   testWidgets('resolved request opens public details without membership', (tester) async {
     Widget? pushed;
-    final router = GlobalPushNotificationRouter(currentUserId: () => 'member', loadCommunity: (_) async => community, loadMember: (_, __) async => null, push: (_, child) => pushed = child);
+    final router = GlobalPushNotificationRouter(currentUserId: () => 'member', loadCommunity: (_) async => community, loadMember: (_, _) async => null, push: (_, child) => pushed = child);
     await tester.pumpWidget(const MaterialApp(home: Scaffold()));
     await router.open(tester.element(find.byType(Scaffold)), {'type': 'community_join_request_resolved', 'communityId': 'c'});
     expect(pushed, isA<CommunityPublicDetailsScreen>());

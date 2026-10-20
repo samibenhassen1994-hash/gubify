@@ -23,14 +23,20 @@ class CommunityAccessRequestModel {
 
   factory CommunityAccessRequestModel.fromFirestore(
     DocumentSnapshot<Map<String, dynamic>> document,
+  ) => CommunityAccessRequestModel.fromMap(document.id, document.data());
+
+  /// Parse Firestore fields without implementing the sealed snapshot class in tests.
+  factory CommunityAccessRequestModel.fromMap(
+    String documentId,
+    Map<String, dynamic>? data,
   ) {
-    final data = document.data() ?? const <String, dynamic>{};
+    final fields = data ?? const <String, dynamic>{};
     return CommunityAccessRequestModel(
-      userId: data["userId"] as String? ?? document.id,
-      displayName: data["displayName"] as String? ?? "User",
-      status: data["status"] as String? ?? pendingStatus,
-      createdAt: data["createdAt"] as Timestamp?,
-      requestedAt: data["requestedAt"] as Timestamp?,
+      userId: fields["userId"] as String? ?? documentId,
+      displayName: fields["displayName"] as String? ?? "User",
+      status: fields["status"] as String? ?? pendingStatus,
+      createdAt: fields["createdAt"] as Timestamp?,
+      requestedAt: fields["requestedAt"] as Timestamp?,
     );
   }
 }

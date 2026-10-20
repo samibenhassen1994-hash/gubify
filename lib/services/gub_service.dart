@@ -161,7 +161,7 @@ class GubService {
       throw InviteRegenerationCooldownException(cooldown.inSeconds + 1);
     }
     try {
-      return reserveUniqueInviteCode<String>(
+      return await reserveUniqueInviteCode<String>(
         generator: _inviteCodeGenerator,
         tryReserve: (candidate) async {
           final regenerated = await _inviteRepository.tryRegenerateInvite(
