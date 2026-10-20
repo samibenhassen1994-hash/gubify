@@ -117,6 +117,7 @@ class _AuthorityReportingDialogState extends State<AuthorityReportingDialog> {
             ),
             const SizedBox(height: 12),
             DropdownButtonFormField<String>(
+              isExpanded: true,
               initialValue: _channel,
               decoration: const InputDecoration(labelText: 'Reporting channel'),
               items: [

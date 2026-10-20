@@ -25,6 +25,7 @@ This is a **release checklist**, not a statement of completed legal compliance.
 - [ ] Adopt and practise `docs/child-safety-escalation.md`; verify competent Italian and international authority reporting routes.
 - [ ] Obtain advice on applicable DSA article 18 duties, privacy/retention, evidence preservation and escalation deadlines.
 - [ ] Check Google Play Child Safety and broader UGC policy declarations against actual live controls.
+- [ ] Determine whether Gubify's actual communication model is classified by Google Play as Anonymous Chat or Random Chat. If it is, use the Play Console age-restriction tools to block minors and ensure the target-audience/listing choices do not target children before release. Firebase anonymous authentication alone is not the classification test. See https://support.google.com/googleplay/android-developer/answer/16302250 and https://support.google.com/googleplay/android-developer/answer/17134731.
 - [ ] Verify no untested server rules or backend operations are deployed to production solely on this branch.
 - [ ] Only then consider signing Play Console declarations, building a new AAB and planning rollout.
 

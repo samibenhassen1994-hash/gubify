@@ -77,26 +77,26 @@ void main() {
           ),
         ),
       );
-      expect(find.text('Community moderation'), findsNothing);
+      expect(find.text('Moderation Center'), findsNothing);
       identities.add(
         const PlatformAdminIdentity(uid: 'one', isAnonymous: false),
       );
       await tester.pump();
       roles['one']!.add(true);
       await tester.pump();
-      await tester.tap(find.text('Community moderation'));
+      await tester.tap(find.text('Moderation Center'));
       await tester.pumpAndSettle();
       expect(find.text('Moderation resources'), findsOneWidget);
       roles['one']!.add(false);
       await tester.pump();
       expect(find.text('Moderation resources'), findsNothing);
       expect(
-        find.text('Community moderation access is unavailable.'),
+        find.text('Moderation Center access is unavailable.'),
         findsOneWidget,
       );
       await tester.pageBack();
       await tester.pump();
-      expect(find.text('Community moderation'), findsNothing);
+      expect(find.text('Moderation Center'), findsNothing);
     },
   );
 }
