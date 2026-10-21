@@ -8,10 +8,12 @@ service cloud.firestore {
       return /databases/$(database)/documents/accountDeletionStates/$(uid);
     }
     function accountDeletionStarted(uid) {
-      return signedIn() && own(uid) && exists(accountDeletionStatePath(uid));
+      return signedIn() && request.auth.uid == uid
+        && exists(accountDeletionStatePath(uid));
     }
     function accountActive() {
-      return signedIn() && !accountDeletionStarted(request.auth.uid);
+      return signedIn()
+        && !exists(accountDeletionStatePath(request.auth.uid));
     }
     function linkedCommunityAccount() {
       return signedIn()
@@ -22,9 +24,12 @@ service cloud.firestore {
     }
     // Il registro è amministrato solo tramite Firebase Console/Admin SDK.
     function isPlatformAdmin() {
-      return linkedCommunityAccount()
+      // linkedCommunityAccount() && provider != anonymous is exactly
+      // signedIn() && provider != anonymous; use the reduced equivalent to
+      // keep large atomic Community batches below the Rules expression limit.
+      return signedIn()
         && request.auth.token.firebase.sign_in_provider != 'anonymous'
-        && !accountDeletionStarted(request.auth.uid)
+        && !exists(accountDeletionStatePath(request.auth.uid))
         && exists(/databases/$(database)/documents/users/$(request.auth.uid))
         && exists(/databases/$(database)/documents/platformAdmins/$(request.auth.uid))
         && get(/databases/$(database)/documents/platformAdmins/$(request.auth.uid)).data.active == true;
@@ -805,6 +810,19 @@ service cloud.firestore {
     function communityRestrictionPath(id) { return /databases/$(database)/documents/communityRestrictions/$(id); }
     function communityMembershipMutationPath(id) { return /databases/$(database)/documents/communities/$(id)/membershipMutations/current; }
     function ownershipPath(uid) { return /databases/$(database)/documents/communityOwnership/$(uid); }
+    function platformAdminCommunityOwnershipPath(uid, id) {
+      return /databases/$(database)/documents/platformAdminCommunityOwnership/$(uid)/communities/$(id);
+    }
+    function validPlatformAdminCommunityOwnershipAfter(uid, id) {
+      let ownership = getAfter(platformAdminCommunityOwnershipPath(uid, id)).data;
+      // The ownership document's own create rule requires an active Platform
+      // Admin. Requiring its server timestamp to equal this request proves it
+      // was authorized in the same atomic batch and prevents a revoked admin
+      // from reusing a previously-created marker.
+      return ownership.ownerId == uid
+        && ownership.communityId == id
+        && ownership.createdAt == request.time;
+    }
     function communitySlugPath(slug) { return /databases/$(database)/documents/communitySlugs/$(slug); }
     function communityPublicPath(slug) { return /databases/$(database)/documents/communityPublic/$(slug); }
     function communityNamePath(nameKey) { return /databases/$(database)/documents/communityNames/$(nameKey); }
@@ -1086,11 +1104,13 @@ service cloud.firestore {
       let slug = root.get('slug', '');
       let nameKey = root.get('nameKey', '');
       let ownerOwnership = ownershipPath(root.ownerId);
+      let adminOwnership = platformAdminCommunityOwnershipPath(root.ownerId, id);
       return communityDeletingOwner(id)
         && !existsAfter(communityPath(id))
         && (!exists(ownerOwnership)
           || get(ownerOwnership).data.get('communityId', '') != id
           || !existsAfter(ownerOwnership))
+        && (!exists(adminOwnership) || !existsAfter(adminOwnership))
         && (!validCommunitySlug(slug)
           || !existsAfter(communitySlugPath(slug)))
         && (!validCommunityNameKey(nameKey)
@@ -2315,7 +2335,9 @@ service cloud.firestore {
           == request.auth.uid;
       allow create: if accountActive() && linkedCommunityAccount() && validCommunityRootCreate(id)
         && validCommunityMemberAndCopy(id, request.auth.uid, 'owner')
-        && getAfter(ownershipPath(request.auth.uid)).data.communityId == id
+        && ((existsAfter(ownershipPath(request.auth.uid))
+            && getAfter(ownershipPath(request.auth.uid)).data.communityId == id)
+          || validPlatformAdminCommunityOwnershipAfter(request.auth.uid, id))
         && validCommunityRootSlugProjection(id);
       allow update: if request.resource.data.diff(resource.data).affectedKeys().hasAny([
           'imageUrl','imagePublicId','imageVersion','imageUpdatedAt'
@@ -2788,6 +2810,19 @@ service cloud.firestore {
         && validCommunityMemberAndCopy(request.resource.data.communityId,uid,'owner');
       allow delete: if own(uid)
         && communityFinalizingDeletion(resource.data.communityId);
+    }
+    match /platformAdminCommunityOwnership/{uid}/communities/{communityId} {
+      allow read: if linkedCommunityAccount() && own(uid);
+      allow create: if own(uid) && isPlatformAdmin()
+        && request.resource.data.keys().hasOnly(['ownerId','communityId','createdAt'])
+        && request.resource.data.ownerId == uid
+        && request.resource.data.communityId == communityId
+        && request.resource.data.createdAt == request.time
+        && communityAfter(communityId).data.createdAt == request.time;
+      allow delete: if own(uid)
+        && resource.data.ownerId == uid
+        && resource.data.communityId == communityId
+        && communityFinalizingDeletion(communityId);
     }
     match /moderationReports/{reportId} {
       function validPlatformModerationReportUpdate(reportId) {

@@ -19,6 +19,7 @@ void main() {
     service = PlatformAdminService(
       identities: identities.stream,
       watchActive: (uid) => roles[uid]!.stream,
+      readActive: (uid) async => uid == 'one',
     );
   });
   tearDown(() async {
@@ -64,6 +65,18 @@ void main() {
       expect(service.isAdmin, false);
     },
   );
+  test('fresh server role check supports creation and fails closed', () async {
+    identities.add(
+      const PlatformAdminIdentity(uid: 'one', isAnonymous: false),
+    );
+    await tick();
+    expect(await service.readCurrentActive(), true);
+    identities.add(
+      const PlatformAdminIdentity(uid: 'two', isAnonymous: false),
+    );
+    await tick();
+    expect(await service.readCurrentActive(), false);
+  });
   testWidgets(
     'admin entry opens protected route and revocation removes mounted content',
     (tester) async {

@@ -143,17 +143,21 @@ class CommunityRepository {
     required String language,
     required String description,
     required String accessMode,
+    bool allowMultipleOwnership = false,
   }) async {
     final ownershipReference = _firestore
         .collection("communityOwnership")
         .doc(ownerId);
-    final legacyOwnedSnapshot = await _communities
-        .where("ownerId", isEqualTo: ownerId)
-        .limit(1)
-        .get();
-    final legacyOwnedCommunity = legacyOwnedSnapshot.docs.isEmpty
-        ? null
-        : legacyOwnedSnapshot.docs.first;
+    QueryDocumentSnapshot<Map<String, dynamic>>? legacyOwnedCommunity;
+    if (!allowMultipleOwnership) {
+      final legacyOwnedSnapshot = await _communities
+          .where("ownerId", isEqualTo: ownerId)
+          .limit(1)
+          .get();
+      legacyOwnedCommunity = legacyOwnedSnapshot.docs.isEmpty
+          ? null
+          : legacyOwnedSnapshot.docs.first;
+    }
     final baseSlug = CommunitySlug.fromName(name);
     final nameKey = CommunityNameKey.fromName(name);
 
@@ -172,6 +176,7 @@ class CommunityRepository {
         nameKey: nameKey,
         ownershipReference: ownershipReference,
         legacyOwnedCommunity: legacyOwnedCommunity,
+        allowMultipleOwnership: allowMultipleOwnership,
       );
       switch (result.outcome) {
         case _CommunityCreationOutcome.created:
@@ -202,6 +207,7 @@ class CommunityRepository {
     required String nameKey,
     required DocumentReference<Map<String, dynamic>> ownershipReference,
     required QueryDocumentSnapshot<Map<String, dynamic>>? legacyOwnedCommunity,
+    required bool allowMultipleOwnership,
   }) async {
     final communityReference = _communities.doc();
     final communityId = communityReference.id;
@@ -239,22 +245,29 @@ class CommunityRepository {
         .collection('communities')
         .doc(communityId);
     final progressReference = _progressReference(ownerId);
+    final platformAdminOwnershipReference = _firestore
+        .collection('platformAdminCommunityOwnership')
+        .doc(ownerId)
+        .collection('communities')
+        .doc(communityId);
 
     return _firestore.runTransaction<_CommunityCreationTransactionResult>((
       transaction,
     ) async {
-      final ownershipSnapshot = await transaction.get(ownershipReference);
-      if (ownershipSnapshot.exists) {
-        return const _CommunityCreationTransactionResult.ownershipExists();
-      }
+      if (!allowMultipleOwnership) {
+        final ownershipSnapshot = await transaction.get(ownershipReference);
+        if (ownershipSnapshot.exists) {
+          return const _CommunityCreationTransactionResult.ownershipExists();
+        }
 
-      if (legacyOwnedCommunity != null) {
-        transaction.set(ownershipReference, {
-          "ownerId": ownerId,
-          "communityId": legacyOwnedCommunity.id,
-          "createdAt": FieldValue.serverTimestamp(),
-        });
-        return const _CommunityCreationTransactionResult.ownershipExists();
+        if (legacyOwnedCommunity != null) {
+          transaction.set(ownershipReference, {
+            "ownerId": ownerId,
+            "communityId": legacyOwnedCommunity.id,
+            "createdAt": FieldValue.serverTimestamp(),
+          });
+          return const _CommunityCreationTransactionResult.ownershipExists();
+        }
       }
 
       final slugSnapshot = await transaction.get(slugReference);
@@ -318,11 +331,17 @@ class CommunityRepository {
         "role": "owner",
         "joinedAt": FieldValue.serverTimestamp(),
       });
-      transaction.set(ownershipReference, {
+      final ownershipData = {
         "ownerId": ownerId,
         "communityId": communityId,
         "createdAt": FieldValue.serverTimestamp(),
-      });
+      };
+      transaction.set(
+        allowMultipleOwnership
+            ? platformAdminOwnershipReference
+            : ownershipReference,
+        ownershipData,
+      );
       _addCommunityProjection(
         transaction: transaction,
         reference: progressReference,
@@ -1257,11 +1276,19 @@ class CommunityRepository {
     final ownershipReference = _firestore
         .collection("communityOwnership")
         .doc(ownerId);
+    final platformAdminOwnershipReference = _firestore
+        .collection('platformAdminCommunityOwnership')
+        .doc(ownerId)
+        .collection('communities')
+        .doc(communityId);
     final failure = await _firestore.runTransaction<String?>((
       transaction,
     ) async {
       final communitySnapshot = await transaction.get(communityReference);
       final ownershipSnapshot = await transaction.get(ownershipReference);
+      final platformAdminOwnershipSnapshot = await transaction.get(
+        platformAdminOwnershipReference,
+      );
       final slug = _nonEmptyString(communitySnapshot.data()?['slug']);
       final nameKey = _nonEmptyString(communitySnapshot.data()?['nameKey']);
       final slugReference = slug == null ? null : _communitySlugs.doc(slug);
@@ -1288,6 +1315,10 @@ class CommunityRepository {
       }
       if (ownershipSnapshot.data()?["communityId"] == communityId) {
         transaction.delete(ownershipReference);
+      }
+      if (platformAdminOwnershipSnapshot.data()?["communityId"] ==
+          communityId) {
+        transaction.delete(platformAdminOwnershipReference);
       }
       if (slugReference != null) transaction.delete(slugReference);
       if (nameReference != null) transaction.delete(nameReference);

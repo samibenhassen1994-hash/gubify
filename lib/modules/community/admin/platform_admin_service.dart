@@ -14,7 +14,9 @@ class PlatformAdminService extends ChangeNotifier {
   PlatformAdminService({
     required Stream<PlatformAdminIdentity?> identities,
     required Stream<bool> Function(String uid) watchActive,
+    Future<bool> Function(String uid)? readActive,
   }) {
+    _readActive = readActive;
     _identitySubscription = identities.listen(
       (identity) {
         final generation = ++_generation;
@@ -48,17 +50,34 @@ class PlatformAdminService extends ChangeNotifier {
   static final instance = PlatformAdminService(
     identities: PlatformAdminRepository().identities(),
     watchActive: PlatformAdminRepository().watchActive,
+    readActive: PlatformAdminRepository().readActive,
   );
   late final StreamSubscription<PlatformAdminIdentity?> _identitySubscription;
   StreamSubscription<bool>? _roleSubscription;
   int _generation = 0;
   bool _isAdmin = false;
   String? _uid;
+  late final Future<bool> Function(String uid)? _readActive;
   bool get isAdmin => _isAdmin;
   String? get adminUid => _isAdmin ? _uid : null;
   void requireAdmin() {
     if (!isAdmin) {
       throw StateError('Community moderation access is unavailable.');
+    }
+  }
+
+  Future<bool> readCurrentActive() async {
+    final uid = _uid;
+    final readActive = _readActive;
+    if (uid == null || readActive == null) return false;
+    try {
+      final active = await readActive(uid);
+      if (uid != _uid) return false;
+      _setAdmin(active);
+      return active;
+    } on Object {
+      if (uid == _uid) _setAdmin(false);
+      return false;
     }
   }
 

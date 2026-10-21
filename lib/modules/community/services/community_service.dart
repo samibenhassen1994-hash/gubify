@@ -98,6 +98,8 @@ class CommunityService {
           ? storedPhotoUrl.trim()
           : user.photoURL;
 
+      final allowMultipleOwnership = await PlatformAdminService.instance
+          .readCurrentActive();
       final community = await CommunityRepository.instance.createCommunity(
         name: normalizedName,
         ownerId: user.uid,
@@ -107,6 +109,7 @@ class CommunityService {
         language: normalizedLanguage,
         description: normalizedDescription,
         accessMode: normalizedAccessMode,
+        allowMultipleOwnership: allowMultipleOwnership,
       );
       if (community == null) {
         throw const CommunityCreationLimitException();

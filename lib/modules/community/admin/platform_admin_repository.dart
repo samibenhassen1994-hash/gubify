@@ -17,4 +17,12 @@ class PlatformAdminRepository {
       .doc(uid)
       .snapshots(includeMetadataChanges: true)
       .map((doc) => !doc.metadata.isFromCache && doc.data()?['active'] == true);
+
+  Future<bool> readActive(String uid) async {
+    final document = await FirebaseFirestore.instance
+        .collection('platformAdmins')
+        .doc(uid)
+        .get(const GetOptions(source: Source.server));
+    return document.data()?['active'] == true;
+  }
 }

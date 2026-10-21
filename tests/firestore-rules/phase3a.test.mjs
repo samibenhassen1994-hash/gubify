@@ -384,6 +384,9 @@ function createCommunityBatch({
   includeMember = true,
   includeCopy = true,
   includeMarker = true,
+  includePlatformAdminMarker = false,
+  platformAdminMarkerOverrides = {},
+  progressCommunityIds,
   includeSlugRegistry = true,
   includePublicProjection = true,
   clientDb: suppliedDb,
@@ -452,9 +455,26 @@ function createCommunityBatch({
       ...markerOverrides,
     });
   }
+  if (includePlatformAdminMarker) {
+    batch.set(
+      doc(
+        clientDb,
+        'platformAdminCommunityOwnership',
+        actor,
+        'communities',
+        id,
+      ),
+      {
+        ownerId: actor,
+        communityId: id,
+        createdAt: serverTimestamp(),
+        ...platformAdminMarkerOverrides,
+      },
+    );
+  }
   batch.set(doc(clientDb, 'communityUserProgress', actor), {
     xp: 0,
-    communityIds: [id],
+    communityIds: progressCommunityIds ?? [id],
     membershipProjectionCommunityId: id,
     membershipProjectionAction: 'join',
     membershipProjectionUpdatedAt: serverTimestamp(),
@@ -687,6 +707,58 @@ describe('Community creation, join, reads, and membership', () => {
     }),
   ));
   test('accepts the complete Flutter creation transaction', () => assertSucceeds(createCommunityBatch()));
+  test('active Platform Admin can create multiple Communities with dedicated ownership records', async () => {
+    await env.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), 'users', ids.ownerCommunity), profile(ids.ownerCommunity));
+      await setDoc(doc(context.firestore(), 'platformAdmins', ids.ownerCommunity), { active: true });
+    });
+    await assertSucceeds(createCommunityBatch({
+      id: 'admin-community-one',
+      includeMarker: false,
+      includePlatformAdminMarker: true,
+    }));
+    await assertSucceeds(createCommunityBatch({
+      id: 'admin-community-two',
+      includeMarker: false,
+      includePlatformAdminMarker: true,
+      rootOverrides: {
+        name: 'Second Community',
+        nameKey: 'secondcommunity',
+        slug: 'second-community',
+      },
+      progressCommunityIds: ['admin-community-one', 'admin-community-two'],
+    }));
+  });
+  test('revoked Platform Admin cannot create an additional Community', async () => {
+    await env.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), 'users', ids.ownerCommunity), profile(ids.ownerCommunity));
+      await setDoc(doc(context.firestore(), 'platformAdmins', ids.ownerCommunity), { active: false });
+    });
+    await assertFails(createCommunityBatch({
+      id: 'revoked-admin-community',
+      includeMarker: false,
+      includePlatformAdminMarker: true,
+    }));
+  });
+  test('normal user cannot create through Platform Admin ownership', () => assertFails(
+    createCommunityBatch({
+      id: 'forged-admin-community',
+      includeMarker: false,
+      includePlatformAdminMarker: true,
+    }),
+  ));
+  test('Platform Admin ownership record must match actor and Community', async () => {
+    await env.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), 'users', ids.ownerCommunity), profile(ids.ownerCommunity));
+      await setDoc(doc(context.firestore(), 'platformAdmins', ids.ownerCommunity), { active: true });
+    });
+    await assertFails(createCommunityBatch({
+      id: 'incoherent-admin-community',
+      includeMarker: false,
+      includePlatformAdminMarker: true,
+      platformAdminMarkerOverrides: { communityId: 'other' },
+    }));
+  });
   test('accepts Approval Community creation', () => assertSucceeds(createCommunityBatch({ rootOverrides: { accessMode: 'approval' } })));
   test('rejects false Community ownerId', () => assertFails(createCommunityBatch({ ownerId: ids.communityOutsider })));
   test('rejects creation without owner membership', () => assertFails(createCommunityBatch({ includeMember: false })));

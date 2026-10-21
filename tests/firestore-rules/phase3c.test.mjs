@@ -261,7 +261,18 @@ async function cleanupCommunity(clientDb, id = 'c1', ownerId = uid.ownerCommunit
     assert.equal(rootSnapshot.exists(), true);
     const ownershipRef = doc(clientDb, 'communityOwnership', ownerId);
     const ownership = await transaction.get(ownershipRef);
+    const adminOwnershipRef = doc(
+      clientDb,
+      'platformAdminCommunityOwnership',
+      ownerId,
+      'communities',
+      id,
+    );
+    const adminOwnership = await transaction.get(adminOwnershipRef);
     if (ownership.data()?.communityId === id) transaction.delete(ownershipRef);
+    if (adminOwnership.data()?.communityId === id) {
+      transaction.delete(adminOwnershipRef);
+    }
     transaction.delete(rootRef);
   });
 }
@@ -536,6 +547,27 @@ describe('Community transition, cleanup, legacy, and retry', () => {
     await assertFails(deleteDoc(doc(db(uid.memberCommunity), 'users', uid.ownerCommunity, 'communities', 'c1')));
     await assertFails(deleteDoc(doc(db(uid.ownerCommunity), 'communityOwnership', uid.ownerCommunity)));
     await assertFails(deleteDoc(doc(db(uid.ownerCommunity), 'communities', 'c1')));
+    await assertSucceeds(cleanupCommunity(db(uid.ownerCommunity)));
+  });
+  test('revoked Platform Admin can delete an already-owned Community and its dedicated marker', async () => {
+    await env.withSecurityRulesDisabled(async (context) => {
+      const firestore = context.firestore();
+      await deleteDoc(doc(firestore, 'communityOwnership', uid.ownerCommunity));
+      await setDoc(
+        doc(
+          firestore,
+          'platformAdminCommunityOwnership',
+          uid.ownerCommunity,
+          'communities',
+          'c1',
+        ),
+        { ownerId: uid.ownerCommunity, communityId: 'c1', createdAt: ts() },
+      );
+      await setDoc(doc(firestore, 'platformAdmins', uid.ownerCommunity), {
+        active: false,
+      });
+    });
+    await markCommunityDeleting();
     await assertSucceeds(cleanupCommunity(db(uid.ownerCommunity)));
   });
   test('deletion owner removes orphan Community copy and progress projection atomically', async () => {

@@ -75,6 +75,49 @@ void main() {
   });
 
   testWidgets(
+    'Platform Admin who owns a Community may select Community again',
+    (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: CreateGubScreen(
+            userHeader: const SizedBox.shrink(),
+            communityLinkedAccountGate: (_) async => true,
+            currentUserOwnsCommunity: () async => true,
+          currentUserIsPlatformAdmin: () async => true,
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.ensureVisible(find.text('Community'));
+      await tester.tap(find.text('Community'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Create community'), findsOneWidget);
+      expect(find.text('Community limit reached'), findsNothing);
+    },
+  );
+
+  testWidgets('normal owner remains limited to one Community', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CreateGubScreen(
+          userHeader: const SizedBox.shrink(),
+          communityLinkedAccountGate: (_) async => true,
+          currentUserOwnsCommunity: () async => true,
+          currentUserIsPlatformAdmin: () async => false,
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.ensureVisible(find.text('Community'));
+    await tester.tap(find.text('Community'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Community limit reached'), findsOneWidget);
+    expect(find.text('Create community'), findsNothing);
+  });
+
+  testWidgets(
     'Community selection stays Private when account gate is cancelled',
     (tester) async {
       var gateCalls = 0;

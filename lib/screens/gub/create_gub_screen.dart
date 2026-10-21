@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../../config/app_limits.dart';
 import '../../modules/community/models/community_model.dart';
+import '../../modules/community/admin/platform_admin_service.dart';
 import '../../modules/community/guidelines/community_guidelines_pre_action.dart';
 import '../../modules/community/models/community_name_conflict.dart';
 import '../../modules/community/screens/gub_community_home_screen.dart';
@@ -32,6 +33,7 @@ class CreateGubScreen extends StatefulWidget {
     super.key,
     this.communityLinkedAccountGate,
     this.currentUserOwnsCommunity,
+    this.currentUserIsPlatformAdmin,
     this.communityGuidelinesPreAction,
     this.communityCreator,
     this.userHeader,
@@ -43,6 +45,7 @@ class CreateGubScreen extends StatefulWidget {
 
   final CommunityLinkedAccountGate? communityLinkedAccountGate;
   final Future<bool> Function()? currentUserOwnsCommunity;
+  final Future<bool> Function()? currentUserIsPlatformAdmin;
   final CommunityGuidelinesPreAction? communityGuidelinesPreAction;
   final CommunityCreator? communityCreator;
   final Widget? userHeader;
@@ -159,7 +162,11 @@ class _CreateGubScreenState extends State<CreateGubScreen> {
               CommunityService.instance.currentUserOwnsCommunity());
       if (!mounted || request != _typeSelectionRequest) return;
 
-      if (ownsCommunity) {
+      final isPlatformAdmin =
+          await widget.currentUserIsPlatformAdmin?.call() ??
+          await PlatformAdminService.instance.readCurrentActive();
+      if (!mounted || request != _typeSelectionRequest) return;
+      if (ownsCommunity && !isPlatformAdmin) {
         setState(() {
           _selectedType = GubType.private;
           _checkingCommunityOwnership = false;

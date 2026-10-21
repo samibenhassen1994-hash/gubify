@@ -1,5 +1,7 @@
 {
   "scripts": {
+    "seed:initial-communities": "node tools/seed-initial-communities.mjs",
+    "test:seed:initial-communities": "node --test tests/tools/initial-community-catalog.test.mjs tests/tools/seed-initial-communities.test.mjs",
     "backfill:organized-event-assignees": "node tools/backfill-organized-event-assignment-user-ids.mjs",
     "test:backfill:organized-event-assignees": "node --test tests/tools/backfill-organized-event-assignment-user-ids.test.mjs",
     "backfill:community-join-request-requested-at": "node tools/backfill-community-join-request-requested-at.mjs",
