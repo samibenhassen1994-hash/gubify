@@ -34,6 +34,13 @@ test('catalog records retain evidence and safe discoverability metadata', () => 
     assert.ok(community.description.length <= 280);
     assert.ok(community.sourceUrls.length > 0);
     assert.ok(community.sourceUrls.every((url) => url.startsWith('https://')));
+    const evidenceUrl = new URL(community.sourceUrls[0]);
+    assert.equal(evidenceUrl.hostname, 'trends.google.com');
+    assert.equal(evidenceUrl.searchParams.get('q'), community.name);
+    assert.ok(['measured', 'qualitative'].includes(community.popularityBasis));
+    if (community.popularityBasis === 'qualitative') {
+      assert.match(community.popularityEvidence, /^Qualitative selection:/);
+    }
     assert.doesNotMatch(community.description, /official community/i);
   }
 });

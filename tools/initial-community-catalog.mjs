@@ -1,13 +1,3 @@
-const sources = Object.freeze({
-  search: 'https://blog.google/products-and-platforms/products/search/year-in-search-2025/',
-  spotify: 'https://newsroom.spotify.com/2025-12-03/wrapped-top-artists-songs-albums-podcasts-audiobooks/',
-  technology: 'https://www.weforum.org/publications/top-10-emerging-technologies-of-2025/in-full/',
-  communities: 'https://redditinc.com/policies/transparency-report-july-to-december-2025-reddit',
-  travel: 'https://www.unwto.org/tourism-data/global-and-regional-tourism-performance',
-  health: 'https://www.who.int/news-room/fact-sheets/detail/physical-activity',
-  developers: 'https://github.blog/news-insights/octoverse/octoverse-2025/',
-});
-
 const rows = [
   // 20 broad global interests.
   ['global','AI Builders','ai-builders','Technology','Practical discussion for people building useful artificial intelligence products, workflows, and responsible experiments.','technology'],
@@ -117,7 +107,7 @@ const rows = [
 ];
 
 export const initialCommunityCatalog = Object.freeze(rows.map(([
-  segment, name, slug, type, description, source,
+  segment, name, slug, type, description,
 ]) => Object.freeze({
   segment,
   name,
@@ -127,8 +117,11 @@ export const initialCommunityCatalog = Object.freeze(rows.map(([
   description,
   accessMode: 'open',
   topic: slug,
-  popularityEvidence: `Documented as a durable or current interest using ${source}.`,
-  sourceUrls: [sources[source]],
+  popularityBasis: 'qualitative',
+  popularityEvidence: `Qualitative selection: ${name} was retained as a durable ${segment} interest after topic-specific trend and editorial review; no measured top-100 search rank is claimed.`,
+  sourceUrls: [
+    `https://trends.google.com/trends/explore?date=today%205-y&q=${encodeURIComponent(name)}`,
+  ],
 })));
 
 const allowedTypes = new Set([
@@ -160,6 +153,8 @@ export function validateInitialCommunityCatalog(catalog) {
     if (typeof item.description !== 'string' || item.description.trim().length < 30 || item.description.length > 280) errors.push(`${label}: invalid description`);
     if (typeof item.topic !== 'string' || item.topic.length === 0) errors.push(`${label}: invalid topic`);
     if (typeof item.popularityEvidence !== 'string' || item.popularityEvidence.length < 20) errors.push(`${label}: missing evidence`);
+    if (!['measured','qualitative'].includes(item.popularityBasis)) errors.push(`${label}: invalid popularity basis`);
+    if (item.popularityBasis === 'qualitative' && !item.popularityEvidence.startsWith('Qualitative selection:')) errors.push(`${label}: qualitative evidence must be explicit`);
     if (!Array.isArray(item.sourceUrls) || item.sourceUrls.length === 0 || item.sourceUrls.some((url) => typeof url !== 'string' || !url.startsWith('https://'))) errors.push(`${label}: invalid sources`);
   }
   if (catalog.length !== 100) errors.push(`expected 100 records, found ${catalog.length}`);

@@ -21,7 +21,12 @@ export function communityNameKey(name) {
     .replaceAll('/', '∕');
 }
 
-export function buildCommunityDocumentPlan({community, communityId, owner}) {
+export function buildCommunityDocumentPlan({
+  community,
+  communityId,
+  owner,
+  progressExists = false,
+}) {
   const createdAt = FieldValue.serverTimestamp();
   const root = {
     communityId,
@@ -47,7 +52,13 @@ export function buildCommunityDocumentPlan({community, communityId, owner}) {
     {path: `communities/${communityId}/members/${owner.uid}`, data: {uid: owner.uid, displayName: owner.displayName, photoUrl: owner.photoUrl, role: 'owner', joinedAt: createdAt}},
     {path: `users/${owner.uid}/communities/${communityId}`, data: {communityId, name: community.name, ownerId: owner.uid, memberCount: 1, visibility: 'public', role: 'owner', joinedAt: createdAt}},
     {path: `platformAdminCommunityOwnership/${owner.uid}/communities/${communityId}`, data: {ownerId: owner.uid, communityId, createdAt}},
-    {path: `communityUserProgress/${owner.uid}`, merge: true, data: {xp: 0, communityIds: FieldValue.arrayUnion(communityId), membershipProjectionCommunityId: communityId, membershipProjectionAction: 'join', membershipProjectionUpdatedAt: createdAt}},
+    {path: `communityUserProgress/${owner.uid}`, merge: true, data: {
+      ...(progressExists ? {} : {xp: 0}),
+      communityIds: FieldValue.arrayUnion(communityId),
+      membershipProjectionCommunityId: communityId,
+      membershipProjectionAction: 'join',
+      membershipProjectionUpdatedAt: createdAt,
+    }},
   ];
 }
 
@@ -162,14 +173,50 @@ async function createOne(db, community, owner) {
       transaction.get(db.doc(`communityUserProgress/${owner.uid}`)),
     ]);
     if (nameDoc.exists || slugDoc.exists) throw new Error(`Concurrent catalog collision: ${community.slug}`);
-    for (const entry of buildCommunityDocumentPlan({community, communityId: communityRef.id, owner})) {
+    for (const entry of buildCommunityDocumentPlan({
+      community,
+      communityId: communityRef.id,
+      owner,
+      progressExists: progressDoc.exists,
+    })) {
       const ref = db.doc(entry.path);
       if (entry.merge) transaction.set(ref, entry.data, {merge: true});
       else transaction.create(ref, entry.data);
     }
-    void progressDoc;
     return communityRef.id;
   });
+}
+
+export async function executePreflightedSeed({catalog, apply, inspect, create}) {
+  const report = {
+    scanned: catalog.length,
+    wouldCreate: 0,
+    existing: 0,
+    conflicts: 0,
+    created: 0,
+  };
+  const pending = [];
+  for (const community of catalog) {
+    const state = await inspect(community);
+    if (state === 'existing') {
+      report.existing += 1;
+    } else if (state === 'conflict') {
+      report.conflicts += 1;
+    } else {
+      report.wouldCreate += 1;
+      pending.push(community);
+    }
+  }
+  if (report.conflicts) {
+    throw Object.assign(new Error('Catalog conflicts require review.'), {report});
+  }
+  if (apply) {
+    for (const community of pending) {
+      await create(community);
+      report.created += 1;
+    }
+  }
+  return report;
 }
 
 export async function runSeed({apply = false, projectId, ownerUid, confirmCount = 0} = {}) {
@@ -180,16 +227,12 @@ export async function runSeed({apply = false, projectId, ownerUid, confirmCount 
   if (apply && confirmCount !== 100) throw new Error('Apply requires --confirm-count 100.');
   const {app, owner} = await verifyIdentity({projectId, ownerUid});
   const db = getFirestore(app);
-  const report = {scanned: 100, wouldCreate: 0, existing: 0, conflicts: 0, created: 0};
-  for (const community of initialCommunityCatalog) {
-    const state = await inspectOne(db, community, ownerUid);
-    if (state === 'existing') { report.existing += 1; continue; }
-    if (state === 'conflict') { report.conflicts += 1; continue; }
-    report.wouldCreate += 1;
-    if (apply) { await createOne(db, community, owner); report.created += 1; }
-  }
-  if (report.conflicts) throw Object.assign(new Error('Catalog conflicts require review.'), {report});
-  return report;
+  return executePreflightedSeed({
+    catalog: initialCommunityCatalog,
+    apply,
+    inspect: (community) => inspectOne(db, community, ownerUid),
+    create: (community) => createOne(db, community, owner),
+  });
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
