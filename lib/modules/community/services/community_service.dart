@@ -28,6 +28,9 @@ class CommunityService {
 
   bool get isCurrentUserAnonymous => _auth.currentUser?.isAnonymous ?? false;
 
+  Future<String?> resolvePublicCommunityIdBySlug(String slug) =>
+      CommunityRepository.instance.resolvePublicCommunityIdBySlug(slug);
+
   Future<CommunityModel> createCommunity({
     required String name,
     String? type,

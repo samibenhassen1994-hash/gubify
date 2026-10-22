@@ -5,9 +5,12 @@ import 'package:flutter/services.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 
-import 'core/invites/invite_link_coordinator.dart';
+import 'core/app_links/community_app_link_handler.dart';
+import 'core/app_links/gubify_app_link_coordinator.dart';
 import 'firebase_options.dart';
 import 'modules/chat/widgets/gub_chat_overlay.dart';
+import 'modules/community/screens/community_public_details_screen.dart';
+import 'modules/community/services/community_service.dart';
 import 'modules/community/services/community_current_user_xp_sync.dart';
 import 'screens/gub/join_gub_screen.dart';
 import 'theme/app_theme.dart';
@@ -38,16 +41,24 @@ class GubifyApp extends StatefulWidget {
 
 class _GubifyAppState extends State<GubifyApp> {
   final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
-  late final InviteLinkCoordinator _inviteLinkCoordinator;
+  late final GubifyAppLinkCoordinator _appLinkCoordinator;
+  late final CommunityAppLinkHandler _communityAppLinkHandler;
   late final CommunityCurrentUserXpSync _currentUserXpSync;
   late final PushNotificationCoordinator _pushNotificationCoordinator;
 
   @override
   void initState() {
     super.initState();
-    _inviteLinkCoordinator = InviteLinkCoordinator(
-      source: AppLinksInviteLinkSource(),
-      openJoin: _openJoin,
+    _communityAppLinkHandler = CommunityAppLinkHandler(
+      resolveCommunityId:
+          CommunityService.instance.resolvePublicCommunityIdBySlug,
+      openCommunity: _openCommunityById,
+      showUnavailable: _showCommunityUnavailable,
+    );
+    _appLinkCoordinator = GubifyAppLinkCoordinator(
+      source: AppLinksGubifyAppLinkSource(),
+      openInvite: _openJoin,
+      openCommunity: _communityAppLinkHandler.open,
     )..start();
     _currentUserXpSync = CommunityCurrentUserXpSync.instance;
     unawaited(_currentUserXpSync.start());
@@ -68,9 +79,31 @@ class _GubifyAppState extends State<GubifyApp> {
     );
   }
 
+  Future<void> _openCommunityById(String communityId) async {
+    final navigator = _navigatorKey.currentState;
+    if (navigator == null || !mounted) return;
+
+    await GubChatOverlay.runWithChatOverlayHidden(
+      () => navigator.push<void>(
+        MaterialPageRoute(
+          builder: (_) =>
+              CommunityPublicDetailsScreen(communityId: communityId),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showCommunityUnavailable() async {
+    final context = _navigatorKey.currentContext;
+    if (context == null || !mounted) return;
+    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+      const SnackBar(content: Text('This Community is no longer available.')),
+    );
+  }
+
   @override
   void dispose() {
-    unawaited(_inviteLinkCoordinator.dispose());
+    unawaited(_appLinkCoordinator.dispose());
     unawaited(_currentUserXpSync.dispose());
     super.dispose();
   }
@@ -84,7 +117,7 @@ class _GubifyAppState extends State<GubifyApp> {
       theme: AppTheme.lightTheme,
       navigatorObservers: [GubChatNavigatorObserver.instance],
       home: StartupScreen(
-        onNavigationReady: _inviteLinkCoordinator.markNavigationReady,
+        onNavigationReady: _appLinkCoordinator.markNavigationReady,
       ),
     );
   }

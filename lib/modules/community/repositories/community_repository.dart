@@ -88,6 +88,27 @@ class CommunityRepository {
   CollectionReference<Map<String, dynamic>> get _communityNames =>
       _firestore.collection('communityNames');
 
+  @visibleForTesting
+  static String? publicCommunityIdFromData({
+    required String requestedSlug,
+    required Map<String, dynamic>? data,
+  }) {
+    if (data?['slug'] != requestedSlug) return null;
+    final communityId = data?['communityId'];
+    return communityId is String && communityId.trim().isNotEmpty
+        ? communityId.trim()
+        : null;
+  }
+
+  Future<String?> resolvePublicCommunityIdBySlug(String slug) async {
+    final snapshot = await _communityPublic.doc(slug).get();
+    if (!snapshot.exists) return null;
+    return publicCommunityIdFromData(
+      requestedSlug: slug,
+      data: snapshot.data(),
+    );
+  }
+
   DocumentReference<Map<String, dynamic>> _progressReference(String userId) =>
       _firestore.collection('communityUserProgress').doc(userId);
 
